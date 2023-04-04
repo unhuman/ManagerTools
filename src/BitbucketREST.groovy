@@ -17,6 +17,6 @@ class BitbucketREST {
         NameValuePair startPair = new BasicNameValuePair("start", "0")
         NameValuePair limitPair = new BasicNameValuePair("limit", "100")
         NameValuePair markupPair = new BasicNameValuePair("markup", "true")
-        return RestService.GetRequest(cookies, uri, startPair, limitPair, markupPair)
+        return RestService.GetRequest(uri, cookies, startPair, limitPair, markupPair)
     }
 }

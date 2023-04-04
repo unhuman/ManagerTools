@@ -8,7 +8,7 @@ class CommandLineHelper {
     }
 
     String getUsername() {
-        String username = prompt("Username (or press enter for ${System.getProperty("user.name")})", false, null)
+        String username = promptAndStore("Username (or press enter for ${System.getProperty("user.name")})", false, null)
         if (username.isEmpty()) {
             username = System.getProperty("user.name")
         }
@@ -16,26 +16,63 @@ class CommandLineHelper {
     }
 
     String getPassword() {
-        return prompt("Password", true, null);
+        return promptAndStore("Password", true, null);
+    }
+
+    String getSprintTeam() {
+        return promptAndStore("Sprint Team name", false, "sprintTeam", true)
+    }
+
+    String getSprintTeamBoardId() {
+        if (!configFileManager.containsKey("sprintTeam")) {
+            throw new RuntimeException("Need sprintTeam already found")
+        }
+
+        String sprintTeam = configFileManager.getValue("sprintTeam")
+        return promptAndStore("Board Id for ${sprintTeam}", false, "${sprintTeam}-boardId", true)
     }
 
     String getJiraServer() {
-        return prompt("Jira Server (jira.x.com)", false, "jiraServer", false)
+        return promptAndStore("Jira Server (jira.x.com)", false, "jiraServer", false)
     }
 
     String getBitbucketServer() {
-        return prompt("Bitbucket Server (bitbucket.x.com)", false, "bitbucketServer", false)
+        return promptAndStore("Bitbucket Server (bitbucket.x.com)", false, "bitbucketServer", false)
     }
 
     String getJiraCookies() {
-        return prompt("Jira Cookies (DevTools/Request/Cookie)", false, "jiraCookies", true)
+        return promptAndStore("Jira Cookies (DevTools/Request/Cookie)", true, "jiraCookies", true)
     }
 
     String getBitbucketCookies() {
-        return prompt("Bitbucket Cookies (DevTools/Request/Cookie)", false, "bitbucketCookies", true)
+        return promptAndStore("Bitbucket Cookies (DevTools/Request/Cookie)", false, "bitbucketCookies", true)
     }
 
-    String prompt(String text, boolean isPassword, String defaultValueConfigKey, boolean promptForExistingValue) {
+    String getDateCheck(String promptDescription, String configKey) {
+        return promptAndStore("Enter date ${promptDescription} (yyyy-mm-dd)", false, configKey, true)
+    }
+
+
+    String prompt(String text) {
+        return prompt(text, false)
+    }
+
+    String prompt(String text, boolean isPassword) {
+        String input
+        if (System.console() != null) {
+            System.console().print("${text}: ")
+            input = (isPassword) ? System.console().readPassword().toString().trim() : System.console().readLine().trim()
+        } else {
+            if (isPassword) {
+                System.out.println("Warning: value will not be masked (****)")
+            }
+            System.out.print("${text}: ")
+            input = new Scanner(System.in).nextLine().trim()
+        }
+        return input
+    }
+
+    private String promptAndStore(String text, boolean isPassword, String defaultValueConfigKey, boolean promptForExistingValue) {
         def defaultValue
         if (defaultValueConfigKey && configFileManager.containsKey(defaultValueConfigKey)) {
             defaultValue = configFileManager.getValue(defaultValueConfigKey)
@@ -45,21 +82,10 @@ class CommandLineHelper {
                 return defaultValue
             }
 
-            text = "${text} (press return to use existing value)"
+            text = "${text} (press return to use existing value: ${isPassword ? "****" : defaultValue})"
         }
 
-        String input
-        if (System.console() != null) {
-            System.out.print("${text}: ")
-            input = (isPassword) ? System.console().readPassword().toString().trim() : System.console().readLine().trim()
-        } else {
-            if (isPassword) {
-                System.out.println("Warning: value will not be masked (****)")
-            }
-            System.out.print("${text}: ")
-            input = new Scanner(System.in).nextLine().trim()
-        }
-
+        String input = prompt(text, isPassword)
         if (input.isEmpty() && defaultValue) {
             input = defaultValue
         } else if (defaultValueConfigKey && !input.isEmpty()) {
