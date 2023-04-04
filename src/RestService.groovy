@@ -48,7 +48,6 @@ class RestService {
                 .setUri(uri)
                 .setHeader(HttpHeaders.ACCEPT, "application/json;charset=UTF-8")
                 .setHeader("Cookie", authCookies)
-                .setHeader(HttpHeaders.ACCEPT, "application/json;charset=UTF-8")
                 .setHeader(HttpHeaders.CONTENT_TYPE, "application/json;charset=UTF-8")
                 .addParameters(parameters)
                 .setEntity(new StringEntity(content))
@@ -75,7 +74,7 @@ class RestService {
     private static RequestConfig getRequestConfig() {
         return RequestConfig.custom()
                 .setConnectTimeout(2000)
-                .setSocketTimeout(30000)
+                .setSocketTimeout(60000)
                 .build()
     };
 

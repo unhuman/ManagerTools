@@ -2,6 +2,8 @@ import java.util.regex.Matcher
 import java.util.regex.Pattern
 
 class JiraCopyTicketEstimates extends Script {
+    private final Pattern QUARTER_PATTERN = Pattern.compile("q[1234]", Pattern.CASE_INSENSITIVE)
+
     @Override
     Object run() {
         CommandLineHelper commandLineHelper = new CommandLineHelper(".managerTools.cfg")
@@ -15,22 +17,20 @@ class JiraCopyTicketEstimates extends Script {
 
         String sprintTeam = commandLineHelper.getSprintTeam()
         String boardId = commandLineHelper.getSprintTeamBoardId()
-        sprintTeam = " - " + sprintTeam
 
                 // prompt for values - but insert expected dashes
-        String sourceQuarter = commandLineHelper.prompt("Enter Quarter for source tickets (ex: q3)") + " - "
-        String destinationQuarter = commandLineHelper.prompt("Enter Quarter for destination tickets (ex: q4)") + " - "
+        String sourceQuarter = commandLineHelper.prompt("Enter Quarter for source tickets (ex: q3)", QUARTER_PATTERN)
+        String destinationQuarter = commandLineHelper.prompt("Enter Quarter for destination tickets (ex: q4)", QUARTER_PATTERN)
         String dateForData = commandLineHelper.getDateCheck("after which all tickets were created", "copyTicketDateCreation")
 
-        String sourceTicketQuery = "${sourceQuarter} - * - ${sprintTeam}"
-        String destinationTicketQuery = "${destinationQuarter} - * - ${sprintTeam}"
+        Boolean doIt = commandLineHelper.prompt("Type in \"DoIt\" to perform the migration (anything else is an audit)").toUpperCase().equals("DOIT")
 
-        String sourceJql = generateJQL(sourceTicketQuery, dateForData)
-        String destinationJql = generateJQL(destinationTicketQuery, dateForData)
+        String sourceJql = generateJQL(sprintTeam, sourceQuarter, dateForData)
+        String destinationJql = generateJQL(sprintTeam, destinationQuarter, dateForData)
 
         // We allow a prefix (to reflect adopted / carryover /etc on source only)
-        Pattern sourcePattern = convertToPattern(true, sourceQuarter, sprintTeam)
-        Pattern destinationPattern = convertToPattern(false, destinationQuarter, sprintTeam)
+        Pattern sourcePattern = convertToPattern(true, sourceQuarter)
+        Pattern destinationPattern = convertToPattern(false, destinationQuarter)
 
         System.out.println("Requesting source data...")
         Object sourceResults = jiraREST.jqlSummaryQuery(sourceJql)
@@ -41,6 +41,7 @@ class JiraCopyTicketEstimates extends Script {
         // sourceResults.issues[].fields.summary = summary
         // sourceResults.issues[].fields.aggregatetimeoriginalestimate = time in seconds
 
+        int counter = 0
         for (Object sourceIssue: sourceResults.issues) {
             Long sourceOriginalEstimate = sourceIssue.fields.aggregatetimeoriginalestimate
             if (sourceOriginalEstimate && sourceOriginalEstimate > 0) {
@@ -57,7 +58,8 @@ class JiraCopyTicketEstimates extends Script {
                         Matcher destinationMatcher = destinationPattern.matcher(destinationIssue.fields.summary)
                         Long destinationOriginalEstimate = destinationIssue.fields.aggregatetimeoriginalestimate
 
-                        if (destinationMatcher.matches() && sourceIssueSummaryType.equals(destinationMatcher.group(1)) &&
+                        // Sometimes descriptions get annotated, so source must start with the destination
+                        if (destinationMatcher.matches() && sourceIssueSummaryType.startsWith(destinationMatcher.group(1)) &&
                                 (destinationOriginalEstimate == null || destinationOriginalEstimate == 0)) {
                             destinationIssues.add(destinationIssue)
                         }
@@ -69,11 +71,15 @@ class JiraCopyTicketEstimates extends Script {
                             break
                         case 1:
                             // process
+                            ++counter
                             String updateTicket = destinationIssues.get(0).key
-                            System.out.println("   Copying estimate ${sourceOriginalEstimate}" +
+                            System.out.println("   ${!doIt ? "AUDIT " : ""}" +
+                                    "Copy estimate ${sourceOriginalEstimate}" +
                                     " from ticket ${sourceTicket}: ${sourceSummary}" +
                                     " to ticket ${updateTicket}: ${destinationIssues.get(0).fields.summary}")
-                            jiraREST.updateOriginalEstimate(updateTicket, boardId, sourceOriginalEstimate)
+                            if (doIt) {
+                                jiraREST.updateOriginalEstimate(updateTicket, boardId, sourceOriginalEstimate)
+                            }
                             break
                         default:
                             System.out.println("   Too many matches: ")
@@ -84,22 +90,18 @@ class JiraCopyTicketEstimates extends Script {
                 }
             }
         }
-
-
-
+        System.out.println("${!doIt ? "AUDIT " : ""}Processed ${counter} tickets")
     }
 
-    private String generateJQL(String ticketQuery, String ticketAfterDate) {
-        String[] components = ticketQuery.split("\\*");
+    private String generateJQL(String sprintTeam, String quarter, String ticketAfterDate) {
         String jql = "created>${ticketAfterDate}"
-        for (String component: components) {
-            jql += " AND summary~\"${component}\""
-        }
+        jql += " AND summary~\"${quarter}\""
+        jql += " AND \"Sprint Team\"=\"${sprintTeam}\""
         return jql
     }
 
-    private Pattern convertToPattern(boolean allowPrefixedData, String quarterPart, String teamPart) {
-        String regex = "${allowPrefixedData ? ".*" : ""}${regexEscape(quarterPart)}(.*)${regexEscape(teamPart)}(.*)"
+    private Pattern convertToPattern(boolean allowPrefixedData, String quarterPart) {
+        String regex = "${allowPrefixedData ? ".*" : ""}${regexEscape(quarterPart)}(.*)"
         return Pattern.compile(regex, Pattern.CASE_INSENSITIVE)
     }
 
