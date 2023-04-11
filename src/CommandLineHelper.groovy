@@ -52,7 +52,7 @@ class CommandLineHelper {
     }
 
     String getBitbucketCookies() {
-        return promptAndStore("Bitbucket Cookies (DevTools/Request/Cookie)", false, ANY_MATCH_PATTERN, "bitbucketCookies", true)
+        return promptAndStore("Bitbucket Cookies (DevTools/Request/Cookie)", true, ANY_MATCH_PATTERN, "bitbucketCookies", true)
     }
 
     String getDateCheck(String promptDescription, String configKey) {
