@@ -64,6 +64,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                             case "UPDATED":
                                 // do nothing
                                 continue
+                            // TODO: Needs Work would be great to capture
                             default:
                                 System.out.println("   ${userName} Unhandled action: ${prActivityAction}")
                         }
@@ -78,6 +79,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     }
 
     def processComment(String userName, String action, String commentAction, Object comment, int indentation) {
+        // TODO: distinguish comments on own PR versus others
         String commentText = comment.text
         if (IGNORE_COMMENTS.contains(commentText)) {
             return
