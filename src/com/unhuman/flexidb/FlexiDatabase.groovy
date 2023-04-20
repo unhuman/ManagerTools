@@ -50,13 +50,13 @@ class FlexiDatabase {
 
         Integer desiredColumnIndex = findColumn(desiredField)
 
-        if (row == null) {
-            return null
-        }
-
         // Figure out the default value if needed
         Object defaultValue = (columnFinder.get(desiredField) instanceof FlexiDBInitDataColumn)
                 ? ((FlexiDBInitDataColumn) columnFinder.get(desiredField)).getDefaultValue() : null
+
+        if (row == null) {
+            return defaultValue
+        }
 
         return (desiredColumnIndex < row.size()) ? row.get(desiredColumnIndex) : defaultValue
     }

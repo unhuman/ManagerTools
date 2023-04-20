@@ -26,8 +26,8 @@ class FlexiDatabaseTests extends GroovyTestCase {
         FlexiDatabase simpleFlexiDb = new FlexiDatabase(definition)
         List<FlexiDBQueryColumn> simpleIndexQuery = List.of(new FlexiDBQueryColumn(INDEX_KEY_1, "value1"))
 
-        // Ensure we get nothing back for the first request
-        Assert.assertNull(simpleFlexiDb.getValue(simpleIndexQuery, SIMPLE_COUNTER_KEY))
+        // Ensure we get the default back
+        Assert.assertEquals(0, simpleFlexiDb.getValue(simpleIndexQuery, SIMPLE_COUNTER_KEY))
 
         // Simple test for requested column not existing
         Assert.assertThrows(ColumnNotFoundException.class,
@@ -50,7 +50,7 @@ class FlexiDatabaseTests extends GroovyTestCase {
 
         // Test not-found index scenario
         List<FlexiDBQueryColumn> notFoundIndexQuery = List.of(new FlexiDBQueryColumn(INDEX_KEY_1, "valueDNE"))
-        Assert.assertNull(simpleFlexiDb.getValue(notFoundIndexQuery, SIMPLE_COUNTER_KEY))
+        Assert.assertEquals(0, simpleFlexiDb.getValue(notFoundIndexQuery, SIMPLE_COUNTER_KEY))
 
         // querying 2 of the same thing won't match
         List<FlexiDBQueryColumn> dupeIndexQuery =
