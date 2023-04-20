@@ -173,11 +173,12 @@ class FlexiDatabase {
             columnFilters.forEach { columnFilter ->
                 {
                     String desiredColumnName = columnFilter.getName()
-                    Object desiredColumnValue = columnFilter.getMatchValue()
 
                     Integer desiredColumnIndex = findColumn(desiredColumnName)
 
                     boolean columnExists = (desiredColumnIndex < row.size())
+
+                    Object desiredColumnValue = columnFilter.getMatchValue()
 
                     if (columnExists) {
                         row.set(desiredColumnIndex, desiredColumnValue)
