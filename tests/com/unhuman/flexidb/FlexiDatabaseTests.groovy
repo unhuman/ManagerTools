@@ -116,5 +116,15 @@ class FlexiDatabaseTests extends GroovyTestCase {
                 new FlexiDBQueryColumn(INDEX_KEY_1, "value1"),
                 new FlexiDBQueryColumn(INDEX_KEY_2, "valueDNE"))
         Assert.assertNull(complexFlexiDB.getValue(complexIndexQuery, NOT_FOUND_KEY))
+
+        // add a second element to the database
+        List<FlexiDBQueryColumn> complexIndexQuery2 = List.of(
+                new FlexiDBQueryColumn(INDEX_KEY_1, "value1"),
+                new FlexiDBQueryColumn(INDEX_KEY_2, "value3"))
+        Assert.assertEquals(11, complexFlexiDB.incrementField(complexIndexQuery2, SIMPLE_COUNTER_KEY))
+
+        // Retrieve all the rows for INDEX_KEY_1 (should be 2)
+        List<Object> counters = complexFlexiDB.getValues(simpleIndexQuery, SIMPLE_COUNTER_KEY)
+        Assert.assertEquals(2, counters.size())
     }
 }

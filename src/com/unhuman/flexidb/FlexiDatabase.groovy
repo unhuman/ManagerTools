@@ -67,6 +67,23 @@ class FlexiDatabase {
         return (desiredColumnIndex < row.size()) ? row.get(desiredColumnIndex) : defaultValue
     }
 
+    List<Object> getValues(List<FlexiDBQueryColumn> columnFilters, String desiredField) {
+        List<List<Object>> rows = findRows(columnFilters)
+
+        Integer desiredColumnIndex = findColumn(desiredField)
+
+        // Figure out the default value if needed
+        Object defaultValue = (columnFinder.get(desiredField) instanceof FlexiDBInitDataColumn)
+                ? ((FlexiDBInitDataColumn) columnFinder.get(desiredField)).getDefaultValue() : null
+
+        List<Object> data = new ArrayList<>()
+        for (List<Object> row: rows) {
+            data.add((desiredColumnIndex < row.size()) ? row.get(desiredColumnIndex) : defaultValue)
+        }
+        return data
+    }
+
+
     /**
      *
      * @param columnFilters
@@ -106,6 +123,25 @@ class FlexiDatabase {
     }
 
     private List<Object> findRow(List<FlexiDBQueryColumn> columnFilters) {
+        List<Object> rows = findRows(columnFilters, false)
+
+        switch (rows.size()) {
+            case 0:
+                return null
+            case 1:
+                return rows.get(0)
+            default:
+                // Should never occur
+                throw new UnexpectedSituationException("Found too many rows ${foundRows.size()} for columnFilters ${columnFilters}")
+        }
+    }
+
+    private List<List<Object>> findRows(List<FlexiDBQueryColumn> columnFilters) {
+        List<List<Object>> rows = findRows(columnFilters, true)
+        return rows
+    }
+
+    private List<List<Object>> findRows(List<FlexiDBQueryColumn> columnFilters, boolean allowMultipleReturn) {
         // check we provided correct details
         int foundCount = 0
 
@@ -124,7 +160,7 @@ class FlexiDatabase {
             foundCount += (foundColumn instanceof FlexiDBInitIndexColumn) ? 1 : 0
         }}
 
-        if (foundCount != requiredColumnsCount) {
+        if (!allowMultipleReturn && foundCount != requiredColumnsCount) {
             throw new InvalidRequestException("Found ${foundCount} of ${requiredColumnsCount} required filters")
         }
 
@@ -148,12 +184,14 @@ class FlexiDatabase {
 
         switch (foundRows.size()) {
             case 0:
-                return null
+                return Collections.emptyList()
             case 1:
-                return foundRows.get(0)
+                return foundRows
             default:
-                // Should never occur
-                throw new UnexpectedSituationException("Found too many rows ${foundRows.size()} for columnFilters ${columnFilters}")
+                if (!allowMultipleReturn) {
+                    throw new UnexpectedSituationException("Found too many rows ${foundRows.size()} for columnFilters ${columnFilters}")
+                }
+                return foundRows
         }
     }
 
