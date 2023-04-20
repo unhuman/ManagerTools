@@ -16,8 +16,8 @@ class FlexiDatabaseTests extends GroovyTestCase {
 
     void testFlexiDatabaseSimple() {
         FlexiDBInitIndexColumn indexField = new FlexiDBInitIndexColumn(INDEX_KEY_1)
-        FlexiDBInitDataColumn dataField = new FlexiDBInitDataColumn(SIMPLE_COUNTER_KEY)
-        FlexiDBInitDataColumn commentsField = new FlexiDBInitDataColumn(SIMPLE_COMMENTS_KEY)
+        FlexiDBInitDataColumn dataField = new FlexiDBInitDataColumn(SIMPLE_COUNTER_KEY, 0)
+        FlexiDBInitDataColumn commentsField = new FlexiDBInitDataColumn(SIMPLE_COMMENTS_KEY, Collections.emptyList())
         List<AbstractFlexiDBInitColumn> definition = List.of(indexField, dataField, commentsField)
 
         FlexiDatabase simpleFlexiDb = new FlexiDatabase(definition)
@@ -31,7 +31,7 @@ class FlexiDatabaseTests extends GroovyTestCase {
         Assert.assertEquals(1, simpleFlexiDb.incrementField(simpleIndexQuery, SIMPLE_COUNTER_KEY))
         Assert.assertEquals(1, simpleFlexiDb.getValue(simpleIndexQuery, SIMPLE_COUNTER_KEY))
 
-        Assert.assertNull(simpleFlexiDb.getValue(simpleIndexQuery, SIMPLE_COMMENTS_KEY))
+        Assert.assertEquals(Collections.emptyList(), simpleFlexiDb.getValue(simpleIndexQuery, SIMPLE_COMMENTS_KEY))
         Assert.assertEquals(1, simpleFlexiDb.append(simpleIndexQuery, SIMPLE_COMMENTS_KEY, "Comment1").size())
         Assert.assertEquals(1, simpleFlexiDb.getValue(simpleIndexQuery, SIMPLE_COMMENTS_KEY).size())
 
@@ -66,7 +66,7 @@ class FlexiDatabaseTests extends GroovyTestCase {
     void testFlexiDatabaseComplex() {
         FlexiDBInitIndexColumn indexField1 = new FlexiDBInitIndexColumn(INDEX_KEY_1)
         FlexiDBInitIndexColumn indexField2 = new FlexiDBInitIndexColumn(INDEX_KEY_2)
-        FlexiDBInitDataColumn dataField = new FlexiDBInitDataColumn(SIMPLE_COUNTER_KEY)
+        FlexiDBInitDataColumn dataField = new FlexiDBInitDataColumn(SIMPLE_COUNTER_KEY, 10)
         List<AbstractFlexiDBInitColumn> definition = List.of(indexField1, indexField2, dataField)
 
         FlexiDatabase complexFlexiDB = new FlexiDatabase(definition)
@@ -81,15 +81,15 @@ class FlexiDatabaseTests extends GroovyTestCase {
                 new FlexiDBQueryColumn(INDEX_KEY_2, "value2"))
 
         // Track values
-        Assert.assertEquals(1, complexFlexiDB.incrementField(complexIndexQuery, SIMPLE_COUNTER_KEY))
-        Assert.assertEquals(1, complexFlexiDB.getValue(complexIndexQuery, SIMPLE_COUNTER_KEY))
+        Assert.assertEquals(11, complexFlexiDB.incrementField(complexIndexQuery, SIMPLE_COUNTER_KEY))
+        Assert.assertEquals(11, complexFlexiDB.getValue(complexIndexQuery, SIMPLE_COUNTER_KEY))
 
         Assert.assertThrows(com.unhuman.flexidb.exceptions.ColumnNotFoundException.class,
                 () -> complexFlexiDB.getValue(simpleIndexQuery, SIMPLE_COMMENTS_KEY))
         Assert.assertThrows(com.unhuman.flexidb.exceptions.ColumnNotFoundException.class,
                 () -> complexFlexiDB.append(simpleIndexQuery, SIMPLE_COMMENTS_KEY, "Comment1").size())
 
-        Assert.assertEquals(2, complexFlexiDB.incrementField(complexIndexQuery, SIMPLE_COUNTER_KEY))
-        Assert.assertEquals(2, complexFlexiDB.getValue(complexIndexQuery, SIMPLE_COUNTER_KEY))
+        Assert.assertEquals(12, complexFlexiDB.incrementField(complexIndexQuery, SIMPLE_COUNTER_KEY))
+        Assert.assertEquals(12, complexFlexiDB.getValue(complexIndexQuery, SIMPLE_COUNTER_KEY))
     }
 }

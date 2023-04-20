@@ -1,7 +1,14 @@
 package com.unhuman.flexidb.init
 
 class FlexiDBInitDataColumn extends AbstractFlexiDBInitColumn {
-    FlexiDBInitDataColumn(String name) {
+    private final Object defaultValue
+
+    FlexiDBInitDataColumn(String name, Object defaultValue) {
         super(name)
+        this.defaultValue = defaultValue
+    }
+
+    Object getDefaultValue() {
+        return defaultValue
     }
 }

@@ -3,6 +3,7 @@ package com.unhuman.flexidb
 import com.unhuman.flexidb.exceptions.ColumnNotFoundException
 import com.unhuman.flexidb.exceptions.InvalidRequestException
 import com.unhuman.flexidb.exceptions.UnexpectedSituationException
+import com.unhuman.flexidb.init.FlexiDBInitDataColumn
 import com.unhuman.flexidb.init.FlexiDBInitIndexColumn
 import com.unhuman.flexidb.init.AbstractFlexiDBInitColumn
 
@@ -10,6 +11,7 @@ import com.unhuman.flexidb.init.AbstractFlexiDBInitColumn
  * This is a dynamic in-memory database.
  * This database will not be high performance, but will make searching for data across fields easy
  *
+ * There is no type checking
  * This is not thread safe
  */
 
@@ -55,7 +57,11 @@ class FlexiDatabase {
             return null
         }
 
-        return (desiredColumnIndex < row.size()) ? row.get(desiredColumnIndex) : null
+        // Figure out the default value if needed
+        Object defaultValue = (columnFinder.get(desiredField) instanceof FlexiDBInitDataColumn)
+                ? ((FlexiDBInitDataColumn) columnFinder.get(desiredField)).getDefaultValue() : null
+
+        return (desiredColumnIndex < row.size()) ? row.get(desiredColumnIndex) : defaultValue
     }
 
     /**
@@ -70,8 +76,12 @@ class FlexiDatabase {
 
         boolean columnExists = (desiredColumnIndex < row.size())
 
-        int newValue = (!columnExists || row.get(desiredColumnIndex) == null)
-                ? 1 : row.get(desiredColumnIndex) + 1
+        // Figure out the default value if needed
+        Object defaultValue = (columnFinder.get(incrementField) instanceof FlexiDBInitDataColumn)
+                ? ((FlexiDBInitDataColumn) columnFinder.get(incrementField)).getDefaultValue() : 0
+
+        int newValue = ((!columnExists || row.get(desiredColumnIndex) == null)
+                ? defaultValue : row.get(desiredColumnIndex)) + 1
 
         if (columnExists) {
             row.set(desiredColumnIndex, newValue)
@@ -82,7 +92,7 @@ class FlexiDatabase {
         return newValue
     }
 
-    List append(List<FlexiDBQueryColumn> columnFilters, String textField, text) {
+    List append(List<FlexiDBQueryColumn> columnFilters, String textField, Object appendData) {
         int desiredColumnIndex = findColumn(textField)
         List<Object> row = findOrCreateRow(columnFilters);
 
@@ -90,7 +100,7 @@ class FlexiDatabase {
 
         List data = (!columnExists || row.get(desiredColumnIndex) == null)
                 ? new ArrayList<>() : row.get(desiredColumnIndex)
-        data.add(text)
+        data.add(appendData)
 
         if (columnExists) {
             row.set(desiredColumnIndex, data)

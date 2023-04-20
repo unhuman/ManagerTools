@@ -1,7 +1,7 @@
 package com.unhuman.flexidb.init
 
 abstract class AbstractFlexiDBInitColumn {
-    private String name
+    private final String name
 
     // This gets populated when added to the database
     private Integer column
