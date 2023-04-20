@@ -16,9 +16,10 @@ import com.unhuman.flexidb.init.AbstractFlexiDBInitColumn
  */
 
 class FlexiDatabase {
+    // TODO : maybe not needed
     private List<AbstractFlexiDBInitColumn> columnSignature
     private Map<String, AbstractFlexiDBInitColumn> columnFinder = new HashMap<>()
-    private int requiredColumnsCount
+    private int indexedColumnCount
 
     private List<List<Object>> rows;
 
@@ -29,7 +30,7 @@ class FlexiDatabase {
      */
     FlexiDatabase(List<AbstractFlexiDBInitColumn> columnSignature) {
         columnSignature = Collections.unmodifiableList(columnSignature)
-        requiredColumnsCount = 0
+        indexedColumnCount = 0
         // to optimize lookups, store a mapping of String to column
         for (int i = 0; i < columnSignature.size(); i++) {
             AbstractFlexiDBInitColumn columnDefinition = columnSignature.get(i)
@@ -38,7 +39,7 @@ class FlexiDatabase {
             columnFinder.put(columnDefinition.getName(), columnDefinition)
 
             if (columnDefinition instanceof FlexiDBInitIndexColumn) {
-                ++requiredColumnsCount
+                ++indexedColumnCount
             }
         }
 
@@ -52,7 +53,7 @@ class FlexiDatabase {
      * @return
      */
     Object getValue(List<FlexiDBQueryColumn> columnFilters, String desiredField) {
-        List<Object> row = findRow(columnFilters)
+        List<List<Object>> rows = findRows(columnFilters, false)
 
         Integer desiredColumnIndex = findColumn(desiredField)
 
@@ -60,15 +61,12 @@ class FlexiDatabase {
         Object defaultValue = (columnFinder.get(desiredField) instanceof FlexiDBInitDataColumn)
                 ? ((FlexiDBInitDataColumn) columnFinder.get(desiredField)).getDefaultValue() : null
 
-        if (row == null) {
-            return defaultValue
-        }
-
-        return (desiredColumnIndex < row.size()) ? row.get(desiredColumnIndex) : defaultValue
+        List<Object> row = (rows.size() > 0) ? rows.get(0) : null
+        return (row != null && desiredColumnIndex < row.size()) ? row.get(desiredColumnIndex) : defaultValue
     }
 
     List<Object> getValues(List<FlexiDBQueryColumn> columnFilters, String desiredField) {
-        List<List<Object>> rows = findRows(columnFilters)
+        List<List<Object>> rows = findRows(columnFilters, true)
 
         Integer desiredColumnIndex = findColumn(desiredField)
 
@@ -122,25 +120,6 @@ class FlexiDatabase {
         )
     }
 
-    private List<Object> findRow(List<FlexiDBQueryColumn> columnFilters) {
-        List<Object> rows = findRows(columnFilters, false)
-
-        switch (rows.size()) {
-            case 0:
-                return null
-            case 1:
-                return rows.get(0)
-            default:
-                // Should never occur
-                throw new UnexpectedSituationException("Found too many rows ${foundRows.size()} for columnFilters ${columnFilters}")
-        }
-    }
-
-    private List<List<Object>> findRows(List<FlexiDBQueryColumn> columnFilters) {
-        List<List<Object>> rows = findRows(columnFilters, true)
-        return rows
-    }
-
     private List<List<Object>> findRows(List<FlexiDBQueryColumn> columnFilters, boolean allowMultipleReturn) {
         // check we provided correct details
         int foundCount = 0
@@ -160,11 +139,12 @@ class FlexiDatabase {
             foundCount += (foundColumn instanceof FlexiDBInitIndexColumn) ? 1 : 0
         }}
 
-        if (!allowMultipleReturn && foundCount != requiredColumnsCount) {
-            throw new InvalidRequestException("Found ${foundCount} of ${requiredColumnsCount} required filters")
+        if (!allowMultipleReturn && foundCount != indexedColumnCount) {
+            throw new InvalidRequestException("Found ${foundCount} of ${indexedColumnCount} required filters")
         }
 
         // now search for the row
+        // TODO: This should be optimized to leverage the indexes
         List<List<Object>> foundRows = new ArrayList<>()
         for (List<Object> row: rows) {
             columnFilters.forEach {columnFilter -> {
@@ -196,7 +176,8 @@ class FlexiDatabase {
     }
 
     private List<Object> findOrCreateRow(List<FlexiDBQueryColumn> columnFilters) {
-        List<Object> row = findRow(columnFilters)
+        List<List<Object>> foundRows = findRows(columnFilters, false)
+        List<Object> row = (foundRows.size() == 1) ? foundRows.get(0) : null
         if (row == null) {
             // create a row, set it to whatever is asked for, and return it
             row = new ArrayList<>(columnFinder.size())
