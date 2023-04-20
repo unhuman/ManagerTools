@@ -45,6 +45,12 @@ class FlexiDatabase {
         rows = new ArrayList<>();
     }
 
+    /**
+     *
+     * @param columnFilters
+     * @param desiredField
+     * @return
+     */
     Object getValue(List<FlexiDBQueryColumn> columnFilters, String desiredField) {
         List<Object> row = findRow(columnFilters)
 
@@ -79,6 +85,13 @@ class FlexiDatabase {
         )
     }
 
+    /**
+     *
+     * @param columnFilters
+     * @param textField
+     * @param appendData
+     * @return
+     */
     List append(List<FlexiDBQueryColumn> columnFilters, String textField, Object appendData) {
         List<Object> row = findOrCreateRow(columnFilters);
 
@@ -92,7 +105,7 @@ class FlexiDatabase {
         )
     }
 
-    List<Object> findRow(List<FlexiDBQueryColumn> columnFilters) {
+    private List<Object> findRow(List<FlexiDBQueryColumn> columnFilters) {
         // check we provided correct details
         int foundCount = 0
 
@@ -144,17 +157,14 @@ class FlexiDatabase {
         }
     }
 
-    List<Object> findOrCreateRow(List<FlexiDBQueryColumn> columnFilters) {
+    private List<Object> findOrCreateRow(List<FlexiDBQueryColumn> columnFilters) {
         List<Object> row = findRow(columnFilters)
         if (row == null) {
             // create a row, set it to whatever is asked for, and return it
             row = new ArrayList<>(columnFinder.size())
             columnFilters.forEach { columnFilter ->
-                {
-                    updateRow(row, columnFilter.getName(),
-                            (int columnIndex, boolean columnExists) -> columnFilter.getMatchValue()
-                    )
-                }
+                updateRow(row, columnFilter.getName(),
+                        (int columnIndex, boolean columnExists) -> columnFilter.getMatchValue())
             }
             rows.add(row)
         }
