@@ -1,4 +1,8 @@
-import org.codehaus.groovy.util.StringUtil
+package com.unhuman.flexidb
+
+import com.unhuman.flexidb.init.FlexiDBInitIndexColumn
+import com.unhuman.flexidb.init.AbstractFlexiDBInitColumn
+import com.unhuman.flexidb.init.FlexiDBInitDataColumn
 
 /**
  * This is a dynamic in-memory database.
@@ -8,8 +12,8 @@ import org.codehaus.groovy.util.StringUtil
  */
 
 class FlexiDatabase {
-    private List<Tuple3<String, Class, Boolean>> columnSignature;
-    private Map<String, Tuple2<Integer, Boolean>> columnFinder = new HashMap<>()
+    private List<AbstractFlexiDBInitColumn> columnSignature
+    private Map<String, AbstractFlexiDBInitColumn> columnFinder = new HashMap<>()
     private int requiredColumnsCount
 
     private List<List<Object>> rows;
@@ -19,13 +23,17 @@ class FlexiDatabase {
     /**
      * @param columnSignature containing (name, class, and requirement for insert (flag))
      */
-    FlexiDatabase(List<Tuple3<String, Class, Boolean>> columnSignature) {
+    FlexiDatabase(List<AbstractFlexiDBInitColumn> columnSignature) {
         columnSignature = Collections.unmodifiableList(columnSignature)
         requiredColumnsCount = 0
         // to optimize lookups, store a mapping of String to column
         for (int i = 0; i < columnSignature.size(); i++) {
-            columnFinder.put(columnSignature.get(i).getV1(), Tuple2.tuple(i, columnSignature.get(i).getV3()))
-            if (columnSignature.get(i).getV3()) {
+            AbstractFlexiDBInitColumn columnDefinition = columnSignature.get(i)
+            // We set the column in the definition for lookups
+            columnDefinition.setColumn(i)
+            columnFinder.put(columnDefinition.getName(), columnDefinition)
+
+            if (columnDefinition instanceof FlexiDBInitIndexColumn) {
                 ++requiredColumnsCount
             }
         }
@@ -33,7 +41,7 @@ class FlexiDatabase {
         rows = new ArrayList<>();
     }
 
-    Object getValue(List<Tuple2<String, Object>> columnFilters, String desiredField) {
+    Object getValue(List<FlexiDBQueryColumn> columnFilters, String desiredField) {
         Integer desiredColumnIndex = findColumn(desiredField)
         if (desiredColumnIndex == null) {
             throw new RuntimeException("Could not find column for desiredField: ${desiredField}")
@@ -54,7 +62,7 @@ class FlexiDatabase {
      * @param incrementField
      * @return
      */
-    int incrementField(List<Tuple2<String, Object>> columnFilters, String incrementField) {
+    int incrementField(List<FlexiDBQueryColumn> columnFilters, String incrementField) {
         int desiredColumnIndex = findColumn(incrementField)
         List<Object> row = findOrCreateRow(columnFilters);
 
@@ -72,7 +80,7 @@ class FlexiDatabase {
         return newValue
     }
 
-    List append(List<Tuple2<String, Object>> columnFilters, String textField, text) {
+    List append(List<FlexiDBQueryColumn> columnFilters, String textField, text) {
         int desiredColumnIndex = findColumn(textField)
         List<Object> row = findOrCreateRow(columnFilters);
 
@@ -91,17 +99,17 @@ class FlexiDatabase {
         return data
     }
 
-    List<Object> findRow(List<Tuple2<String, Object>> columnFilters) {
+    List<Object> findRow(List<FlexiDBQueryColumn> columnFilters) {
         // check we provided correct details
         int foundCount = 0
 
         columnFilters.forEach {columnFilter -> {
-            String desiredColumnName = columnFilter.getV1()
-            Tuple2<Integer, Boolean> foundColumn = columnFinder.get(desiredColumnName);
+            String desiredColumnName = columnFilter.getName()
+            AbstractFlexiDBInitColumn foundColumn = columnFinder.get(desiredColumnName);
             if (foundColumn == null) {
                 throw new RuntimeException("Could not find column: ${desiredColumnName}")
             }
-            foundCount += (foundColumn.getV2()) ? 1 : 0
+            foundCount += (foundColumn instanceof FlexiDBInitIndexColumn) ? 1 : 0
         }}
         if (foundCount != requiredColumnsCount) {
             throw new RuntimeException("Provided ${foundCount} of ${requiredColumnsCount}")
@@ -111,8 +119,8 @@ class FlexiDatabase {
         List<List<Object>> foundRows = new ArrayList<>()
         for (List<Object> row: rows) {
             columnFilters.forEach {columnFilter -> {
-                String desiredColumnName = columnFilter.getV1()
-                Object desiredColumnValue = columnFilter.getV2()
+                String desiredColumnName = columnFilter.getName()
+                Object desiredColumnValue = columnFilter.getMatchValue()
 
                 Integer desiredColumnIndex = findColumn(desiredColumnName)
                 if (row.get(desiredColumnIndex) != desiredColumnValue) {
@@ -136,15 +144,15 @@ class FlexiDatabase {
 
     }
 
-    List<Object> findOrCreateRow(List<Tuple2<String, Object>> columnFilters) {
+    List<Object> findOrCreateRow(List<FlexiDBQueryColumn> columnFilters) {
         List<Object> row = findRow(columnFilters)
         if (row == null) {
             // create a row, set it to whatever is asked for, and return it
             row = new ArrayList<>(columnFinder.size())
             columnFilters.forEach { columnFilter ->
                 {
-                    String desiredColumnName = columnFilter.getV1()
-                    Object desiredColumnValue = columnFilter.getV2()
+                    String desiredColumnName = columnFilter.getName()
+                    Object desiredColumnValue = columnFilter.getMatchValue()
 
                     Integer desiredColumnIndex = findColumn(desiredColumnName)
 
@@ -164,10 +172,10 @@ class FlexiDatabase {
     }
 
     private Integer findColumn(String columnName) {
-        Tuple2<Integer, Boolean> desiredColumnIndex = columnFinder.get(columnName)
-        if (desiredColumnIndex == null) {
+        AbstractFlexiDBInitColumn desiredColumn = columnFinder.get(columnName)
+        if (desiredColumn == null) {
             throw new RuntimeException("Unknown column: ${columnName}")
         }
-        return desiredColumnIndex.getV1()
+        return desiredColumn.getColumn()
     }
 }
