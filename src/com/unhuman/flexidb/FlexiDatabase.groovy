@@ -1,8 +1,10 @@
 package com.unhuman.flexidb
 
+import com.unhuman.flexidb.exceptions.ColumnNotFoundException
+import com.unhuman.flexidb.exceptions.InvalidRequestException
+import com.unhuman.flexidb.exceptions.UnexpectedSituationException
 import com.unhuman.flexidb.init.FlexiDBInitIndexColumn
 import com.unhuman.flexidb.init.AbstractFlexiDBInitColumn
-import com.unhuman.flexidb.init.FlexiDBInitDataColumn
 
 /**
  * This is a dynamic in-memory database.
@@ -21,7 +23,7 @@ class FlexiDatabase {
     // TODO: Optimization - we could optimize searches by tracking the columnFinder lookup values in Maps.
 
     /**
-     * @param columnSignature containing (name, class, and requirement for insert (flag))
+     * @param columnSignature
      */
     FlexiDatabase(List<AbstractFlexiDBInitColumn> columnSignature) {
         columnSignature = Collections.unmodifiableList(columnSignature)
@@ -44,7 +46,7 @@ class FlexiDatabase {
     Object getValue(List<FlexiDBQueryColumn> columnFilters, String desiredField) {
         Integer desiredColumnIndex = findColumn(desiredField)
         if (desiredColumnIndex == null) {
-            throw new RuntimeException("Could not find column for desiredField: ${desiredField}")
+            throw new ColumnNotFoundException("Could not find column: ${desiredField}")
         }
 
         List<Object> row = findRow(columnFilters)
@@ -106,13 +108,22 @@ class FlexiDatabase {
         columnFilters.forEach {columnFilter -> {
             String desiredColumnName = columnFilter.getName()
             AbstractFlexiDBInitColumn foundColumn = columnFinder.get(desiredColumnName);
+
             if (foundColumn == null) {
-                throw new RuntimeException("Could not find column: ${desiredColumnName}")
+                throw new ColumnNotFoundException("Could not find column: ${desiredColumnName}")
             }
+
+            if (!(foundColumn instanceof FlexiDBInitIndexColumn)) {
+                throw new InvalidRequestException("Requested column is not an index column: ${desiredColumnName}")
+            }
+
             foundCount += (foundColumn instanceof FlexiDBInitIndexColumn) ? 1 : 0
         }}
+        if (foundCount != columnFilters.size()) {
+            throw new InvalidRequestException("Found ${foundCount} of ${columnFilters.size()} requested filters")
+        }
         if (foundCount != requiredColumnsCount) {
-            throw new RuntimeException("Provided ${foundCount} of ${requiredColumnsCount}")
+            throw new InvalidRequestException("Found only ${foundCount} of ${requiredColumnsCount} required filters")
         }
 
         // now search for the row
@@ -139,7 +150,7 @@ class FlexiDatabase {
             case 1:
                 return foundRows.get(0)
             default:
-                throw new RuntimeException("Found too many rows ${foundRows.size()} for columnFilters ${columnFilters}")
+                throw new UnexpectedSituationException("Found too many rows ${foundRows.size()} for columnFilters ${columnFilters}")
         }
 
     }
@@ -174,7 +185,7 @@ class FlexiDatabase {
     private Integer findColumn(String columnName) {
         AbstractFlexiDBInitColumn desiredColumn = columnFinder.get(columnName)
         if (desiredColumn == null) {
-            throw new RuntimeException("Unknown column: ${columnName}")
+            throw new ColumnNotFoundException("Unknown column: ${columnName}")
         }
         return desiredColumn.getColumn()
     }

@@ -2,14 +2,12 @@ package com.unhuman.flexidb.init
 
 abstract class AbstractFlexiDBInitColumn {
     private String name
-    private Class dataType
 
     // This gets populated when added to the database
     private Integer column
 
-    AbstractFlexiDBInitColumn(String name, Class dataType) {
+    AbstractFlexiDBInitColumn(String name) {
         this.name = name
-        this.dataType = dataType
     }
 
     String getName() {
