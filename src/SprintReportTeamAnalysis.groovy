@@ -1,5 +1,4 @@
 import groovy.cli.commons.OptionAccessor
-import org.apache.commons.codec.binary.StringUtils
 
 class SprintReportTeamAnalysis extends AbstractSprintReport {
     final List<String> IGNORE_USERS = [ "codeowners" ]

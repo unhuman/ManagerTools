@@ -24,6 +24,10 @@ class GetTeamSprints extends Script {
 
         def options = cli.parse(this.args)
 
+        if (!options) {
+            return
+        }
+
         if (options.h) {
             cli.usage()
             return

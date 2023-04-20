@@ -53,6 +53,10 @@ abstract class AbstractSprintReport extends Script {
 
         OptionAccessor options = cli.parse(this.args)
 
+        if (!options) {
+            return
+        }
+
         if (options.h) {
             cli.usage()
             return
