@@ -46,12 +46,9 @@ class FlexiDatabase {
     }
 
     Object getValue(List<FlexiDBQueryColumn> columnFilters, String desiredField) {
-        Integer desiredColumnIndex = findColumn(desiredField)
-        if (desiredColumnIndex == null) {
-            throw new ColumnNotFoundException("Could not find column: ${desiredField}")
-        }
-
         List<Object> row = findRow(columnFilters)
+
+        Integer desiredColumnIndex = findColumn(desiredField)
 
         if (row == null) {
             return null
@@ -71,44 +68,28 @@ class FlexiDatabase {
      * @return
      */
     int incrementField(List<FlexiDBQueryColumn> columnFilters, String incrementField) {
-        int desiredColumnIndex = findColumn(incrementField)
         List<Object> row = findOrCreateRow(columnFilters);
-
-        boolean columnExists = (desiredColumnIndex < row.size())
-
-        // Figure out the default value if needed
-        Object defaultValue = (columnFinder.get(incrementField) instanceof FlexiDBInitDataColumn)
-                ? ((FlexiDBInitDataColumn) columnFinder.get(incrementField)).getDefaultValue() : 0
-
-        int newValue = ((!columnExists || row.get(desiredColumnIndex) == null)
-                ? defaultValue : row.get(desiredColumnIndex)) + 1
-
-        if (columnExists) {
-            row.set(desiredColumnIndex, newValue)
-        } else {
-            row.add(desiredColumnIndex, newValue)
-        }
-
-        return newValue
+        return updateRow(row, incrementField,
+                (int columnIndex, boolean columnExists) -> {
+                    Object defaultValue = (columnFinder.get(incrementField) instanceof FlexiDBInitDataColumn)
+                            ? ((FlexiDBInitDataColumn) columnFinder.get(incrementField)).getDefaultValue() : 0
+                    return ((!columnExists || row.get(columnIndex) == null)
+                            ? defaultValue : row.get(columnIndex)) + 1
+                }
+        )
     }
 
     List append(List<FlexiDBQueryColumn> columnFilters, String textField, Object appendData) {
-        int desiredColumnIndex = findColumn(textField)
         List<Object> row = findOrCreateRow(columnFilters);
 
-        boolean columnExists = (desiredColumnIndex < row.size())
-
-        List data = (!columnExists || row.get(desiredColumnIndex) == null)
-                ? new ArrayList<>() : row.get(desiredColumnIndex)
-        data.add(appendData)
-
-        if (columnExists) {
-            row.set(desiredColumnIndex, data)
-        } else {
-            row.add(desiredColumnIndex, data)
-        }
-
-        return data
+        return updateRow(row, textField,
+                (int columnIndex, boolean columnExists) -> {
+                    List data = (!columnExists || row.get(columnIndex) == null)
+                            ? new ArrayList<>() : row.get(columnIndex)
+                    data.add(appendData)
+                    return data
+                }
+        )
     }
 
     List<Object> findRow(List<FlexiDBQueryColumn> columnFilters) {
@@ -129,11 +110,9 @@ class FlexiDatabase {
 
             foundCount += (foundColumn instanceof FlexiDBInitIndexColumn) ? 1 : 0
         }}
-        if (foundCount != columnFilters.size()) {
-            throw new InvalidRequestException("Found ${foundCount} of ${columnFilters.size()} requested filters")
-        }
+
         if (foundCount != requiredColumnsCount) {
-            throw new InvalidRequestException("Found only ${foundCount} of ${requiredColumnsCount} required filters")
+            throw new InvalidRequestException("Found ${foundCount} of ${requiredColumnsCount} required filters")
         }
 
         // now search for the row
@@ -160,9 +139,9 @@ class FlexiDatabase {
             case 1:
                 return foundRows.get(0)
             default:
+                // Should never occur
                 throw new UnexpectedSituationException("Found too many rows ${foundRows.size()} for columnFilters ${columnFilters}")
         }
-
     }
 
     List<Object> findOrCreateRow(List<FlexiDBQueryColumn> columnFilters) {
@@ -172,25 +151,38 @@ class FlexiDatabase {
             row = new ArrayList<>(columnFinder.size())
             columnFilters.forEach { columnFilter ->
                 {
-                    String desiredColumnName = columnFilter.getName()
-
-                    Integer desiredColumnIndex = findColumn(desiredColumnName)
-
-                    boolean columnExists = (desiredColumnIndex < row.size())
-
-                    Object desiredColumnValue = columnFilter.getMatchValue()
-
-                    if (columnExists) {
-                        row.set(desiredColumnIndex, desiredColumnValue)
-                    } else {
-                        row.add(desiredColumnIndex, desiredColumnValue)
-                    }
+                    updateRow(row, columnFilter.getName(),
+                            (int columnIndex, boolean columnExists) -> columnFilter.getMatchValue()
+                    )
                 }
             }
             rows.add(row)
         }
 
         return row
+    }
+
+    /**
+     * Updates a row
+     * @param row
+     * @param desiredColumnName
+     * @param mutation used to alter data
+     * @return
+     */
+    private Object updateRow(List<Object> row, String desiredColumnName, Closure mutation) {
+        Integer desiredColumnIndex = findColumn(desiredColumnName)
+        boolean columnExists = (desiredColumnIndex < row.size())
+
+        // callback to the mutation to do any data adjustments
+        Object desiredColumnValue = mutation(desiredColumnIndex, columnExists)
+
+        if (columnExists) {
+            row.set(desiredColumnIndex, desiredColumnValue)
+        } else {
+            row.add(desiredColumnIndex, desiredColumnValue)
+        }
+
+        return desiredColumnValue
     }
 
     private Integer findColumn(String columnName) {

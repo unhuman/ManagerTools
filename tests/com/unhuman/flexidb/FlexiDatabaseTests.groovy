@@ -1,5 +1,6 @@
 package com.unhuman.flexidb
 
+import com.unhuman.flexidb.exceptions.ColumnNotFoundException
 import com.unhuman.flexidb.exceptions.InvalidRequestException
 import com.unhuman.flexidb.init.FlexiDBInitIndexColumn
 import com.unhuman.flexidb.init.AbstractFlexiDBInitColumn
@@ -28,8 +29,11 @@ class FlexiDatabaseTests extends GroovyTestCase {
         // Ensure we get nothing back for the first request
         Assert.assertNull(simpleFlexiDb.getValue(simpleIndexQuery, SIMPLE_COUNTER_KEY))
 
-        // Track values
+        // Simple test for requested column not existing
+        Assert.assertThrows(ColumnNotFoundException.class,
+                () -> simpleFlexiDb.getValue(simpleIndexQuery, NOT_FOUND_KEY))
 
+        // Track values
         Assert.assertEquals(1, simpleFlexiDb.incrementField(simpleIndexQuery, SIMPLE_COUNTER_KEY))
         Assert.assertEquals(1, simpleFlexiDb.getValue(simpleIndexQuery, SIMPLE_COUNTER_KEY))
 
@@ -47,6 +51,13 @@ class FlexiDatabaseTests extends GroovyTestCase {
         // Test not-found index scenario
         List<FlexiDBQueryColumn> notFoundIndexQuery = List.of(new FlexiDBQueryColumn(INDEX_KEY_1, "valueDNE"))
         Assert.assertNull(simpleFlexiDb.getValue(notFoundIndexQuery, SIMPLE_COUNTER_KEY))
+
+        // querying 2 of the same thing won't match
+        List<FlexiDBQueryColumn> dupeIndexQuery =
+                List.of(new FlexiDBQueryColumn(INDEX_KEY_1, "value1"),
+                        new FlexiDBQueryColumn(INDEX_KEY_1, "value1"))
+        Assert.assertThrows(InvalidRequestException.class,
+                () -> simpleFlexiDb.getValue(dupeIndexQuery, SIMPLE_COUNTER_KEY))
 
         // Do a test of non-index field
         List<FlexiDBQueryColumn> complexIndexQuery1 = List.of(
@@ -88,9 +99,9 @@ class FlexiDatabaseTests extends GroovyTestCase {
         Assert.assertEquals(11, complexFlexiDB.incrementField(complexIndexQuery, SIMPLE_COUNTER_KEY))
         Assert.assertEquals(11, complexFlexiDB.getValue(complexIndexQuery, SIMPLE_COUNTER_KEY))
 
-        Assert.assertThrows(com.unhuman.flexidb.exceptions.ColumnNotFoundException.class,
+        Assert.assertThrows(com.unhuman.flexidb.exceptions.InvalidRequestException.class,
                 () -> complexFlexiDB.getValue(simpleIndexQuery, SIMPLE_COMMENTS_KEY))
-        Assert.assertThrows(com.unhuman.flexidb.exceptions.ColumnNotFoundException.class,
+        Assert.assertThrows(com.unhuman.flexidb.exceptions.InvalidRequestException.class,
                 () -> complexFlexiDB.append(simpleIndexQuery, SIMPLE_COMMENTS_KEY, "Comment1").size())
 
         Assert.assertEquals(12, complexFlexiDB.incrementField(complexIndexQuery, SIMPLE_COUNTER_KEY))
