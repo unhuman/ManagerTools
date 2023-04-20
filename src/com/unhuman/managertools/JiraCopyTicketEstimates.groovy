@@ -1,3 +1,8 @@
+package com.unhuman.managertools
+
+import com.unhuman.managertools.util.CommandLineHelper
+import com.unhuman.managertools.rest.JiraREST
+
 import java.util.regex.Matcher
 import java.util.regex.Pattern
 

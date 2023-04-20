@@ -1,3 +1,5 @@
+package com.unhuman.managertools.util
+
 import groovy.json.JsonBuilder
 import groovy.json.JsonSlurper
 

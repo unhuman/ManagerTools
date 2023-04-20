@@ -1,3 +1,5 @@
+package com.unhuman.managertools.rest
+
 import org.apache.http.NameValuePair
 import org.apache.http.message.BasicNameValuePair
 

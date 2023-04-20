@@ -1,3 +1,8 @@
+package com.unhuman.managertools
+
+import com.unhuman.managertools.util.CommandLineHelper
+import com.unhuman.managertools.rest.BitbucketREST
+import com.unhuman.managertools.rest.JiraREST
 @Grapes([
         @Grab(group='commons-cli', module='commons-cli', version='1.5.0')
 ])

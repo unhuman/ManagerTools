@@ -1,3 +1,5 @@
+package com.unhuman.managertools.util
+
 import java.util.regex.Pattern
 
 class CommandLineHelper {

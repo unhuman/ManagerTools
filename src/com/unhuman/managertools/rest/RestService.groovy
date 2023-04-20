@@ -1,3 +1,5 @@
+package com.unhuman.managertools.rest
+
 import groovy.json.JsonSlurper
 import org.apache.http.HttpHeaders
 import org.apache.http.NameValuePair

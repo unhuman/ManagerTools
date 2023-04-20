@@ -1,3 +1,5 @@
+package com.unhuman.managertools
+
 import groovy.cli.commons.OptionAccessor
 
 class SprintReportTeamAnalysis extends AbstractSprintReport {
