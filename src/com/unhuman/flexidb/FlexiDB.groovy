@@ -38,6 +38,10 @@ class FlexiDB {
 
             if (columnDefinition instanceof FlexiDBInitIndexColumn) {
                 ++indexedColumnCount
+            } else if (columnDefinition instanceof FlexiDBInitDataColumn) {
+                // Set defaults for the rows
+                FlexiDBInitDataColumn initData = (FlexiDBInitDataColumn) columnDefinition
+                FlexiDBRow.setDefault(initData.getName(), initData.getDefaultValue())
             }
         }
 
@@ -56,12 +60,9 @@ class FlexiDB {
 
         List<FlexiDBRow> rows = findRows(columnFilters, false)
 
-        // Figure out the default value if needed
-        Object defaultValue = (columnFinder.get(desiredField) instanceof FlexiDBInitDataColumn)
-                ? ((FlexiDBInitDataColumn) columnFinder.get(desiredField)).getDefaultValue() : null
-
         FlexiDBRow row = (rows.size() > 0) ? rows.get(0) : null
-        return (row != null && row.containsKey(desiredField)) ? row.get(desiredField) : defaultValue
+        // TODO: Do we really want to default when we don't have a row?
+        return (row != null) ? row.get(desiredField) : FlexiDBRow.getDefault(desiredField)
     }
 
     List<Object> getValues(List<FlexiDBQueryColumn> columnFilters, String desiredField) {
@@ -69,13 +70,9 @@ class FlexiDB {
 
         List<FlexiDBRow> rows = findRows(columnFilters, true)
 
-        // Figure out the default value if needed
-        Object defaultValue = (columnFinder.get(desiredField) instanceof FlexiDBInitDataColumn)
-                ? ((FlexiDBInitDataColumn) columnFinder.get(desiredField)).getDefaultValue() : null
-
         List<Object> data = new ArrayList<>()
         for (FlexiDBRow row: rows) {
-            data.add((row.containsKey(desiredField)) ? row.get(desiredField) : defaultValue)
+            data.add(row.get(desiredField))
         }
         return data
     }
@@ -93,7 +90,7 @@ class FlexiDB {
         FlexiDBRow row = findOrCreateRow(columnFilters);
         Object defaultValue = (columnFinder.get(incrementField) instanceof FlexiDBInitDataColumn)
                 ? ((FlexiDBInitDataColumn) columnFinder.get(incrementField)).getDefaultValue() : 0
-        int newValue = (row.containsKey(incrementField) ? row.get(incrementField) : defaultValue) + 1
+        int newValue = row.get(incrementField) + 1
         row.put(incrementField, newValue)
         return newValue
     }
