@@ -8,7 +8,7 @@ import com.unhuman.flexidb.init.FlexiDBInitDataColumn
 import groovy.test.GroovyTestCase
 import org.junit.Assert
 
-class FlexiDatabaseTests extends GroovyTestCase {
+class FlexiDBTests extends GroovyTestCase {
     private final String INDEX_KEY_1 = "StringIdx1"
     private final String INDEX_KEY_2 = "StringIdx2"
 
@@ -24,7 +24,7 @@ class FlexiDatabaseTests extends GroovyTestCase {
         FlexiDBInitDataColumn commentsField = new FlexiDBInitDataColumn(SIMPLE_COMMENTS_KEY, Collections.emptyList())
         List<AbstractFlexiDBInitColumn> definition = List.of(indexField, dataField, commentsField)
 
-        FlexiDatabase simpleFlexiDb = new FlexiDatabase(definition)
+        FlexiDB simpleFlexiDb = new FlexiDB(definition)
         List<FlexiDBQueryColumn> simpleIndexQuery = List.of(new FlexiDBQueryColumn(INDEX_KEY_1, "value1"))
 
         // Ensure we get the default back
@@ -86,7 +86,7 @@ class FlexiDatabaseTests extends GroovyTestCase {
 
         List<AbstractFlexiDBInitColumn> definition = List.of(indexField1, indexField2, dataField, commentsField, notFoundField)
 
-        FlexiDatabase complexFlexiDB = new FlexiDatabase(definition)
+        FlexiDB complexFlexiDB = new FlexiDB(definition)
         List<FlexiDBQueryColumn> simpleIndexQuery = List.of(new FlexiDBQueryColumn(INDEX_KEY_1, "value1"))
 
         // Ensure we get nothing back for the first request

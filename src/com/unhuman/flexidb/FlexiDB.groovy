@@ -17,7 +17,7 @@ import com.unhuman.flexidb.init.AbstractFlexiDBInitColumn
  * This is not thread safe
  */
 
-class FlexiDatabase {
+class FlexiDB {
     private List<FlexiDBRow> database;
     private Map<String, AbstractFlexiDBInitColumn> columnFinder = new HashMap<>()
     private int indexedColumnCount
@@ -29,7 +29,7 @@ class FlexiDatabase {
     /**
      * @param columnSignature
      */
-    FlexiDatabase(List<AbstractFlexiDBInitColumn> columnSignature) {
+    FlexiDB(List<AbstractFlexiDBInitColumn> columnSignature) {
         indexedColumnCount = 0
         // to optimize lookups, store a mapping of String to column
         for (int i = 0; i < columnSignature.size(); i++) {
