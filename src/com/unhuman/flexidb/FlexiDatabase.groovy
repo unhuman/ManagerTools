@@ -1,5 +1,6 @@
 package com.unhuman.flexidb
 
+import com.unhuman.flexidb.data.FlexiDBIndexKey
 import com.unhuman.flexidb.data.FlexiDBRow
 import com.unhuman.flexidb.exceptions.ColumnNotFoundException
 import com.unhuman.flexidb.exceptions.InvalidRequestException
@@ -21,6 +22,8 @@ class FlexiDatabase {
     private Map<String, AbstractFlexiDBInitColumn> columnFinder = new HashMap<>()
     private int indexedColumnCount
 
+    Map<FlexiDBIndexKey, LinkedHashSet<FlexiDBRow>> indexes
+
     // TODO: Optimization - we could optimize searches by tracking the columnFinder lookup values in Maps.
 
     /**
@@ -38,7 +41,8 @@ class FlexiDatabase {
             }
         }
 
-        database = new ArrayList<>();
+        database = new ArrayList<>()
+        indexes = new HashMap<>()
     }
 
     /**
@@ -136,33 +140,37 @@ class FlexiDatabase {
         }
 
         // now search for the row
-        // TODO: This should be optimized to leverage the indexes
-        List<FlexiDBRow> foundRows = new ArrayList<>()
-        for (FlexiDBRow row: database) {
-            columnFilters.forEach {columnFilter -> {
-                String desiredColumnName = columnFilter.getName()
-                Object desiredColumnValue = columnFilter.getMatchValue()
+        LinkedHashSet<FlexiDBRow> foundRows = new LinkedHashSet<>()
+        columnFilters.forEach {columnFilter -> {
+            String desiredColumnName = columnFilter.getName()
+            Object desiredColumnValue = columnFilter.getMatchValue()
+            LinkedHashSet<FlexiDBRow> filterRows = indexes.get(new FlexiDBIndexKey(desiredColumnName, desiredColumnValue))
 
-                if (row.get(desiredColumnName) != desiredColumnValue) {
-                    row = null
-                }
-            }}
-            if (row == null) {
-                continue
+            filterRows = (filterRows != null) ? filterRows.clone() : Collections.emptySet()
+
+            // either use the data if we had none or determine the intersection
+            if (foundRows.isEmpty()) {
+                foundRows = filterRows
+            } else {
+                foundRows.retainAll(filterRows)
             }
-            foundRows.add(row)
-        }
+
+            // nothing?  bail out
+            if (foundRows.isEmpty()) {
+                return
+            }
+        }}
 
         switch (foundRows.size()) {
             case 0:
                 return Collections.emptyList()
             case 1:
-                return foundRows
+                return foundRows.toList()
             default:
                 if (!allowMultipleReturn) {
                     throw new UnexpectedSituationException("Found too many rows ${foundRows.size()} for columnFilters ${columnFilters}")
                 }
-                return foundRows
+                return foundRows.toList()
         }
     }
 
@@ -170,10 +178,17 @@ class FlexiDatabase {
         List<FlexiDBRow> foundRows = findRows(columnFilters, false)
         FlexiDBRow row = (foundRows.size() == 1) ? foundRows.get(0) : null
         if (row == null) {
-            // create a row, set it to whatever is asked for, a`nd return it
+            // create a row, set it to whatever is asked for and update indexesa
             row = new FlexiDBRow(columnFinder.size())
             columnFilters.forEach { columnFilter ->
+                // put the data into the row
                 row.put(columnFilter.getName(), columnFilter.getMatchValue())
+
+                // index the data
+                FlexiDBIndexKey indexKey = new FlexiDBIndexKey(columnFilter.getName(), columnFilter.getMatchValue())
+                LinkedHashSet<FlexiDBRow> indexedRows = (indexes.containsKey(indexKey)) ? indexes.get(indexKey) : new LinkedHashSet<>()
+                indexedRows.add(row)
+                indexes.put(indexKey, indexedRows)
             }
             database.add(row)
         }
