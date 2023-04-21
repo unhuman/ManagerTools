@@ -3,6 +3,7 @@ package com.unhuman.flexidb
 import com.unhuman.flexidb.data.FlexiDBIndexKey
 import com.unhuman.flexidb.data.FlexiDBRow
 import com.unhuman.flexidb.exceptions.ColumnNotFoundException
+import com.unhuman.flexidb.exceptions.DataNotFoundException
 import com.unhuman.flexidb.exceptions.InvalidRequestException
 import com.unhuman.flexidb.exceptions.UnexpectedSituationException
 import com.unhuman.flexidb.init.FlexiDBInitDataColumn
@@ -61,8 +62,11 @@ class FlexiDB {
         List<FlexiDBRow> rows = findRows(columnFilters, false)
 
         FlexiDBRow row = (rows.size() > 0) ? rows.get(0) : null
-        // TODO: Do we really want to default when we don't have a row?
-        return (row != null) ? row.get(desiredField) : FlexiDBRow.getDefault(desiredField)
+
+        if (row == null) {
+            throw new DataNotFoundException("Row not found for ${columnFilters}")
+        }
+        return row.get(desiredField)
     }
 
     List<Object> getValues(List<FlexiDBQueryColumn> columnFilters, String desiredField) {

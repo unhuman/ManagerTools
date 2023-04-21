@@ -1,6 +1,7 @@
 package com.unhuman.flexidb
 
 import com.unhuman.flexidb.exceptions.ColumnNotFoundException
+import com.unhuman.flexidb.exceptions.DataNotFoundException
 import com.unhuman.flexidb.exceptions.InvalidRequestException
 import com.unhuman.flexidb.init.FlexiDBInitIndexColumn
 import com.unhuman.flexidb.init.AbstractFlexiDBInitColumn
@@ -28,7 +29,8 @@ class FlexiDBTests extends GroovyTestCase {
         List<FlexiDBQueryColumn> simpleIndexQuery = List.of(new FlexiDBQueryColumn(INDEX_KEY_1, "value1"))
 
         // Ensure we get the default back
-        Assert.assertEquals(0, simpleFlexiDb.getValue(simpleIndexQuery, SIMPLE_COUNTER_KEY))
+        Assert.assertThrows(DataNotFoundException.class,
+                () -> simpleFlexiDb.getValue(simpleIndexQuery, SIMPLE_COUNTER_KEY))
 
         // Simple test for requested column not existing
         Assert.assertThrows(ColumnNotFoundException.class,
@@ -51,7 +53,8 @@ class FlexiDBTests extends GroovyTestCase {
 
         // Test not-found index scenario
         List<FlexiDBQueryColumn> notFoundIndexQuery = List.of(new FlexiDBQueryColumn(INDEX_KEY_1, "valueDNE"))
-        Assert.assertEquals(0, simpleFlexiDb.getValue(notFoundIndexQuery, SIMPLE_COUNTER_KEY))
+        Assert.assertThrows(DataNotFoundException.class,
+                () -> simpleFlexiDb.getValue(notFoundIndexQuery, SIMPLE_COUNTER_KEY))
 
         // querying 2 of the same thing won't match
         List<FlexiDBQueryColumn> dupeIndexQuery =

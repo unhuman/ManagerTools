@@ -16,4 +16,11 @@ class FlexiDBQueryColumn {
     Object getMatchValue() {
         return matchValue
     }
+
+
+    @Override
+    String toString() {
+        String valueQuotation = (matchValue instanceof String) ? "'" : ""
+        return "FlexiDBQueryColumn{'${name}':${valueQuotation}${matchValue}${valueQuotation}}"
+    }
 }
