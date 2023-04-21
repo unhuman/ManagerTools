@@ -1,5 +1,6 @@
 package com.unhuman.flexidb
 
+import com.unhuman.flexidb.data.FlexiDBRow
 import com.unhuman.flexidb.exceptions.ColumnNotFoundException
 import com.unhuman.flexidb.exceptions.InvalidRequestException
 import com.unhuman.flexidb.exceptions.UnexpectedSituationException
@@ -16,12 +17,9 @@ import com.unhuman.flexidb.init.AbstractFlexiDBInitColumn
  */
 
 class FlexiDatabase {
-    // TODO : maybe not needed
-    private List<AbstractFlexiDBInitColumn> columnSignature
+    private List<FlexiDBRow> database;
     private Map<String, AbstractFlexiDBInitColumn> columnFinder = new HashMap<>()
     private int indexedColumnCount
-
-    private List<List<Object>> rows;
 
     // TODO: Optimization - we could optimize searches by tracking the columnFinder lookup values in Maps.
 
@@ -29,13 +27,10 @@ class FlexiDatabase {
      * @param columnSignature
      */
     FlexiDatabase(List<AbstractFlexiDBInitColumn> columnSignature) {
-        columnSignature = Collections.unmodifiableList(columnSignature)
         indexedColumnCount = 0
         // to optimize lookups, store a mapping of String to column
         for (int i = 0; i < columnSignature.size(); i++) {
             AbstractFlexiDBInitColumn columnDefinition = columnSignature.get(i)
-            // We set the column in the definition for lookups
-            columnDefinition.setColumn(i)
             columnFinder.put(columnDefinition.getName(), columnDefinition)
 
             if (columnDefinition instanceof FlexiDBInitIndexColumn) {
@@ -43,7 +38,7 @@ class FlexiDatabase {
             }
         }
 
-        rows = new ArrayList<>();
+        database = new ArrayList<>();
     }
 
     /**
@@ -53,30 +48,30 @@ class FlexiDatabase {
      * @return
      */
     Object getValue(List<FlexiDBQueryColumn> columnFilters, String desiredField) {
-        List<List<Object>> rows = findRows(columnFilters, false)
+        validateColumn(desiredField)
 
-        Integer desiredColumnIndex = findColumn(desiredField)
+        List<FlexiDBRow> rows = findRows(columnFilters, false)
 
         // Figure out the default value if needed
         Object defaultValue = (columnFinder.get(desiredField) instanceof FlexiDBInitDataColumn)
                 ? ((FlexiDBInitDataColumn) columnFinder.get(desiredField)).getDefaultValue() : null
 
-        List<Object> row = (rows.size() > 0) ? rows.get(0) : null
-        return (row != null && desiredColumnIndex < row.size()) ? row.get(desiredColumnIndex) : defaultValue
+        FlexiDBRow row = (rows.size() > 0) ? rows.get(0) : null
+        return (row != null && row.containsKey(desiredField)) ? row.get(desiredField) : defaultValue
     }
 
     List<Object> getValues(List<FlexiDBQueryColumn> columnFilters, String desiredField) {
-        List<List<Object>> rows = findRows(columnFilters, true)
+        validateColumn(desiredField)
 
-        Integer desiredColumnIndex = findColumn(desiredField)
+        List<FlexiDBRow> rows = findRows(columnFilters, true)
 
         // Figure out the default value if needed
         Object defaultValue = (columnFinder.get(desiredField) instanceof FlexiDBInitDataColumn)
                 ? ((FlexiDBInitDataColumn) columnFinder.get(desiredField)).getDefaultValue() : null
 
         List<Object> data = new ArrayList<>()
-        for (List<Object> row: rows) {
-            data.add((desiredColumnIndex < row.size()) ? row.get(desiredColumnIndex) : defaultValue)
+        for (FlexiDBRow row: rows) {
+            data.add((row.containsKey(desiredField)) ? row.get(desiredField) : defaultValue)
         }
         return data
     }
@@ -89,38 +84,35 @@ class FlexiDatabase {
      * @return
      */
     int incrementField(List<FlexiDBQueryColumn> columnFilters, String incrementField) {
-        List<Object> row = findOrCreateRow(columnFilters);
-        return updateRow(row, incrementField,
-                (int columnIndex, boolean columnExists) -> {
-                    Object defaultValue = (columnFinder.get(incrementField) instanceof FlexiDBInitDataColumn)
-                            ? ((FlexiDBInitDataColumn) columnFinder.get(incrementField)).getDefaultValue() : 0
-                    return ((!columnExists || row.get(columnIndex) == null)
-                            ? defaultValue : row.get(columnIndex)) + 1
-                }
-        )
+        validateColumn(incrementField)
+
+        FlexiDBRow row = findOrCreateRow(columnFilters);
+        Object defaultValue = (columnFinder.get(incrementField) instanceof FlexiDBInitDataColumn)
+                ? ((FlexiDBInitDataColumn) columnFinder.get(incrementField)).getDefaultValue() : 0
+        int newValue = (row.containsKey(incrementField) ? row.get(incrementField) : defaultValue) + 1
+        row.put(incrementField, newValue)
+        return newValue
     }
 
     /**
      *
      * @param columnFilters
-     * @param textField
+     * @param appendField
      * @param appendData
      * @return
      */
-    List append(List<FlexiDBQueryColumn> columnFilters, String textField, Object appendData) {
-        List<Object> row = findOrCreateRow(columnFilters);
+    List append(List<FlexiDBQueryColumn> columnFilters, String appendField, Object appendData) {
+        validateColumn(appendField)
 
-        return updateRow(row, textField,
-                (int columnIndex, boolean columnExists) -> {
-                    List data = (!columnExists || row.get(columnIndex) == null)
-                            ? new ArrayList<>() : row.get(columnIndex)
-                    data.add(appendData)
-                    return data
-                }
-        )
+        FlexiDBRow row = findOrCreateRow(columnFilters);
+
+        List data = (!row.containsKey(appendField)) ? new ArrayList<>() : row.get(appendField)
+        data.add(appendData)
+        row.put(appendField, data)
+        return data
     }
 
-    private List<List<Object>> findRows(List<FlexiDBQueryColumn> columnFilters, boolean allowMultipleReturn) {
+    private List<FlexiDBRow> findRows(List<FlexiDBQueryColumn> columnFilters, boolean allowMultipleReturn) {
         // check we provided correct details
         int foundCount = 0
 
@@ -145,14 +137,13 @@ class FlexiDatabase {
 
         // now search for the row
         // TODO: This should be optimized to leverage the indexes
-        List<List<Object>> foundRows = new ArrayList<>()
-        for (List<Object> row: rows) {
+        List<FlexiDBRow> foundRows = new ArrayList<>()
+        for (FlexiDBRow row: database) {
             columnFilters.forEach {columnFilter -> {
                 String desiredColumnName = columnFilter.getName()
                 Object desiredColumnValue = columnFilter.getMatchValue()
 
-                Integer desiredColumnIndex = findColumn(desiredColumnName)
-                if (row.get(desiredColumnIndex) != desiredColumnValue) {
+                if (row.get(desiredColumnName) != desiredColumnValue) {
                     row = null
                 }
             }}
@@ -175,50 +166,24 @@ class FlexiDatabase {
         }
     }
 
-    private List<Object> findOrCreateRow(List<FlexiDBQueryColumn> columnFilters) {
-        List<List<Object>> foundRows = findRows(columnFilters, false)
-        List<Object> row = (foundRows.size() == 1) ? foundRows.get(0) : null
+    private FlexiDBRow findOrCreateRow(List<FlexiDBQueryColumn> columnFilters) {
+        List<FlexiDBRow> foundRows = findRows(columnFilters, false)
+        FlexiDBRow row = (foundRows.size() == 1) ? foundRows.get(0) : null
         if (row == null) {
-            // create a row, set it to whatever is asked for, and return it
-            row = new ArrayList<>(columnFinder.size())
+            // create a row, set it to whatever is asked for, a`nd return it
+            row = new FlexiDBRow(columnFinder.size())
             columnFilters.forEach { columnFilter ->
-                updateRow(row, columnFilter.getName(),
-                        (int columnIndex, boolean columnExists) -> columnFilter.getMatchValue())
+                row.put(columnFilter.getName(), columnFilter.getMatchValue())
             }
-            rows.add(row)
+            database.add(row)
         }
 
         return row
     }
 
-    /**
-     * Updates a row
-     * @param row
-     * @param desiredColumnName
-     * @param mutation used to alter data
-     * @return
-     */
-    private Object updateRow(List<Object> row, String desiredColumnName, Closure mutation) {
-        Integer desiredColumnIndex = findColumn(desiredColumnName)
-        boolean columnExists = (desiredColumnIndex < row.size())
-
-        // callback to the mutation to do any data adjustments
-        Object desiredColumnValue = mutation(desiredColumnIndex, columnExists)
-
-        if (columnExists) {
-            row.set(desiredColumnIndex, desiredColumnValue)
-        } else {
-            row.add(desiredColumnIndex, desiredColumnValue)
-        }
-
-        return desiredColumnValue
-    }
-
-    private Integer findColumn(String columnName) {
-        AbstractFlexiDBInitColumn desiredColumn = columnFinder.get(columnName)
-        if (desiredColumn == null) {
+    private void validateColumn(String columnName) {
+        if (!columnFinder.containsKey(columnName)) {
             throw new ColumnNotFoundException("Unknown column: ${columnName}")
         }
-        return desiredColumn.getColumn()
     }
 }

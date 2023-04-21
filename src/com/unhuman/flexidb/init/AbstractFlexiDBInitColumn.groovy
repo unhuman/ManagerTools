@@ -13,12 +13,4 @@ abstract class AbstractFlexiDBInitColumn {
     String getName() {
         return name
     }
-
-    protected void setColumn(int column) {
-        this.column = column
-    }
-
-    int getColumn() {
-        return column
-    }
 }

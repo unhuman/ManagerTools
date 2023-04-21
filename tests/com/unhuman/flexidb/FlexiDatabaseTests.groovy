@@ -15,7 +15,8 @@ class FlexiDatabaseTests extends GroovyTestCase {
     private final String SIMPLE_COUNTER_KEY = "Counter"
     private final String SIMPLE_COMMENTS_KEY = "Comments"
 
-    private final String NOT_FOUND_KEY = "ItemShouldNotExist"
+    private final String NO_DATA_COLUMN_KEY = "DoNotPutDataInThisColumn"
+    private final String INVALID_COLUMN_KEY = "ColumnDNE"
 
     void testFlexiDatabaseSimple() {
         FlexiDBInitIndexColumn indexField = new FlexiDBInitIndexColumn(INDEX_KEY_1)
@@ -31,7 +32,7 @@ class FlexiDatabaseTests extends GroovyTestCase {
 
         // Simple test for requested column not existing
         Assert.assertThrows(ColumnNotFoundException.class,
-                () -> simpleFlexiDb.getValue(simpleIndexQuery, NOT_FOUND_KEY))
+                () -> simpleFlexiDb.getValue(simpleIndexQuery, INVALID_COLUMN_KEY))
 
         // Track values
         Assert.assertEquals(1, simpleFlexiDb.incrementField(simpleIndexQuery, SIMPLE_COUNTER_KEY))
@@ -80,9 +81,10 @@ class FlexiDatabaseTests extends GroovyTestCase {
         FlexiDBInitIndexColumn indexField1 = new FlexiDBInitIndexColumn(INDEX_KEY_1)
         FlexiDBInitIndexColumn indexField2 = new FlexiDBInitIndexColumn(INDEX_KEY_2)
         FlexiDBInitDataColumn dataField = new FlexiDBInitDataColumn(SIMPLE_COUNTER_KEY, 10)
-        FlexiDBInitDataColumn notFoundField = new FlexiDBInitDataColumn(NOT_FOUND_KEY, null)
+        FlexiDBInitDataColumn commentsField = new FlexiDBInitDataColumn(SIMPLE_COMMENTS_KEY, Collections.emptyList())
+        FlexiDBInitDataColumn notFoundField = new FlexiDBInitDataColumn(NO_DATA_COLUMN_KEY, null)
 
-        List<AbstractFlexiDBInitColumn> definition = List.of(indexField1, indexField2, dataField, notFoundField)
+        List<AbstractFlexiDBInitColumn> definition = List.of(indexField1, indexField2, dataField, commentsField, notFoundField)
 
         FlexiDatabase complexFlexiDB = new FlexiDatabase(definition)
         List<FlexiDBQueryColumn> simpleIndexQuery = List.of(new FlexiDBQueryColumn(INDEX_KEY_1, "value1"))
@@ -110,12 +112,12 @@ class FlexiDatabaseTests extends GroovyTestCase {
         List<FlexiDBQueryColumn> complexNotFoundIndexQuery1 = List.of(
                 new FlexiDBQueryColumn(INDEX_KEY_1, "valueDNE"),
                 new FlexiDBQueryColumn(INDEX_KEY_2, "value2"))
-        Assert.assertNull(complexFlexiDB.getValue(complexIndexQuery, NOT_FOUND_KEY))
+        Assert.assertNull(complexFlexiDB.getValue(complexIndexQuery, NO_DATA_COLUMN_KEY))
 
         List<FlexiDBQueryColumn> complexNotFoundIndexQuery2 = List.of(
                 new FlexiDBQueryColumn(INDEX_KEY_1, "value1"),
                 new FlexiDBQueryColumn(INDEX_KEY_2, "valueDNE"))
-        Assert.assertNull(complexFlexiDB.getValue(complexIndexQuery, NOT_FOUND_KEY))
+        Assert.assertNull(complexFlexiDB.getValue(complexIndexQuery, NO_DATA_COLUMN_KEY))
 
         // add a second element to the database
         List<FlexiDBQueryColumn> complexIndexQuery2 = List.of(
