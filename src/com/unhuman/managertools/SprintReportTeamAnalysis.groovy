@@ -7,6 +7,8 @@ import com.unhuman.flexidb.init.FlexiDBInitDataColumn
 import com.unhuman.flexidb.init.FlexiDBInitIndexColumn
 import groovy.cli.commons.OptionAccessor
 
+import java.text.SimpleDateFormat
+
 class SprintReportTeamAnalysis extends AbstractSprintReport {
     final List<String> IGNORE_USERS = [ "codeowners", "DeployMan" ]
     final List<String> IGNORE_COMMENTS = [ "Tasks to Complete Before Merging Pull Request" ]
@@ -15,6 +17,9 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     static final String TOTAL_PREFIX = "SELF_"
 
     static final String DB_COLUMN_COMMENTS = "COMMENTS"
+
+    static final SimpleDateFormat DATE_PARSER = new SimpleDateFormat("dd/MMM/yy")
+    static final SimpleDateFormat DATE_OUTPUT = new SimpleDateFormat("yyyy/MM/dd");
 
     enum DBIndexData {
         SPRINT("sprint"),
@@ -67,7 +72,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     // other data
     enum DBData {
         START_DATE("startDate", null),
-        END_DATE("startDate", null),
+        END_DATE("endDate", null),
         AUTHOR("author", null)
 
         private String jiraField
@@ -105,15 +110,15 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         columnOrder.remove(DBData.START_DATE.name())
         columnOrder.add(1, DBData.START_DATE.name())
         columnOrder.remove(DBData.END_DATE.name())
-        columnOrder.add(1, DBData.END_DATE.name())
+        columnOrder.add(2, DBData.END_DATE.name())
 
-        System.out.println(database.toCSV())
+        System.out.println(database.toCSV(columnOrder))
     }
 
     def getIssueCategoryInformation(Object sprint, List<Object> issueList) {
         String sprintName = sprint.name
-        String startDate = sprint.startDate
-        String endDate = sprint.endDate
+        String startDate = cleanDate(sprint.startDate)
+        String endDate = cleanDate(sprint.endDate)
 
         issueList.each(issue -> {
             def ticket = issue.key
@@ -232,5 +237,9 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         columns.add(new FlexiDBInitDataColumn(DB_COLUMN_COMMENTS, Collections.emptyList()))
 
         return columns
+    }
+
+    def cleanDate(String date) {
+        return DATE_OUTPUT.format(DATE_PARSER.parse(date))
     }
 }
