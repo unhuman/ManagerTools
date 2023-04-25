@@ -16,8 +16,6 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     static final String SELF_PREFIX = "SELF_"
     static final String TOTAL_PREFIX = "SELF_"
 
-    static final String DB_COLUMN_COMMENTS = "COMMENTS"
-
     static final SimpleDateFormat DATE_PARSER = new SimpleDateFormat("dd/MMM/yy")
     static final SimpleDateFormat DATE_OUTPUT = new SimpleDateFormat("yyyy/MM/dd");
 
@@ -73,7 +71,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     enum DBData {
         START_DATE("startDate", null),
         END_DATE("endDate", null),
-        AUTHOR("author", null)
+        AUTHOR("author", null),
+        COMMENTS("comments", Collections.emptyList())
 
         private String jiraField
         private Object defaultValue
@@ -107,10 +106,12 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
         // Generate the CSV file - we'll do some column adjustments
         List<String> columnOrder = new ArrayList<>(database.getOriginalColumnOrder())
+        // start date right after sprint, which is first
         columnOrder.remove(DBData.START_DATE.name())
         columnOrder.add(1, DBData.START_DATE.name())
         columnOrder.remove(DBData.END_DATE.name())
         columnOrder.add(2, DBData.END_DATE.name())
+        // comments are currently generated last - if things changed, might need to manage that here
 
         System.out.println(database.toCSV(columnOrder))
     }
@@ -209,7 +210,10 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         if (IGNORE_COMMENTS.contains(commentText)) {
             return
         }
+
         commentText = commentText.replaceAll("(\\r|\\n)?\\n", "  ").trim()
+        database.append(indexLookup, DBData.COMMENTS.name(), commentText)
+
         comment.comments.forEach(replyComment -> {
             processComment(indexLookup, replyComment.author.name, "COMMENTED", "REPLY", replyComment, indentation + 3)
         })
@@ -232,9 +236,6 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         DBData.values().each { data -> {
             columns.add(new FlexiDBInitDataColumn(data.name(), data.getDefaultValue()))
         }}
-
-        // other data columns
-        columns.add(new FlexiDBInitDataColumn(DB_COLUMN_COMMENTS, Collections.emptyList()))
 
         return columns
     }

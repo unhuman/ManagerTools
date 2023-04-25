@@ -239,7 +239,17 @@ class FlexiDB {
             for (int i = 0; i < columnOrder.size(); i++) {
                 sb.append((i > 0) ? separator : "")
                 Object value = row.get(columnOrder.get(i))
-                // TODO: may still need to resolve the value (ie lists)
+
+                // We have to fixup lists
+                if (value instanceof List) {
+                    StringBuilder newValueBuilder = new StringBuilder(1024)
+                    for (int j = 0; j < ((List) value).size(); j++) {
+                        newValueBuilder.append((i > 0) ? "\n" : "")
+                        newValueBuilder.append(((List) value).get(j))
+                    }
+                    value = newValueBuilder.toString()
+                }
+
                 sb.append(StringEscapeUtils.escapeCsv(value.toString()))
             }
             sb.append('\n')
