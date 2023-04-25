@@ -81,7 +81,6 @@ class FlexiDB {
         return data
     }
 
-
     /**
      *
      * @param columnFilters
@@ -91,12 +90,28 @@ class FlexiDB {
     int incrementField(List<FlexiDBQueryColumn> columnFilters, String incrementField) {
         validateColumn(incrementField)
 
-        FlexiDBRow row = findOrCreateRow(columnFilters);
-        Object defaultValue = (columnFinder.get(incrementField) instanceof FlexiDBInitDataColumn)
+        FlexiDBRow row = findOrCreateRow(columnFilters)
+
+        Object defaultValue = ((columnFinder.get(incrementField) instanceof FlexiDBInitDataColumn) &&
+                ((FlexiDBInitDataColumn) columnFinder.get(incrementField)).getDefaultValue() != null)
                 ? ((FlexiDBInitDataColumn) columnFinder.get(incrementField)).getDefaultValue() : 0
-        int newValue = row.get(incrementField) + 1
+
+        int newValue = ((row.get(incrementField) != null) ? row.get(incrementField) : defaultValue) + 1
         row.put(incrementField, newValue)
         return newValue
+    }
+
+    /**
+     *
+     * @param columnFilters
+     * @param columnName
+     * @param value
+     */
+    void setValue(List<FlexiDBQueryColumn> columnFilters, String columnName, Object value) {
+        validateColumn(columnName)
+
+        FlexiDBRow row = findOrCreateRow(columnFilters);
+        row.setProperty(columnName, value)
     }
 
     /**
@@ -142,7 +157,7 @@ class FlexiDB {
 
         // now search for the row
         LinkedHashSet<FlexiDBRow> foundRows = new LinkedHashSet<>()
-        columnFilters.forEach {columnFilter -> {
+        for (FlexiDBQueryColumn columnFilter: columnFilters) { // cannot use each since can't break out
             String desiredColumnName = columnFilter.getName()
             Object desiredColumnValue = columnFilter.getMatchValue()
             LinkedHashSet<FlexiDBRow> filterRows = indexes.get(new FlexiDBIndexKey(desiredColumnName, desiredColumnValue))
@@ -158,9 +173,9 @@ class FlexiDB {
 
             // nothing?  bail out
             if (foundRows.isEmpty()) {
-                return
+                break
             }
-        }}
+        }
 
         switch (foundRows.size()) {
             case 0:

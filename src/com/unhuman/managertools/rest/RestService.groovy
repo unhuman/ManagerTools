@@ -1,5 +1,10 @@
 package com.unhuman.managertools.rest
 
+@Grapes([
+        @Grab(group='org.apache.httpcomponents.core5', module='httpcore5', version='5.2.1'),
+        @Grab(group='org.apache.httpcomponents.client5', module='httpclient5', version='5.2.1')
+])
+
 import groovy.json.JsonSlurper
 import org.apache.http.HttpHeaders
 import org.apache.http.NameValuePair
@@ -11,7 +16,6 @@ import org.apache.http.impl.client.HttpClientBuilder
 import org.apache.http.util.EntityUtils
 
 import java.nio.charset.Charset
-import java.util.concurrent.TimeUnit
 
 class RestService {
     static Object GetRequest(String uri, String authCookies, NameValuePair... parameters) {
@@ -62,7 +66,6 @@ class RestService {
     private static Object executeRequest(HttpUriRequest request) {
         String responseData = HttpClientBuilder.create().build().withCloseable { httpClient ->
             httpClient.execute(request).withCloseable { response ->
-
                 if (response.getStatusLine().getStatusCode() < 200 || response.getStatusLine().getStatusCode() > 299) {
                     throw new RuntimeException("Error: Status ${response.getStatusLine().getStatusCode()}")
                 }

@@ -16,17 +16,21 @@ class FlexiDBTests extends GroovyTestCase {
     private final String SIMPLE_COUNTER_KEY = "Counter"
     private final String SIMPLE_COMMENTS_KEY = "Comments"
 
+    private final String SIMPLE_VALUE_KEY = "Value"
+
     private final String NO_DATA_COLUMN_KEY = "DoNotPutDataInThisColumn"
     private final String INVALID_COLUMN_KEY = "ColumnDNE"
 
     void testFlexiDatabaseSimple() {
         FlexiDBInitIndexColumn indexField = new FlexiDBInitIndexColumn(INDEX_KEY_1)
+        FlexiDBInitDataColumn valueField = new FlexiDBInitDataColumn(SIMPLE_VALUE_KEY, null)
         FlexiDBInitDataColumn dataField = new FlexiDBInitDataColumn(SIMPLE_COUNTER_KEY, 0)
         FlexiDBInitDataColumn commentsField = new FlexiDBInitDataColumn(SIMPLE_COMMENTS_KEY, Collections.emptyList())
-        List<AbstractFlexiDBInitColumn> definition = List.of(indexField, dataField, commentsField)
+        List<AbstractFlexiDBInitColumn> definition = List.of(indexField, valueField, dataField, commentsField)
 
         FlexiDB simpleFlexiDb = new FlexiDB(definition)
-        List<FlexiDBQueryColumn> simpleIndexQuery = List.of(new FlexiDBQueryColumn(INDEX_KEY_1, "value1"))
+        List<FlexiDBQueryColumn> simpleIndexQuery =
+                List.of(new FlexiDBQueryColumn(INDEX_KEY_1, "value1"))
 
         // Ensure we get the default back
         Assert.assertThrows(DataNotFoundException.class,
@@ -37,6 +41,13 @@ class FlexiDBTests extends GroovyTestCase {
                 () -> simpleFlexiDb.getValue(simpleIndexQuery, INVALID_COLUMN_KEY))
 
         // Track values
+        Assert.assertThrows(DataNotFoundException.class, () -> simpleFlexiDb.getValue(simpleIndexQuery, SIMPLE_VALUE_KEY))
+        simpleFlexiDb.setValue(simpleIndexQuery, SIMPLE_VALUE_KEY, "one")
+        Assert.assertEquals("one", simpleFlexiDb.getValue(simpleIndexQuery, SIMPLE_VALUE_KEY))
+        simpleFlexiDb.setValue(simpleIndexQuery, SIMPLE_VALUE_KEY, "two")
+        Assert.assertEquals("two", simpleFlexiDb.getValue(simpleIndexQuery, SIMPLE_VALUE_KEY))
+
+
         Assert.assertEquals(1, simpleFlexiDb.incrementField(simpleIndexQuery, SIMPLE_COUNTER_KEY))
         Assert.assertEquals(1, simpleFlexiDb.getValue(simpleIndexQuery, SIMPLE_COUNTER_KEY))
 
