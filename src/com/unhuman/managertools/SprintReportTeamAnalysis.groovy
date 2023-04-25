@@ -12,6 +12,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     final List<String> IGNORE_COMMENTS = [ "Tasks to Complete Before Merging Pull Request" ]
 
     static final String SELF_PREFIX = "SELF_"
+    static final String TOTAL_PREFIX = "SELF_"
 
     static final String DB_COLUMN_COMMENTS = "COMMENTS"
 
@@ -34,14 +35,14 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
     // Note these values could all get DB_SELF_PREFIX pre-pended based on user
     enum JiraDBActions {
-        APPROVED(0), SELF_APPROVED(0),
-        COMMENTED(0), SELF_COMMENTED(0),
-        DECLINED(0), SELF_DECLINED(0),
-        MERGED(0), SELF_MERGED(0),
-        OPENED(0), SELF_OPENED(0),
-        RESCOPED(null), SELF_RESCOPED(null),
-        UNAPPROVED(0), SELF_UNAPPROVED(0),
-        UPDATED(0), SELF_UPDATED(0)
+        APPROVED(0), SELF_APPROVED(0), TOTAL_APPROVED(0),
+        COMMENTED(0), SELF_COMMENTED(0), TOTAL_COMMENTED(0),
+        DECLINED(0), SELF_DECLINED(0), TOTAL_DECLINED(0),
+        MERGED(0), SELF_MERGED(0), TOTAL_MERGED(0),
+        OPENED(0), SELF_OPENED(0), TOTAL_OPENED(0),
+        RESCOPED(0), SELF_RESCOPED(0), TOTAL_RESCOPED(0),
+        UNAPPROVED(0), SELF_UNAPPROVED(0), TOTAL_UNAPPROVED(0),
+        UPDATED(0), SELF_UPDATED(0), TOTAL_UPDATED(0),
 
         private Object defaultValue
 
@@ -99,7 +100,13 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             getIssueCategoryInformation(data.sprint, data.contents.issuesNotCompletedInCurrentSprint)
         })
 
-        // Temporary - output the database
+        // Generate the CSV file - we'll do some column adjustments
+        List<String> columnOrder = new ArrayList<>(database.getOriginalColumnOrder())
+        columnOrder.remove(DBData.START_DATE.name())
+        columnOrder.add(1, DBData.START_DATE.name())
+        columnOrder.remove(DBData.END_DATE.name())
+        columnOrder.add(1, DBData.END_DATE.name())
+
         System.out.println(database.toCSV())
     }
 
@@ -119,14 +126,18 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     // can get approvers out of ^^^
                     // check comment count before polling for comments
                     def prId = (pullRequest.id.startsWith("#") ? pullRequest.id.substring(1) : pullRequest.id)
-                    def prAuthor = pullRequest.author
+                    def prAuthor = pullRequest.author.name // Below, we try to update this to match the username
                     def prUrl = pullRequest.url
 
                     def prActivities = bitbucketREST.getActivities(prUrl)
 
                     System.out.println("   PR ${ticket} / ${prId} has ${prActivities.values.size()} activities")
-                    for (Object prActivity: prActivities.values) {
+                    // process from oldest to newest (reverse)
+                    for (int i = prActivities.size -1; i >= 0; i--) {
+                        prActivity = prActivities.values.get(i)
                         String userName = prActivity.user.name
+                        // try to match up the names better
+                        prAuthor = (prAuthor.equals(prActivity.user.displayName)) ? userName : prAuthor
                         boolean isSelf = (userName.equals(prAuthor))
 
                         // Skip this if not desired
@@ -172,12 +183,11 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                                 break
                         }
 
-                        // increment counter
+                        // increment counters (total and then specific)
+                        database.incrementField(indexLookup, TOTAL_PREFIX + prActivityAction.name())
                         JiraDBActions dbActivityAction = (isSelf)
                                 ? JiraDBActions.valueOf(SELF_PREFIX + prActivityAction.name()) : prActivityAction
-                        int counter = database.incrementField(indexLookup, dbActivityAction.name())
-
-                        System.out.println("   ${userName} ${dbActivityAction.name()} counter: ${counter}")
+                        database.incrementField(indexLookup, dbActivityAction.name())
                     }
                 })
             })
@@ -195,7 +205,6 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             return
         }
         commentText = commentText.replaceAll("(\\r|\\n)?\\n", "  ").trim()
-//        System.out.println("${org.apache.ivy.util.StringUtils.repeat(' ', indentation)}${userName} ${action} ${commentAction}: ${commentText}")
         comment.comments.forEach(replyComment -> {
             processComment(indexLookup, replyComment.author.name, "COMMENTED", "REPLY", replyComment, indentation + 3)
         })
