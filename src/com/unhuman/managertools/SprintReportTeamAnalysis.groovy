@@ -8,7 +8,7 @@ import com.unhuman.flexidb.init.FlexiDBInitIndexColumn
 import groovy.cli.commons.OptionAccessor
 
 class SprintReportTeamAnalysis extends AbstractSprintReport {
-    final List<String> IGNORE_USERS = [ "codeowners" ]
+    final List<String> IGNORE_USERS = [ "codeowners", "DeployMan" ]
     final List<String> IGNORE_COMMENTS = [ "Tasks to Complete Before Merging Pull Request" ]
 
     static final String SELF_PREFIX = "SELF_"
@@ -98,6 +98,9 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             getIssueCategoryInformation(data.sprint, data.contents.completedIssues)
             getIssueCategoryInformation(data.sprint, data.contents.issuesNotCompletedInCurrentSprint)
         })
+
+        // Temporary - output the database
+        System.out.println(database.toCSV())
     }
 
     def getIssueCategoryInformation(Object sprint, List<Object> issueList) {
@@ -182,19 +185,19 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     }
 
     def processComment(List<FlexiDBQueryColumn> indexLookup, Object prActivity) {
-        processComment(userName, prActivity.action, prActivity.commentAction, prActivity.comment, 3)
+        processComment(indexLookup, prActivity.user.name, prActivity.action, prActivity.commentAction, prActivity.comment, 3)
     }
 
-    def processComment(List<FlexiDBQueryColumn> indexLookup, String action, String commentAction, Object comment, int indentation) {
+    def processComment(List<FlexiDBQueryColumn> indexLookup, String userName, String action, String commentAction, Object comment, int indentation) {
         // TODO: distinguish comments on own PR versus others
         String commentText = comment.text
         if (IGNORE_COMMENTS.contains(commentText)) {
             return
         }
         commentText = commentText.replaceAll("(\\r|\\n)?\\n", "  ").trim()
-        System.out.println("${org.apache.ivy.util.StringUtils.repeat(' ', indentation)}${userName} ${action} ${commentAction}: ${commentText}")
+//        System.out.println("${org.apache.ivy.util.StringUtils.repeat(' ', indentation)}${userName} ${action} ${commentAction}: ${commentText}")
         comment.comments.forEach(replyComment -> {
-            processComment(replyComment.author.name, "COMMENTED", "REPLY", replyComment, indentation + 3)
+            processComment(indexLookup, replyComment.author.name, "COMMENTED", "REPLY", replyComment, indentation + 3)
         })
     }
 

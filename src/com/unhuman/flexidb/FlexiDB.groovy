@@ -9,6 +9,7 @@ import com.unhuman.flexidb.exceptions.UnexpectedSituationException
 import com.unhuman.flexidb.init.FlexiDBInitDataColumn
 import com.unhuman.flexidb.init.FlexiDBInitIndexColumn
 import com.unhuman.flexidb.init.AbstractFlexiDBInitColumn
+import org.apache.commons.text.StringEscapeUtils
 
 /**
  * This is a dynamic in-memory database.
@@ -19,23 +20,24 @@ import com.unhuman.flexidb.init.AbstractFlexiDBInitColumn
  */
 
 class FlexiDB {
-    private List<FlexiDBRow> database;
-    private Map<String, AbstractFlexiDBInitColumn> columnFinder = new HashMap<>()
-    private int indexedColumnCount
+    private final List<FlexiDBRow> database;
+    private final Map<String, AbstractFlexiDBInitColumn> columnFinder = new HashMap<>()
+    private final List<String> originalColumnOrder
+    private final int indexedColumnCount
 
     Map<FlexiDBIndexKey, LinkedHashSet<FlexiDBRow>> indexes
-
-    // TODO: Optimization - we could optimize searches by tracking the columnFinder lookup values in Maps.
 
     /**
      * @param columnSignature
      */
     FlexiDB(List<AbstractFlexiDBInitColumn> columnSignature) {
         indexedColumnCount = 0
+        originalColumnOrder = new ArrayList<>()
         // to optimize lookups, store a mapping of String to column
         for (int i = 0; i < columnSignature.size(); i++) {
             AbstractFlexiDBInitColumn columnDefinition = columnSignature.get(i)
             columnFinder.put(columnDefinition.getName(), columnDefinition)
+            originalColumnOrder.add(columnDefinition.getName())
 
             if (columnDefinition instanceof FlexiDBInitIndexColumn) {
                 ++indexedColumnCount
@@ -48,6 +50,7 @@ class FlexiDB {
 
         database = new ArrayList<>()
         indexes = new HashMap<>()
+        originalColumnOrder = Collections.unmodifiableList(originalColumnOrder)
     }
 
     /**
@@ -210,6 +213,39 @@ class FlexiDB {
         }
 
         return row
+    }
+
+    List<String> getOriginalColumnOrder() {
+        return originalColumnOrder
+    }
+
+    String toCSV() {
+        return toCSV(originalColumnOrder)
+    }
+
+    String toCSV(List<String> columnOrder) {
+        char separator = ','
+        StringBuilder sb = new StringBuilder(4096)
+
+        // Render heading
+        for (int i = 0; i < columnOrder.size(); i++) {
+            sb.append((i > 0) ? separator : "")
+            sb.append(columnOrder.get(i))
+        }
+        sb.append('\n')
+
+        // Render rows
+        database.each {row -> {
+            for (int i = 0; i < columnOrder.size(); i++) {
+                sb.append((i > 0) ? separator : "")
+                Object value = row.get(columnOrder.get(i))
+                // TODO: may still need to resolve the value (ie lists)
+                sb.append(StringEscapeUtils.escapeCsv(value.toString()))
+            }
+            sb.append('\n')
+        }}
+
+        return sb.toString()
     }
 
     private void validateColumn(String columnName) {

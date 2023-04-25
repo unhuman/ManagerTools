@@ -89,6 +89,15 @@ class FlexiDBTests extends GroovyTestCase {
 
         Assert.assertThrows(com.unhuman.flexidb.exceptions.InvalidRequestException.class,
                 () -> simpleFlexiDb.getValue(complexIndexQuery2, SIMPLE_COUNTER_KEY))
+
+        String expectedCSV = "StringIdx1,Value,Counter,Comments" + "\n" +
+                "value1,two,2,\"[Comment1, Comment2]\"" + "\n"
+        Assert.assertEquals(expectedCSV, simpleFlexiDb.toCSV())
+
+        expectedCSV = "Counter" + "\n" +
+                "2" + "\n"
+        Assert.assertEquals(expectedCSV, simpleFlexiDb.toCSV(Collections.singletonList(SIMPLE_COUNTER_KEY)))
+
     }
 
     void testFlexiDatabaseComplex() {
@@ -142,5 +151,10 @@ class FlexiDBTests extends GroovyTestCase {
         // Retrieve all the rows for INDEX_KEY_1 (should be 2)
         List<Object> counters = complexFlexiDB.getValues(simpleIndexQuery, SIMPLE_COUNTER_KEY)
         Assert.assertEquals(2, counters.size())
+
+        String expectedCSV = "StringIdx1,StringIdx2,Counter,Comments,DoNotPutDataInThisColumn" + "\n" +
+                "value1,value2,12,[],null" + "\n" +
+                "value1,value3,11,[],null" + "\n"
+        Assert.assertEquals(expectedCSV, complexFlexiDB.toCSV())
     }
 }
