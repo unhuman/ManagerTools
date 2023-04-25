@@ -6,22 +6,47 @@ package com.unhuman.managertools.rest
 ])
 
 import groovy.json.JsonSlurper
-import org.apache.http.HttpHeaders
-import org.apache.http.NameValuePair
-import org.apache.http.client.config.RequestConfig
-import org.apache.http.client.methods.HttpUriRequest
-import org.apache.http.client.methods.RequestBuilder
-import org.apache.http.entity.StringEntity
-import org.apache.http.impl.client.HttpClientBuilder
-import org.apache.http.util.EntityUtils
+import org.apache.hc.client5.http.config.RequestConfig
+import org.apache.hc.client5.http.impl.classic.HttpClientBuilder
+import org.apache.hc.core5.http.HttpHeaders
+import org.apache.hc.core5.http.NameValuePair
+import org.apache.hc.core5.http.io.entity.StringEntity
+import org.apache.hc.core5.http.io.support.ClassicRequestBuilder
+import org.apache.hc.core5.http.message.BasicClassicHttpRequest
 
 import java.nio.charset.Charset
+import java.util.concurrent.TimeUnit
 
 class RestService {
+
+//    private static enum ConnectionManager {
+//        // Just one of me so constructor will be called once.
+//        Client
+//        // The pool
+//        private PoolingHttpClientConnectionManager cm
+//
+//        // The constructor creates it - thus late
+//        private ConnectionManager() {
+//            cm = new PoolingHttpClientConnectionManager()
+//            // Increase max total connection to 200
+//            cm.setMaxTotal(2)
+//            // Increase default max connection per route to 20
+//            cm.setDefaultMaxPerRoute(20)
+//        }
+//
+//        CloseableHttpClient get() {
+//            CloseableHttpClient threadSafeClient = HttpClients.custom()
+//                    .setConnectionManager(cm)
+////                    .setDefaultRequestConfig(ConnectionManager.getRequestConfig())
+//                    .build()
+//            return threadSafeClient
+//        }
+//    }
+
+
     static Object GetRequest(String uri, String authCookies, NameValuePair... parameters) {
-        HttpUriRequest request = RequestBuilder
+        BasicClassicHttpRequest request = ClassicRequestBuilder
                 .create("GET")
-                .setConfig(getRequestConfig())
                 .setUri(uri)
                 .setHeader(HttpHeaders.ACCEPT, "application/json;charset=UTF-8")
                 .setHeader("Cookie", authCookies)
@@ -34,9 +59,8 @@ class RestService {
 
 
     static Object GetRequest(String uri, String user, String password, NameValuePair... parameters) {
-        HttpUriRequest request = RequestBuilder
+        BasicClassicHttpRequest request = ClassicRequestBuilder
                 .create("GET")
-                .setConfig(getRequestConfig())
                 .setUri(uri)
                 .setHeader(HttpHeaders.ACCEPT, "application/json;charset=UTF-8")
                 .setHeader(HttpHeaders.AUTHORIZATION, getBasicAuth(user, password))
@@ -48,9 +72,8 @@ class RestService {
     }
 
     static Object PutRequest(String uri, String authCookies, String content, NameValuePair... parameters) {
-        HttpUriRequest request = RequestBuilder
+        BasicClassicHttpRequest request = ClassicRequestBuilder
                 .create("PUT")
-                .setConfig(getRequestConfig())
                 .setUri(uri)
                 .setHeader(HttpHeaders.ACCEPT, "application/json;charset=UTF-8")
                 .setHeader("Cookie", authCookies)
@@ -63,25 +86,31 @@ class RestService {
     }
 
 
-    private static Object executeRequest(HttpUriRequest request) {
-        String responseData = HttpClientBuilder.create().build().withCloseable { httpClient ->
-            httpClient.execute(request).withCloseable { response ->
-                if (response.getStatusLine().getStatusCode() < 200 || response.getStatusLine().getStatusCode() > 299) {
-                    throw new RuntimeException("Error: Status ${response.getStatusLine().getStatusCode()}")
-                }
-                return EntityUtils.toString(response.getEntity());
-            }
+    private static Object executeRequest(BasicClassicHttpRequest request) {
+        String responseData = HttpClientBuilder.create()
+                .setDefaultRequestConfig(getRequestConfig())
+                .build()
+                .withCloseable { httpClient ->
+                    httpClient.execute(request).withCloseable { response ->
+                        if (response.getCode() < 200 || response.getCode() > 299) {
+                            throw new RuntimeException("Error: Status ${response.getStatusLine().getStatusCode()}")
+                        }
+                        InputStream inputStream = response.getEntity().getContent()
+                        String text = new String(inputStream.readAllBytes(), Charset.defaultCharset())
+                        return text
+                    }
         }
 
         return new JsonSlurper().parseText(responseData)
+
     }
 
     private static RequestConfig getRequestConfig() {
         return RequestConfig.custom()
-                .setConnectTimeout(2000)
-                .setSocketTimeout(60000)
+                .setConnectTimeout((long) 2L, TimeUnit.SECONDS)
+                .setResponseTimeout((long) 60L, TimeUnit.SECONDS)
                 .build()
-    };
+    }
 
     private static String getBasicAuth(String user, String password) {
         return "Basic "+ Base64.encoder.encodeToString("${user}:${password}".getBytes(Charset.defaultCharset()));

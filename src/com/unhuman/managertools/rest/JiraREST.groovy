@@ -1,7 +1,7 @@
 package com.unhuman.managertools.rest
 
-import org.apache.http.NameValuePair
-import org.apache.http.message.BasicNameValuePair
+import org.apache.hc.core5.http.NameValuePair
+import org.apache.hc.core5.http.message.BasicNameValuePair
 
 class JiraREST {
     String jiraServer
