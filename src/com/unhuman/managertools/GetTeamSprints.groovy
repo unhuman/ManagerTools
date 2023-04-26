@@ -67,6 +67,9 @@ class GetTeamSprints extends Script {
             data.sprints = data.sprints.subList(0, limitCount)
         }
 
+        // Flip what's left to order back the way we want it
+        Collections.reverse(data.sprints)
+
         return data
     }
 }
