@@ -3,3 +3,4 @@ out/
 lib/
 apache-ivy*/
 ManagerTools.iml
+**/*.csv

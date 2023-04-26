@@ -5,13 +5,13 @@ import com.unhuman.flexidb.FlexiDBQueryColumn
 import com.unhuman.flexidb.init.AbstractFlexiDBInitColumn
 import com.unhuman.flexidb.init.FlexiDBInitDataColumn
 import com.unhuman.flexidb.init.FlexiDBInitIndexColumn
-import groovy.cli.commons.OptionAccessor
+import groovy.cli.commons.CliBuilder
 
 import java.text.SimpleDateFormat
 
 class SprintReportTeamAnalysis extends AbstractSprintReport {
-    final List<String> IGNORE_USERS = [ "codeowners", "DeployMan" ]
-    final List<String> IGNORE_COMMENTS = [ "Tasks to Complete Before Merging Pull Request" ]
+    final List<String> IGNORE_USERS = ["codeowners", "DeployMan"]
+    final List<String> IGNORE_COMMENTS = ["Tasks to Complete Before Merging Pull Request"]
 
     static final String SELF_PREFIX = "SELF_"
     static final String TOTAL_PREFIX = "SELF_"
@@ -94,7 +94,19 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     static FlexiDB database = new FlexiDB(generateDBSignature())
 
     @Override
-    def process(OptionAccessor commandLineOptions, String boardId, List<String> sprintIds) {
+    def addCustomCommandLineOptions(CliBuilder cli) {
+        cli.o(longOpt: 'outputCSV', required: true, args: 1, argName: 'outputCSV', 'Output filename (.csv)')
+    }
+
+    @Override
+    def validateCustomCommandLineOptions() {
+        if (!getCommandLineOptions().'outputCSV'.endsWith(".csv")) {
+            throw new RuntimeException("Output filename must end in .csv")
+        }
+    }
+
+    @Override
+    def process(String boardId, List<String> sprintIds) {
         sprintIds.each(sprintId -> {
             Object data = jiraREST.getSprintReport(boardId, sprintId)
             System.out.println(data.sprint.name)
@@ -113,7 +125,9 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         columnOrder.add(2, DBData.END_DATE.name())
         // comments are currently generated last - if things changed, might need to manage that here
 
-        System.out.println(database.toCSV(columnOrder))
+        try (PrintStream out = new PrintStream(new FileOutputStream(getCommandLineOptions().'outputCSV'))) {
+            out.print(database.toCSV(columnOrder));
+        }
     }
 
     def getIssueCategoryInformation(Object sprint, List<Object> issueList) {

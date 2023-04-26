@@ -1,10 +1,8 @@
 package com.unhuman.managertools
 
-import groovy.cli.commons.OptionAccessor
-
 class SprintReportTeamCarryoverHours extends AbstractSprintReport {
     @Override
-    def process(OptionAccessor commandLineOptions, String boardId, List<String> sprintIds) {
+    def process(String boardId, List<String> sprintIds) {
         double totalCarryOverHoursAcrossSprints = 0
         sprintIds.each(sprintId -> {
             Object data = jiraREST.getSprintReport(boardId, sprintId)
