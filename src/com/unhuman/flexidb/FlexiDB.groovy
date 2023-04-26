@@ -83,6 +83,16 @@ class FlexiDB {
         return data
     }
 
+    List<Object> findUniqueValues(String columnName) {
+        LinkedHashSet<Object> uniqueValues = new LinkedHashSet<>()
+        database.each(row -> {
+            if (row.containsKey(columnName) && row.get(columnName) != null && !uniqueValues.contains(row.get(columnName)))  {
+                uniqueValues.add(row.get(columnName))
+            }
+        })
+        return uniqueValues.toList()
+    }
+
     /**
      *
      * @param columnFilters
@@ -134,7 +144,7 @@ class FlexiDB {
         return data
     }
 
-    private List<FlexiDBRow> findRows(List<FlexiDBQueryColumn> columnFilters, boolean allowMultipleReturn) {
+    List<FlexiDBRow> findRows(List<FlexiDBQueryColumn> columnFilters, boolean allowMultipleReturn) {
         // check we provided correct details
         int foundCount = 0
 

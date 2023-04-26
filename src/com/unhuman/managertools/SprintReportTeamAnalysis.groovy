@@ -5,13 +5,16 @@ import com.unhuman.flexidb.FlexiDBQueryColumn
 import com.unhuman.flexidb.init.AbstractFlexiDBInitColumn
 import com.unhuman.flexidb.init.FlexiDBInitDataColumn
 import com.unhuman.flexidb.init.FlexiDBInitIndexColumn
+import com.unhuman.managertools.data.DBData
+import com.unhuman.managertools.data.DBIndexData
+import com.unhuman.managertools.data.JiraDBActions
 import groovy.cli.commons.CliBuilder
 
 import java.text.SimpleDateFormat
 
 class SprintReportTeamAnalysis extends AbstractSprintReport {
-    final List<String> IGNORE_USERS = ["codeowners", "DeployMan"]
-    final List<String> IGNORE_COMMENTS = ["Tasks to Complete Before Merging Pull Request"]
+    static final List<String> IGNORE_USERS = ["codeowners", "DeployMan"]
+    static final List<String> IGNORE_COMMENTS = ["Tasks to Complete Before Merging Pull Request"]
 
     static final String SELF_PREFIX = "SELF_"
     static final String TOTAL_PREFIX = "TOTAL_"
@@ -19,79 +22,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     static final SimpleDateFormat DATE_PARSER = new SimpleDateFormat("dd/MMM/yy")
     static final SimpleDateFormat DATE_OUTPUT = new SimpleDateFormat("yyyy/MM/dd");
 
-    enum DBIndexData {
-        SPRINT("sprint"),
-        TICKET("ticket"),
-        PR_ID("prId"),
-        USER("user")
-
-        private String jiraField
-
-        private DBIndexData(String jiraField) {
-            this.jiraField = jiraField
-        }
-
-        String getJiraField() {
-            return jiraField
-        }
-    }
-
-    // Note these values could all get DB_SELF_PREFIX or DB_TOTAL_PREFIX pre-pended based on user
-    enum JiraDBActions {
-        APPROVED(0), SELF_APPROVED(0), TOTAL_APPROVED(0),
-        COMMENTED(0), SELF_COMMENTED(0), TOTAL_COMMENTED(0),
-        DECLINED(0), SELF_DECLINED(0), TOTAL_DECLINED(0),
-        MERGED(0), SELF_MERGED(0), TOTAL_MERGED(0),
-        OPENED(0), SELF_OPENED(0), TOTAL_OPENED(0),
-        RESCOPED(0), SELF_RESCOPED(0), TOTAL_RESCOPED(0),
-        UNAPPROVED(0), SELF_UNAPPROVED(0), TOTAL_UNAPPROVED(0),
-        UPDATED(0), SELF_UPDATED(0), TOTAL_UPDATED(0),
-
-        private Object defaultValue
-
-        private JiraDBActions(Object defaultValue) {
-            this.defaultValue = defaultValue
-        }
-
-        Object getDefaultValue() {
-            return defaultValue
-        }
-
-        static JiraDBActions getResolvedValue(String desiredAction) {
-            try {
-                return JiraDBActions.valueOf(desiredAction)
-            } catch (Exception e) {
-                System.out.println("   Unknown Jira action: ${desiredAction}")
-                return null
-            }
-        }
-    }
-
-    // other data
-    enum DBData {
-        START_DATE("startDate", null),
-        END_DATE("endDate", null),
-        AUTHOR("author", null),
-        COMMENTS("comments", Collections.emptyList())
-
-        private String jiraField
-        private Object defaultValue
-
-        private DBData(String jiraField, Object defaultValue) {
-            this.jiraField = jiraField
-            this.defaultValue = defaultValue
-        }
-
-        String getJiraField() {
-            return jiraField
-        }
-
-        Object getDefaultValue() {
-            return defaultValue
-        }
-    }
-
-    static FlexiDB database = new FlexiDB(generateDBSignature())
+    final FlexiDB database = new FlexiDB(generateDBSignature())
 
     @Override
     def addCustomCommandLineOptions(CliBuilder cli) {
@@ -136,7 +67,9 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     }
 
     protected void generateOutput(ArrayList<String> columnOrder) {
-        try (PrintStream out = new PrintStream(new FileOutputStream(getCommandLineOptions().'outputCSV'))) {
+        String filename = getCommandLineOptions().'outputCSV'
+        System.out.println("Writing file: ${filename}")
+        try (PrintStream out = new PrintStream(new FileOutputStream(filename))) {
             out.print(database.toCSV(columnOrder));
         }
     }
@@ -267,5 +200,9 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
     def cleanDate(String date) {
         return DATE_OUTPUT.format(DATE_PARSER.parse(date))
+    }
+
+    protected List<String> getSprintIds() {
+        return sprintIds
     }
 }
