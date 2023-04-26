@@ -7,7 +7,8 @@ package com.unhuman.managertools.rest
 
 import groovy.json.JsonSlurper
 import org.apache.hc.client5.http.config.RequestConfig
-import org.apache.hc.client5.http.impl.classic.HttpClientBuilder
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient
+import org.apache.hc.client5.http.impl.classic.HttpClients
 import org.apache.hc.core5.http.HttpHeaders
 import org.apache.hc.core5.http.NameValuePair
 import org.apache.hc.core5.http.io.entity.StringEntity
@@ -15,33 +16,36 @@ import org.apache.hc.core5.http.io.support.ClassicRequestBuilder
 import org.apache.hc.core5.http.message.BasicClassicHttpRequest
 
 import java.nio.charset.Charset
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 class RestService {
 
-//    private static enum ConnectionManager {
-//        // Just one of me so constructor will be called once.
-//        Client
-//        // The pool
-//        private PoolingHttpClientConnectionManager cm
-//
-//        // The constructor creates it - thus late
-//        private ConnectionManager() {
-//            cm = new PoolingHttpClientConnectionManager()
-//            // Increase max total connection to 200
-//            cm.setMaxTotal(2)
-//            // Increase default max connection per route to 20
-//            cm.setDefaultMaxPerRoute(20)
-//        }
-//
-//        CloseableHttpClient get() {
-//            CloseableHttpClient threadSafeClient = HttpClients.custom()
-//                    .setConnectionManager(cm)
-////                    .setDefaultRequestConfig(ConnectionManager.getRequestConfig())
-//                    .build()
-//            return threadSafeClient
-//        }
-//    }
+    static Map<String, CloseableHttpClient> clients = new ConcurrentHashMap<>()
+
+    /**
+     * Simple connection manager - re-uses connections
+     * @param authority
+     * @return
+     */
+    private static CloseableHttpClient getClient(String authority) {
+        synchronized (clients) {
+            if (!clients.containsKey(authority)) {
+                RequestConfig requestConfig = RequestConfig.custom()
+                        .setConnectTimeout((long) 2L, TimeUnit.SECONDS)
+                        .setResponseTimeout((long) 60L, TimeUnit.SECONDS)
+                        .build()
+
+                CloseableHttpClient client = HttpClients.custom()
+                        .setDefaultRequestConfig(requestConfig)
+                        .build()
+
+                clients.put(authority, client)
+            }
+
+            return clients.get(authority)
+        }
+    }
 
 
     static Object GetRequest(String uri, String authCookies, NameValuePair... parameters) {
@@ -87,20 +91,17 @@ class RestService {
 
 
     private static Object executeRequest(BasicClassicHttpRequest request) {
-        String responseData = HttpClientBuilder.create()
-                .setDefaultRequestConfig(getRequestConfig())
-                .build()
-                .withCloseable { httpClient ->
+        String responseData = getClient(request.getAuthority().getHostName())
+                .with { httpClient ->
                     httpClient.execute(request).withCloseable { response ->
                         if (response.getCode() < 200 || response.getCode() > 299) {
-                            throw new RuntimeException("Error: Status ${response.getStatusLine().getStatusCode()}")
+                            throw new RuntimeException("Error: Status ${response.getCode()}")
                         }
                         InputStream inputStream = response.getEntity().getContent()
                         String text = new String(inputStream.readAllBytes(), Charset.defaultCharset())
                         return text
                     }
         }
-
         return new JsonSlurper().parseText(responseData)
 
     }
