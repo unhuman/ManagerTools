@@ -14,7 +14,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     final List<String> IGNORE_COMMENTS = ["Tasks to Complete Before Merging Pull Request"]
 
     static final String SELF_PREFIX = "SELF_"
-    static final String TOTAL_PREFIX = "SELF_"
+    static final String TOTAL_PREFIX = "TOTAL_"
 
     static final SimpleDateFormat DATE_PARSER = new SimpleDateFormat("dd/MMM/yy")
     static final SimpleDateFormat DATE_OUTPUT = new SimpleDateFormat("yyyy/MM/dd");
@@ -36,7 +36,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         }
     }
 
-    // Note these values could all get DB_SELF_PREFIX pre-pended based on user
+    // Note these values could all get DB_SELF_PREFIX or DB_TOTAL_PREFIX pre-pended based on user
     enum JiraDBActions {
         APPROVED(0), SELF_APPROVED(0), TOTAL_APPROVED(0),
         COMMENTED(0), SELF_COMMENTED(0), TOTAL_COMMENTED(0),
