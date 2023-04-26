@@ -107,6 +107,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
     @Override
     def process(String boardId, List<String> sprintIds) {
+        // populate the database
         sprintIds.each(sprintId -> {
             Object data = jiraREST.getSprintReport(boardId, sprintId)
             System.out.println(data.sprint.name)
@@ -116,7 +117,14 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             getIssueCategoryInformation(data.sprint, data.contents.issuesNotCompletedInCurrentSprint)
         })
 
+        // Determine the list of columns to report
+        List<String> columnOrder = generateColumnsOrder()
+
         // Generate the CSV file - we'll do some column adjustments
+        generateOutput(columnOrder)
+    }
+
+    protected List<String> generateColumnsOrder() {
         List<String> columnOrder = new ArrayList<>(database.getOriginalColumnOrder())
         // start date right after sprint, which is first
         columnOrder.remove(DBData.START_DATE.name())
@@ -124,7 +132,10 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         columnOrder.remove(DBData.END_DATE.name())
         columnOrder.add(2, DBData.END_DATE.name())
         // comments are currently generated last - if things changed, might need to manage that here
+        columnOrder
+    }
 
+    protected void generateOutput(ArrayList<String> columnOrder) {
         try (PrintStream out = new PrintStream(new FileOutputStream(getCommandLineOptions().'outputCSV'))) {
             out.print(database.toCSV(columnOrder));
         }

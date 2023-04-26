@@ -9,7 +9,6 @@ import com.unhuman.flexidb.exceptions.UnexpectedSituationException
 import com.unhuman.flexidb.init.FlexiDBInitDataColumn
 import com.unhuman.flexidb.init.FlexiDBInitIndexColumn
 import com.unhuman.flexidb.init.AbstractFlexiDBInitColumn
-import org.apache.commons.text.StringEscapeUtils
 
 /**
  * This is a dynamic in-memory database.
@@ -224,34 +223,15 @@ class FlexiDB {
     }
 
     String toCSV(List<String> columnOrder) {
-        char separator = ','
         StringBuilder sb = new StringBuilder(4096)
 
-        // Render heading
-        for (int i = 0; i < columnOrder.size(); i++) {
-            sb.append((i > 0) ? separator : "")
-            sb.append(columnOrder.get(i))
-        }
+        // Render headings
+        sb.append(FlexiDBRow.headingsToCSV(columnOrder))
         sb.append('\n')
 
         // Render rows
         database.each {row -> {
-            for (int i = 0; i < columnOrder.size(); i++) {
-                sb.append((i > 0) ? separator : "")
-                Object value = row.get(columnOrder.get(i))
-
-                // We have to fixup lists
-                if (value instanceof List) {
-                    StringBuilder newValueBuilder = new StringBuilder(1024)
-                    for (int j = 0; j < ((List) value).size(); j++) {
-                        newValueBuilder.append((j > 0) ? "\n" : "")
-                        newValueBuilder.append(((List) value).get(j))
-                    }
-                    value = newValueBuilder.toString()
-                }
-
-                sb.append(StringEscapeUtils.escapeCsv(value.toString()))
-            }
+            sb.append(row.toCSV(columnOrder))
             sb.append('\n')
         }}
 

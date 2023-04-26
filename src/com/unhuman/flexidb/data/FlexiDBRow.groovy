@@ -1,7 +1,12 @@
 package com.unhuman.flexidb.data
 
+import org.apache.commons.text.StringEscapeUtils
+
 class FlexiDBRow extends LinkedHashMap<String, Object> {
     static final Map<String, Object> defaults = new HashMap<>()
+
+    static final char CSV_SEPARATOR = ','
+
     FlexiDBRow(int initialCapacity) {
         super(initialCapacity)
     }
@@ -18,5 +23,50 @@ class FlexiDBRow extends LinkedHashMap<String, Object> {
     @Override
     Object get(Object key) {
         return (super.containsKey(key) ? super.get(key) : defaults.get(key))
+    }
+
+    static String headingsToCSV(List<String> columnOrder) {
+        StringBuilder sb = new StringBuilder(512)
+        for (int i = 0; i < columnOrder.size(); i++) {
+            String columnName = columnOrder.get(i)
+            sb.append((i > 0) ? CSV_SEPARATOR : "")
+
+            // if a columnName is null, that's an empty value
+            if (columnName == null) {
+                continue
+            }
+
+            sb.append(columnOrder.get(i))
+        }
+        return sb.toString()
+    }
+
+    String toCSV(List<String> columnOrder) {
+        StringBuilder sb = new StringBuilder(512)
+        for (int i = 0; i < columnOrder.size(); i++) {
+            String columnName = columnOrder.get(i)
+            sb.append((i > 0) ? CSV_SEPARATOR : "")
+
+            // if a columnName is null, that's an empty value
+            if (columnName == null) {
+                continue
+            }
+
+            Object value = get(columnName)
+
+            // We have to fixup lists
+            if (value instanceof List) {
+                StringBuilder newValueBuilder = new StringBuilder(1024)
+                for (int j = 0; j < ((List) value).size(); j++) {
+                    newValueBuilder.append((j > 0) ? "\n" : "")
+                    newValueBuilder.append(((List) value).get(j))
+                }
+                value = newValueBuilder.toString()
+            }
+
+            // escape the value to include in a CSV
+            sb.append(StringEscapeUtils.escapeCsv(value.toString()))
+        }
+        return sb.toString()
     }
 }
