@@ -244,7 +244,7 @@ class FlexiDB {
                 if (value instanceof List) {
                     StringBuilder newValueBuilder = new StringBuilder(1024)
                     for (int j = 0; j < ((List) value).size(); j++) {
-                        newValueBuilder.append((i > 0) ? "\n" : "")
+                        newValueBuilder.append((j > 0) ? "\n" : "")
                         newValueBuilder.append(((List) value).get(j))
                     }
                     value = newValueBuilder.toString()
