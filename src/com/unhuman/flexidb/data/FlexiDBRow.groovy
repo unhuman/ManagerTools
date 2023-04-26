@@ -53,6 +53,9 @@ class FlexiDBRow extends LinkedHashMap<String, Object> {
             }
 
             Object value = get(columnName)
+            if (value == null) {
+                continue
+            }
 
             // We have to fixup lists
             if (value instanceof List) {

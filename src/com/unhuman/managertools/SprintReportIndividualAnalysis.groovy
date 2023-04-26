@@ -46,6 +46,7 @@ class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
             sb.append(FlexiDBRow.headingsToCSV(columnOrder))
             sb.append('\n')
 
+            FlexiDBRow overallTotalsRow = new FlexiDBRow(columnOrder.size())
             sprints.each { sprint -> {
                 List<FlexiDBQueryColumn> userSprintFinder = new ArrayList<>()
                 userSprintFinder.add(new FlexiDBQueryColumn(DBIndexData.SPRINT.name(), sprint))
@@ -54,18 +55,43 @@ class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
                 List<FlexiDBRow> rows = database.findRows(userSprintFinder, true)
 
                 // Render rows
+                FlexiDBRow sprintTotalsRow = new FlexiDBRow(columnOrder.size())
                 rows.each {row -> {
                     sb.append(row.toCSV(columnOrder))
                     sb.append('\n')
+
+                    // Build up totals
+                    columnOrder.each { column -> {
+                        Object value = row.get(column)
+                        if ((value instanceof Integer) || (value instanceof Long)) {
+                            Long longValue = (Long) value
+                            // add to sprint totals
+                            sprintTotalsRow.put(column, sprintTotalsRow.containsKey(column)
+                                    ? sprintTotalsRow.get(column) + longValue : longValue)
+                            // add to overall totals
+                            overallTotalsRow.put(column, overallTotalsRow.containsKey(column)
+                                    ? overallTotalsRow.get(column) + longValue : longValue)
+                        }
+                    }}
                 }}
 
-                // TODO: Totals for sprint
+                // Totals for Sprint
+                if (!sprintTotalsRow.containsKey(columnOrder.get(0))) {
+                    sprintTotalsRow.put(columnOrder.get(0), "Sprint Totals")
+                }
+                sb.append(sprintTotalsRow.toCSV(columnOrder))
+                sb.append('\n')
 
                 // space between sprints
                 sb.append('\n')
             }}
 
-            // TODO: Totals Overall
+            // Overall totals
+            if (!overallTotalsRow.containsKey(columnOrder.get(0))) {
+                overallTotalsRow.put(columnOrder.get(0), "Overall Totals")
+            }
+            sb.append(overallTotalsRow.toCSV(columnOrder))
+            sb.append('\n')
 
             String filename = getCommandLineOptions().'outputCSV'.replace(".csv", "-${user}.csv")
             System.out.println("Writing file: ${filename}")
