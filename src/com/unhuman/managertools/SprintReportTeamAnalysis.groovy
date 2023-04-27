@@ -70,7 +70,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     }
 
     protected void generateOutput(ArrayList<String> columnOrder) {
-        String filename = getCommandLineOptions().'outputCSV'
+        String filename = getCommandLineOptions().'outputCSV'.replace(".csv", "-${commandLineOptions.'boardId'}.csv")
         System.out.println("Writing file: ${filename}")
         try (PrintStream out = new PrintStream(new FileOutputStream(filename))) {
             out.print(database.toCSV(columnOrder));

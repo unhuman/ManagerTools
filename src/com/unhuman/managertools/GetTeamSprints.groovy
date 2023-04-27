@@ -23,7 +23,7 @@ class GetTeamSprints extends Script {
         def cli = new CliBuilder(usage: 'GetTeamSprints [options]', header: 'Options:');
         cli.width = 120
         cli.h(longOpt: 'help', 'Shows useful information')
-        cli.b(longOpt: 'board-id', required: true, args: 1, argName: 'boardId', 'Sprint Board Id Number')
+        cli.b(longOpt: 'boardId', required: true, args: 1, argName: 'boardId', 'Sprint Board Id Number')
         cli.l(longOpt: 'limit', required: false, args: 1, argName: 'limitCount', 'Limit of count to get')
 
         def options = cli.parse(this.args)
@@ -44,7 +44,7 @@ class GetTeamSprints extends Script {
 
         jiraREST = new JiraREST(jiraServer, jiraCookies)
 
-        Object data = getClosedRecentSprints(options.'board-id', (options.'limit') ? Integer.parseInt(options.'limit') : null)
+        Object data = getClosedRecentSprints(options.'boardId', (options.'limit') ? Integer.parseInt(options.'limit') : null)
         data.sprints.each { sprint ->
             System.out.println("${sprint.id}: ${sprint.name}")
         }

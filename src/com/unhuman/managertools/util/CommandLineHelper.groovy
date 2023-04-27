@@ -1,5 +1,7 @@
 package com.unhuman.managertools.util
 
+import org.codehaus.groovy.util.StringUtil
+
 import java.util.regex.Pattern
 
 class CommandLineHelper {
@@ -57,6 +59,12 @@ class CommandLineHelper {
         return promptAndStore("Bitbucket Cookies (DevTools/Request/Cookie)", true, ANY_MATCH_PATTERN, "bitbucketCookies", true)
     }
 
+    List<String> getBoardTeamUsers(String boardId) {
+        List<String> users = promptAndStore("Team users (optional, comma separated) for board: ${boardId}", false, ANY_MATCH_PATTERN, "${boardId}-users", true).split(",").toList()
+        users = users.stream().map { it.trim() }.filter { it != null && !it.isEmpty() }.toList()
+        return users
+    }
+
     String getDateCheck(String promptDescription, String configKey) {
         return promptAndStore("Enter date ${promptDescription} (yyyy-mm-dd)", false, DATE_PATTERN, configKey, true)
     }
@@ -106,14 +114,14 @@ class CommandLineHelper {
             }
         }
 
-        text = "${text} (press return to use existing value: ${isPassword ? "****" : defaultValue})"
+        text = (defaultValue) ? "${text} (press return to use existing value: ${isPassword ? "****" : defaultValue})" : text
 
         while (true) {
             // We match anything here, but then later do our own check
             String input = prompt(text, isPassword, ANY_MATCH_PATTERN)
             if (input.isEmpty() && defaultValue) {
                 return defaultValue
-            } else if (defaultValueConfigKey && !input.isEmpty() &&
+            } else if (defaultValueConfigKey &&
                     validationPattern.matcher(input).matches()) {
                 configFileManager.updateValue(defaultValueConfigKey, input)
                 return input

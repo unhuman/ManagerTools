@@ -3,15 +3,20 @@ package com.unhuman.managertools
 import com.unhuman.flexidb.FlexiDBQueryColumn
 import com.unhuman.flexidb.data.FlexiDBRow
 import com.unhuman.managertools.data.DBIndexData
+import com.unhuman.managertools.util.CommandLineHelper
 import groovy.cli.commons.CliBuilder
 
 import java.util.stream.Collectors
 
 class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
+    List<String> teamUsers
+
     @Override
-    def addCustomCommandLineOptions(CliBuilder cli) {
-        super.addCustomCommandLineOptions(cli)
-        cli.u(longOpt: 'users', args: 1, argName: 'users', 'Users to limit processing to (comma separated)')
+    protected void setupRun() {
+        super.setupRun()
+        // Load the command line helper here for ability to manage users / team
+        CommandLineHelper commandLineHelper = new CommandLineHelper(".managerTools.cfg")
+        teamUsers = commandLineHelper.getBoardTeamUsers(commandLineOptions.'boardId')
     }
 
     @Override
@@ -21,8 +26,7 @@ class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
 
         // Try to get values out of the database for user and case-insensitively up-convert the matches,
         // otherwise preserve unknown values (they won't matter)
-        List<String> specifiedUsers = (getCommandLineOptions().'users')
-                ? Arrays.asList(getCommandLineOptions().'users'.split(',')) : null
+        List<String> specifiedUsers = (teamUsers.size() > 0) ? teamUsers : null
         if (specifiedUsers != null) {
             users = specifiedUsers.stream().map { specifiedUser -> {
                 List<String> matched = users.stream().findAll {it::equalsIgnoreCase(specifiedUser) }
@@ -93,7 +97,7 @@ class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
             sb.append(overallTotalsRow.toCSV(columnOrder))
             sb.append('\n')
 
-            String filename = getCommandLineOptions().'outputCSV'.replace(".csv", "-${user}.csv")
+            String filename = getCommandLineOptions().'outputCSV'.replace(".csv", "-${commandLineOptions.'boardId'}-${user}.csv")
             System.out.println("Writing file: ${filename}")
             try (PrintStream out = new PrintStream(new FileOutputStream(filename))) {
                 out.print(sb.toString());

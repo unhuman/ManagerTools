@@ -18,6 +18,7 @@ abstract class AbstractSprintReport extends Script {
     protected JiraREST jiraREST
     protected BitbucketREST bitbucketREST
     private OptionAccessor commandLineOptions
+    private List<String> sprintIds
 
     /**
      * Implementations should override this functionality.
@@ -45,15 +46,20 @@ abstract class AbstractSprintReport extends Script {
     def validateCustomCommandLineOptions() { }
 
     def run() {
+        setupRun()
+        process(commandLineOptions.'boardId', sprintIds)
+    }
+
+    protected void setupRun() {
         CliBuilder cli = new CliBuilder(usage: 'SprintReportTeamAnalysis [options]', header: 'Options:');
         cli.width = 120
         cli.h(longOpt: 'help', 'Shows useful information')
-        cli.b(longOpt: 'board-id', required: true, args: 1, argName: 'boardId', 'Sprint Board Id Number')
+        cli.b(longOpt: 'boardId', required: true, args: 1, argName: 'boardId', 'Sprint Board Id Number')
 
         def optionGroup = new OptionGroup(required: true)
         optionGroup.with {
             addOption(cli.option('l', [longOpt: 'limit', args: 1, argName: 'limitSprints'], 'Number of recent sprints to process'))
-            addOption(cli.option('s', [longOpt: 'sprint-ids', args: 1, argName: 'sprintIds'], 'Sprint Id Numbers (comma separated)'))
+            addOption(cli.option('s', [longOpt: 'sprintIds', args: 1, argName: 'sprintIds'], 'Sprint Id Numbers (comma separated)'))
         }
         cli.options.addOptionGroup(optionGroup)
 
@@ -92,17 +98,14 @@ abstract class AbstractSprintReport extends Script {
         jiraREST = new JiraREST(jiraServer, jiraCookies)
         bitbucketREST = new BitbucketREST(bitbucketServer, bitbucketCookies)
 
-        List<String> sprintIds
         if (commandLineOptions.'limit') {
             GetTeamSprints getTeamSprints = new GetTeamSprints(jiraREST)
-            def sprintData = getTeamSprints.getClosedRecentSprints(commandLineOptions.'board-id', Integer.parseInt(commandLineOptions.'limit'))
+            def sprintData = getTeamSprints.getClosedRecentSprints(commandLineOptions.'boardId', Integer.parseInt(commandLineOptions.'limit'))
             sprintIds = sprintData.sprints.stream().map(sprint -> sprint.id.toString()).collect(Collectors.toUnmodifiableList())
         } else {
-            // limit and sprint-ids are required / mutually exclusive, so just use what we get
-            sprintIds = commandLineOptions.'sprint-ids'.split(',')
+            // limit and sprintIds are required / mutually exclusive, so just use what we get
+            sprintIds = commandLineOptions.'sprintIds'.split(',')
         }
-
-        process(commandLineOptions.'board-id', sprintIds)
     }
 
     protected OptionAccessor getCommandLineOptions() {
