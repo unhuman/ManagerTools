@@ -55,7 +55,6 @@ abstract class AbstractSprintReport extends Script {
             addOption(cli.option('l', [longOpt: 'limit', args: 1, argName: 'limitSprints'], 'Number of recent sprints to process'))
             addOption(cli.option('s', [longOpt: 'sprint-ids', args: 1, argName: 'sprintIds'], 'Sprint Id Numbers (comma separated)'))
         }
-
         cli.options.addOptionGroup(optionGroup)
 
         // Any custom options need to be added

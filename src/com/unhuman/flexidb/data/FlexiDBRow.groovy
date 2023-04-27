@@ -1,5 +1,9 @@
 package com.unhuman.flexidb.data
 
+@Grapes(
+        @Grab(group='org.apache.commons', module='commons-text', version='1.10.0')
+)
+
 import org.apache.commons.text.StringEscapeUtils
 
 class FlexiDBRow extends LinkedHashMap<String, Object> {

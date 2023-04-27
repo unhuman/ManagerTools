@@ -11,7 +11,7 @@ class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
     @Override
     def addCustomCommandLineOptions(CliBuilder cli) {
         super.addCustomCommandLineOptions(cli)
-        cli.u(longOpt: 'users', args: 1, required: true, argName: 'users', 'Users to limit processing to (comma separated)')
+        cli.u(longOpt: 'users', args: 1, argName: 'users', 'Users to limit processing to (comma separated)')
     }
 
     @Override
@@ -21,7 +21,7 @@ class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
 
         // Try to get values out of the database for user and case-insensitively up-convert the matches,
         // otherwise preserve unknown values (they won't matter)
-        List<String> specifiedUsers = (getCommandLineOptions().'users' != null)
+        List<String> specifiedUsers = (getCommandLineOptions().'users')
                 ? Arrays.asList(getCommandLineOptions().'users'.split(',')) : null
         if (specifiedUsers != null) {
             users = specifiedUsers.stream().map { specifiedUser -> {

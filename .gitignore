@@ -4,3 +4,4 @@ lib/
 apache-ivy*/
 ManagerTools.iml
 **/*.csv
+.DS_Store

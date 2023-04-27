@@ -8,9 +8,11 @@ enum JiraDBActions {
     OPENED(0), SELF_OPENED(0), TOTAL_OPENED(0),
     RESCOPED(0), SELF_RESCOPED(0), TOTAL_RESCOPED(0),
     UNAPPROVED(0), SELF_UNAPPROVED(0), TOTAL_UNAPPROVED(0),
-    UPDATED(0), SELF_UPDATED(0), TOTAL_UPDATED(0),
+    UPDATED(0), SELF_UPDATED(0), TOTAL_UPDATED(0)
 
     private Object defaultValue
+
+    static final int DETAIL_DATA_SKIP_COUNT = 2
 
     private JiraDBActions(Object defaultValue) {
         this.defaultValue = defaultValue

@@ -22,11 +22,12 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     static final SimpleDateFormat DATE_PARSER = new SimpleDateFormat("dd/MMM/yy")
     static final SimpleDateFormat DATE_OUTPUT = new SimpleDateFormat("yyyy/MM/dd");
 
-    final FlexiDB database = new FlexiDB(generateDBSignature())
+    FlexiDB database
 
     @Override
     def addCustomCommandLineOptions(CliBuilder cli) {
         cli.o(longOpt: 'outputCSV', required: true, args: 1, argName: 'outputCSV', 'Output filename (.csv)')
+        cli.d(longOpt: 'detailed', args: 1, argName: 'detailed', 'Detailed breakdown of participation counts')
     }
 
     @Override
@@ -38,6 +39,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
     @Override
     def process(String boardId, List<String> sprintIds) {
+        database = new FlexiDB(generateDBSignature())
+
         // populate the database
         sprintIds.each(sprintId -> {
             Object data = jiraREST.getSprintReport(boardId, sprintId)
@@ -147,10 +150,13 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                                 break
                         }
 
-                        // increment counters (total and then specific)
-                        database.incrementField(indexLookup, TOTAL_PREFIX + prActivityAction.name())
-                        JiraDBActions dbActivityAction = (isSelf)
-                                ? JiraDBActions.valueOf(SELF_PREFIX + prActivityAction.name()) : prActivityAction
+                        // increment counters (total and then specific) based on detailed configuration
+                        JiraDBActions dbActivityAction = prActivityAction
+                        if (commandLineOptions.'detailed') {
+                            database.incrementField(indexLookup, TOTAL_PREFIX + prActivityAction.name())
+                            dbActivityAction = (isSelf)
+                                    ? JiraDBActions.valueOf(SELF_PREFIX + prActivityAction.name()) : prActivityAction
+                        }
                         database.incrementField(indexLookup, dbActivityAction.name())
                     }
                 })
@@ -177,7 +183,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         })
     }
 
-    static List<AbstractFlexiDBInitColumn> generateDBSignature() {
+    List<AbstractFlexiDBInitColumn> generateDBSignature() {
         List<AbstractFlexiDBInitColumn> columns = new ArrayList<>()
 
         // Searchable / index columns
@@ -186,9 +192,11 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         }}
 
         // JiraDB Actions to the data columns
-        JiraDBActions.values().each { action -> {
+        for (int i = 0; i < JiraDBActions.values().length; i++) {
+            JiraDBActions action = JiraDBActions.values()[i]
             columns.add(new FlexiDBInitDataColumn(action.name(), action.getDefaultValue()))
-        }}
+            i += (commandLineOptions.'detailed') ? 0 : JiraDBActions.DETAIL_DATA_SKIP_COUNT
+        }
 
         // Relevant Jira Data
         DBData.values().each { data -> {
