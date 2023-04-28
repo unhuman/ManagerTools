@@ -71,10 +71,92 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         // Determine the list of columns to report
         List<String> columnOrder = generateColumnsOrder()
 
+        List<String> sprints = database.findUniqueValues(DBIndexData.SPRINT.name())
+        LinkedHashSet<String> users = new LinkedHashSet<>(database.findUniqueValues(DBIndexData.USER.name()))
+
+        // 1. Iterate through sprints
+        // 2.    Report all rows for that sprint
+        // 3.    Sum up those rows
+        // 4.    Report totals
+        //
+        // 5. Report total results of all totals
+
+        StringBuilder sb = new StringBuilder(4096)
+        sb.setLength(0)
+        sb.append(FlexiDBRow.headingsToCSV(columnOrder))
+        sb.append('\n')
+
+        FlexiDBRow overallTotalsRow = new FlexiDBRow(columnOrder.size())
+        sprints.each {
+            sprint -> {
+                List<FlexiDBQueryColumn> sprintFinder = new ArrayList<>()
+                sprintFinder.add(new FlexiDBQueryColumn(DBIndexData.SPRINT.name(), sprint))
+
+                findRowsAndAppendCSVData(sprintFinder, sb, overallTotalsRow)
+            }
+        }
+
+        // Summary
+        appendSummary(sb, overallTotalsRow)
+
+        // Write file
         String filename = getCommandLineOptions().'outputCSV'.replace(".csv", "-${commandLineOptions.'boardId'}.csv")
+        writeResultsFile(filename, sb)
+    }
+
+    /**
+     * Update Find rows matching the sprintFinder, CSV stringbuilder, track totals in provided overallTotalsRow
+     * @param rowsFilter
+     * @param sb (will be updated)
+     * @param overallTotalsRow (will be updated)
+     * @return
+     */
+    StringBuilder findRowsAndAppendCSVData(ArrayList<FlexiDBQueryColumn> rowsFilter, StringBuilder sb, overallTotalsRow) {
+        // Determine the list of columns to report
+        List<String> columnOrder = generateColumnsOrder()
+
+        List<FlexiDBRow> rows = database.findRows(rowsFilter, true)
+
+        // Render rows
+        FlexiDBRow sprintTotalsRow = new FlexiDBRow(columnOrder.size())
+        rows.each { row ->
+            {
+                sb.append(row.toCSV(columnOrder))
+                sb.append('\n')
+
+                // Build up totals
+                columnOrder.each { column ->
+                    {
+                        Object value = row.get(column)
+                        if ((value instanceof Integer) || (value instanceof Long)) {
+                            Long longValue = (Long) value
+                            // add to sprint totals
+                            sprintTotalsRow.put(column, sprintTotalsRow.containsKey(column)
+                                    ? sprintTotalsRow.get(column) + longValue : longValue)
+                            // add to overall totals
+                            overallTotalsRow.put(column, overallTotalsRow.containsKey(column)
+                                    ? overallTotalsRow.get(column) + longValue : longValue)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Totals for Sprint
+        appendTotalsInfo(sb, "Sprint Totals", sprintTotalsRow)
+        // space between sprints
+        return sb.append('\n')
+    }
+
+    protected void appendSummary(StringBuilder sb, FlexiDBRow overallTotalsRow) {
+        // Overall totals
+        appendTotalsInfo(sb, "Overall Totals", overallTotalsRow)
+    }
+
+    protected void writeResultsFile(String filename, StringBuilder sb) {
         System.out.println("Writing file: ${filename}")
         try (PrintStream out = new PrintStream(new FileOutputStream(filename))) {
-            out.print(database.toCSV(columnOrder));
+            out.print(sb.toString());
         }
     }
 
@@ -213,7 +295,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
      * @param totalsDescription (will try to use if first column is not calculated)
      * @param totalsRow
      */
-    void appendTotalsInfo(StringBuilder sb, String totalsDescription, FlexiDBRow totalsRow) {
+    StringBuilder appendTotalsInfo(StringBuilder sb, String totalsDescription, FlexiDBRow totalsRow) {
         List<String> columnOrder = generateColumnsOrder()
 
         // if we can replace the first column (non-calculated value) we can clear out the first column heading
@@ -228,7 +310,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             }
         }
         sb.append(totalsRow.toCSV(columnOrder))
-        sb.append('\n')
+        return sb.append('\n')
     }
 
     def cleanDate(String date) {

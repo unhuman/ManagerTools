@@ -54,44 +54,15 @@ class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
                 userSprintFinder.add(new FlexiDBQueryColumn(DBIndexData.SPRINT.name(), sprint))
                 userSprintFinder.add(new FlexiDBQueryColumn(DBIndexData.USER.name(), user))
 
-                List<FlexiDBRow> rows = database.findRows(userSprintFinder, true)
-
-                // Render rows
-                FlexiDBRow sprintTotalsRow = new FlexiDBRow(columnOrder.size())
-                rows.each {row -> {
-                    sb.append(row.toCSV(columnOrder))
-                    sb.append('\n')
-
-                    // Build up totals
-                    columnOrder.each { column -> {
-                        Object value = row.get(column)
-                        if ((value instanceof Integer) || (value instanceof Long)) {
-                            Long longValue = (Long) value
-                            // add to sprint totals
-                            sprintTotalsRow.put(column, sprintTotalsRow.containsKey(column)
-                                    ? sprintTotalsRow.get(column) + longValue : longValue)
-                            // add to overall totals
-                            overallTotalsRow.put(column, overallTotalsRow.containsKey(column)
-                                    ? overallTotalsRow.get(column) + longValue : longValue)
-                        }
-                    }}
-                }}
-
-                // Totals for Sprint
-                appendTotalsInfo(sb, "Sprint Totals", sprintTotalsRow)
-
-                // space between sprints
-                sb.append('\n')
+                findRowsAndAppendCSVData(userSprintFinder, sb, overallTotalsRow)
             }}
 
-            // Overall totals
-            appendTotalsInfo(sb, "Overall Totals", overallTotalsRow)
+            // Summary
+            appendSummary(sb, overallTotalsRow)
 
+            // Write to file
             String filename = getCommandLineOptions().'outputCSV'.replace(".csv", "-${commandLineOptions.'boardId'}-${user}.csv")
-            System.out.println("Writing file: ${filename}")
-            try (PrintStream out = new PrintStream(new FileOutputStream(filename))) {
-                out.print(sb.toString());
-            }
+            writeResultsFile(filename, sb)
         }}
     }
 }
