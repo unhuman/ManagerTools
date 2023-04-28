@@ -306,7 +306,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
         for (int i = 1; i < columnOrder.size(); i++) {
             if (totalsRow.containsKey(columnOrder.get(i))) {
-                totalsRow.put(columnOrder.get(i), columnOrder.get(i) + ": " + totalsRow.get(columnOrder.get(i)))
+                totalsRow.put(columnOrder.get(i), "${columnOrder.get(i)}\n${totalsRow.get(columnOrder.get(i))}")
             }
         }
         sb.append(totalsRow.toCSV(columnOrder))
