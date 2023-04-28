@@ -4,9 +4,6 @@ import com.unhuman.flexidb.FlexiDBQueryColumn
 import com.unhuman.flexidb.data.FlexiDBRow
 import com.unhuman.managertools.data.DBIndexData
 import com.unhuman.managertools.util.CommandLineHelper
-import groovy.cli.commons.CliBuilder
-
-import java.util.stream.Collectors
 
 class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
     List<String> teamUsers
@@ -20,7 +17,10 @@ class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
     }
 
     @Override
-    protected void generateOutput(ArrayList<String> columnOrder) {
+    protected void generateOutput() {
+        // Determine the list of columns to report
+        List<String> columnOrder = generateColumnsOrder()
+
         List<String> sprints = database.findUniqueValues(DBIndexData.SPRINT.name())
         LinkedHashSet<String> users = new LinkedHashSet<>(database.findUniqueValues(DBIndexData.USER.name()))
 
@@ -41,8 +41,6 @@ class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
         // 4.       Report totals
         //
         // 5. Report total results of all totals
-
-        // TODO: Add empty column first to be able to display totals?
 
         StringBuilder sb = new StringBuilder(4096)
         users.each {user -> {
@@ -80,22 +78,14 @@ class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
                 }}
 
                 // Totals for Sprint
-                if (!sprintTotalsRow.containsKey(columnOrder.get(0))) {
-                    sprintTotalsRow.put(columnOrder.get(0), "Sprint Totals")
-                }
-                sb.append(sprintTotalsRow.toCSV(columnOrder))
-                sb.append('\n')
+                appendTotalsInfo(sb, "Sprint Totals", sprintTotalsRow)
 
                 // space between sprints
                 sb.append('\n')
             }}
 
             // Overall totals
-            if (!overallTotalsRow.containsKey(columnOrder.get(0))) {
-                overallTotalsRow.put(columnOrder.get(0), "Overall Totals")
-            }
-            sb.append(overallTotalsRow.toCSV(columnOrder))
-            sb.append('\n')
+            appendTotalsInfo(sb, "Overall Totals", overallTotalsRow)
 
             String filename = getCommandLineOptions().'outputCSV'.replace(".csv", "-${commandLineOptions.'boardId'}-${user}.csv")
             System.out.println("Writing file: ${filename}")

@@ -2,6 +2,7 @@ package com.unhuman.managertools
 
 import com.unhuman.flexidb.FlexiDB
 import com.unhuman.flexidb.FlexiDBQueryColumn
+import com.unhuman.flexidb.data.FlexiDBRow
 import com.unhuman.flexidb.init.AbstractFlexiDBInitColumn
 import com.unhuman.flexidb.init.FlexiDBInitDataColumn
 import com.unhuman.flexidb.init.FlexiDBInitIndexColumn
@@ -51,11 +52,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             getIssueCategoryInformation(data.sprint, data.contents.issuesNotCompletedInCurrentSprint)
         })
 
-        // Determine the list of columns to report
-        List<String> columnOrder = generateColumnsOrder()
-
         // Generate the CSV file - we'll do some column adjustments
-        generateOutput(columnOrder)
+        generateOutput()
     }
 
     protected List<String> generateColumnsOrder() {
@@ -69,7 +67,10 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         columnOrder
     }
 
-    protected void generateOutput(ArrayList<String> columnOrder) {
+    protected void generateOutput() {
+        // Determine the list of columns to report
+        List<String> columnOrder = generateColumnsOrder()
+
         String filename = getCommandLineOptions().'outputCSV'.replace(".csv", "-${commandLineOptions.'boardId'}.csv")
         System.out.println("Writing file: ${filename}")
         try (PrintStream out = new PrintStream(new FileOutputStream(filename))) {
@@ -204,6 +205,30 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         }}
 
         return columns
+    }
+
+    /** append a row of totals information (with header)
+     *
+     * @param sb
+     * @param totalsDescription (will try to use if first column is not calculated)
+     * @param totalsRow
+     */
+    void appendTotalsInfo(StringBuilder sb, String totalsDescription, FlexiDBRow totalsRow) {
+        List<String> columnOrder = generateColumnsOrder()
+
+        // if we can replace the first column (non-calculated value) we can clear out the first column heading
+        if (!totalsRow.containsKey(columnOrder.get(0))) {
+            columnOrder.set(0, "")
+            totalsRow.put(columnOrder.get(0), totalsDescription)
+        }
+
+        for (int i = 1; i < columnOrder.size(); i++) {
+            if (totalsRow.containsKey(columnOrder.get(i))) {
+                totalsRow.put(columnOrder.get(i), columnOrder.get(i) + ": " + totalsRow.get(columnOrder.get(i)))
+            }
+        }
+        sb.append(totalsRow.toCSV(columnOrder))
+        sb.append('\n')
     }
 
     def cleanDate(String date) {
