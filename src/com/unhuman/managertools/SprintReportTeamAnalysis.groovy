@@ -294,16 +294,16 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             return
         }
 
+        // Update comments
         commentText = commentText.replaceAll("(\\r|\\n)?\\n", "  ").trim()
         database.append(currentUserIndexLookup, DBData.COMMENTS.name(), commentText, true)
         incrementCounter(currentUserIndexLookup, JiraDBActions.COMMENTED, isSelf)
 
+        // Recursively process responses
         comment.comments.forEach(replyComment -> {
             // Use the original index lookup so we can determine if self
-            processComment(originalIndexLookup, replyComment.author.name, "COMMENTED", "REPLY", replyComment, indentation + 3)
+            processComment(originalIndexLookup, replyComment.author.name, JiraDBActions.COMMENTED.name(), "REPLY", replyComment, indentation + 3)
         })
-
-        // TODO update counters here
     }
 
     List<AbstractFlexiDBInitColumn> generateDBSignature() {
