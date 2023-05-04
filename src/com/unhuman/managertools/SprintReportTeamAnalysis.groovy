@@ -280,6 +280,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
      * @return
      */
     def processComment(List<FlexiDBQueryColumn> originalIndexLookup, String userName, String action, String commentAction, Object comment, int indentation) {
+
+        // TODO: this self tracking & lookup handling are a bit wonky
         boolean isSelf = userName.equals(originalIndexLookup.stream().filter { it.getName() == DBIndexData.USER.name() }.toList()[0].getMatchValue())
 
         // recreate the indexLookup with the actual user
@@ -293,7 +295,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         }
 
         commentText = commentText.replaceAll("(\\r|\\n)?\\n", "  ").trim()
-        database.append(currentUserIndexLookup, DBData.COMMENTS.name(), commentText)
+        database.append(currentUserIndexLookup, DBData.COMMENTS.name(), commentText, true)
         incrementCounter(currentUserIndexLookup, JiraDBActions.COMMENTED, isSelf)
 
         comment.comments.forEach(replyComment -> {

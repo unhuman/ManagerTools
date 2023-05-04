@@ -134,11 +134,28 @@ class FlexiDB {
      * @return
      */
     List append(Collection<FlexiDBQueryColumn> columnFilters, String appendField, Object appendData) {
+        append(columnFilters, appendField, appendData, false)
+    }
+
+    /**
+     *
+     * @param columnFilters
+     * @param appendField
+     * @param appendData
+     * @return
+     */
+    List append(Collection<FlexiDBQueryColumn> columnFilters, String appendField, Object appendData, boolean addLineNumber) {
         validateColumn(appendField)
 
         FlexiDBRow row = findOrCreateRow(columnFilters);
 
         List data = (!row.containsKey(appendField)) ? new ArrayList<>() : row.get(appendField)
+
+        if (addLineNumber) {
+            int lineNumber = data.size() + 1
+            appendData = "${lineNumber}. ${appendData}"
+        }
+
         data.add(appendData)
         row.put(appendField, data)
         return data
