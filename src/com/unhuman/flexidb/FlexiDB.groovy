@@ -18,10 +18,6 @@ import com.unhuman.flexidb.init.AbstractFlexiDBInitColumn
  * This is not thread safe
  */
 
-// TODO: refactor looksup to take a Set instead of a List
-// TODO: This will be easier to alter values in the query
-
-
 class FlexiDB {
     private final List<FlexiDBRow> database;
     private final Map<String, AbstractFlexiDBInitColumn> columnFinder = new HashMap<>()
@@ -62,7 +58,7 @@ class FlexiDB {
      * @param desiredField
      * @return
      */
-    Object getValue(List<FlexiDBQueryColumn> columnFilters, String desiredField) {
+    Object getValue(Collection<FlexiDBQueryColumn> columnFilters, String desiredField) {
         validateColumn(desiredField)
 
         List<FlexiDBRow> rows = findRows(columnFilters, false)
@@ -75,7 +71,7 @@ class FlexiDB {
         return row.get(desiredField)
     }
 
-    List<Object> getValues(List<FlexiDBQueryColumn> columnFilters, String desiredField) {
+    List<Object> getValues(Collection<FlexiDBQueryColumn> columnFilters, String desiredField) {
         validateColumn(desiredField)
 
         List<FlexiDBRow> rows = findRows(columnFilters, true)
@@ -103,7 +99,7 @@ class FlexiDB {
      * @param incrementField
      * @return
      */
-    int incrementField(List<FlexiDBQueryColumn> columnFilters, String incrementField) {
+    int incrementField(Collection<FlexiDBQueryColumn> columnFilters, String incrementField) {
         validateColumn(incrementField)
 
         FlexiDBRow row = findOrCreateRow(columnFilters)
@@ -123,7 +119,7 @@ class FlexiDB {
      * @param columnName
      * @param value
      */
-    void setValue(List<FlexiDBQueryColumn> columnFilters, String columnName, Object value) {
+    void setValue(Collection<FlexiDBQueryColumn> columnFilters, String columnName, Object value) {
         validateColumn(columnName)
 
         FlexiDBRow row = findOrCreateRow(columnFilters);
@@ -137,7 +133,7 @@ class FlexiDB {
      * @param appendData
      * @return
      */
-    List append(List<FlexiDBQueryColumn> columnFilters, String appendField, Object appendData) {
+    List append(Collection<FlexiDBQueryColumn> columnFilters, String appendField, Object appendData) {
         validateColumn(appendField)
 
         FlexiDBRow row = findOrCreateRow(columnFilters);
@@ -148,7 +144,7 @@ class FlexiDB {
         return data
     }
 
-    List<FlexiDBRow> findRows(List<FlexiDBQueryColumn> columnFilters, boolean allowMultipleReturn) {
+    List<FlexiDBRow> findRows(Collection<FlexiDBQueryColumn> columnFilters, boolean allowMultipleReturn) {
         // check we provided correct details
         int foundCount = 0
 
@@ -206,7 +202,7 @@ class FlexiDB {
         }
     }
 
-    private FlexiDBRow findOrCreateRow(List<FlexiDBQueryColumn> columnFilters) {
+    private FlexiDBRow findOrCreateRow(Collection<FlexiDBQueryColumn> columnFilters) {
         List<FlexiDBRow> foundRows = findRows(columnFilters, false)
         FlexiDBRow row = (foundRows.size() == 1) ? foundRows.get(0) : null
         if (row == null) {
