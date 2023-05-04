@@ -18,6 +18,10 @@ import com.unhuman.flexidb.init.AbstractFlexiDBInitColumn
  * This is not thread safe
  */
 
+// TODO: refactor looksup to take a Set instead of a List
+// TODO: This will be easier to alter values in the query
+
+
 class FlexiDB {
     private final List<FlexiDBRow> database;
     private final Map<String, AbstractFlexiDBInitColumn> columnFinder = new HashMap<>()

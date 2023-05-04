@@ -183,7 +183,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
                     System.out.println("   PR ${ticket} / ${prId} has ${prActivities.values.size()} activities")
                     // process from oldest to newest (reverse)
-                    for (int i = prActivities.size -1; i >= 0; i--) {
+                    for (int i = prActivities.values.size() - 1; i >= 0; i--) {
                         prActivity = prActivities.values.get(i)
                         String userName = prActivity.user.name
                         // try to match up the names better
@@ -218,7 +218,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                                 break
                             case JiraDBActions.COMMENTED.name():
                                 processComment(indexLookup, prActivity)
-                                break
+                                // processComment updates counters due to nested data
+                                continue
                             case JiraDBActions.DECLINED.name():
                                 break
                             case JiraDBActions.MERGED.name():
@@ -234,24 +235,57 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         }
 
                         // increment counters (total and then specific) based on detailed configuration
-                        JiraDBActions dbActivityAction = prActivityAction
-                        if (commandLineOptions.'detailed') {
-                            database.incrementField(indexLookup, TOTAL_PREFIX + prActivityAction.name())
-                            dbActivityAction = (isSelf)
-                                    ? JiraDBActions.valueOf(SELF_PREFIX + prActivityAction.name()) : prActivityAction
-                        }
-                        database.incrementField(indexLookup, dbActivityAction.name())
+                        incrementCounter(indexLookup, prActivityAction, isSelf)
                     }
                 })
             })
         })
     }
 
+    /**
+     * Increment counters for data provided
+     * @param indexLookup
+     * @param prActivityAction
+     * @param isSelf
+     * @param dbActivityAction
+     */
+    protected void incrementCounter(ArrayList<FlexiDBQueryColumn> indexLookup, JiraDBActions prActivityAction, boolean isSelf) {
+        JiraDBActions dbActivityAction = prActivityAction
+        if (commandLineOptions.'detailed') {
+            database.incrementField(indexLookup, TOTAL_PREFIX + prActivityAction.name())
+            dbActivityAction = (isSelf)
+                    ? JiraDBActions.valueOf(SELF_PREFIX + prActivityAction.name()) : prActivityAction
+        }
+        database.incrementField(indexLookup, dbActivityAction.name())
+    }
+
+    /**
+     * process comments - this will update the counters since the data can be recursive
+     * @param indexLookup
+     * @param prActivity
+     * @return
+     */
     def processComment(List<FlexiDBQueryColumn> indexLookup, Object prActivity) {
         processComment(indexLookup, prActivity.user.name, prActivity.action, prActivity.commentAction, prActivity.comment, 3)
     }
 
-    def processComment(List<FlexiDBQueryColumn> indexLookup, String userName, String action, String commentAction, Object comment, int indentation) {
+    /**
+     * process comments - this will update the counters since the data can be recursive
+     * @param indexLookup
+     * @param userName
+     * @param action
+     * @param commentAction
+     * @param comment
+     * @param indentation
+     * @return
+     */
+    def processComment(List<FlexiDBQueryColumn> originalIndexLookup, String userName, String action, String commentAction, Object comment, int indentation) {
+        boolean isSelf = userName.equals(originalIndexLookup.stream().filter { it.getName() == DBIndexData.USER.name() }.toList()[0].getMatchValue())
+
+        // recreate the indexLookup with the actual user
+        List<FlexiDBQueryColumn> currentUserIndexLookup = new ArrayList<>(originalIndexLookup.stream().filter { it.getName() != DBIndexData.USER.name() }.toList())
+        currentUserIndexLookup.add(new FlexiDBQueryColumn(DBIndexData.USER.name(), userName))
+
         // TODO: distinguish comments on own PR versus others
         String commentText = comment.text
         if (IGNORE_COMMENTS.contains(commentText)) {
@@ -259,11 +293,15 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         }
 
         commentText = commentText.replaceAll("(\\r|\\n)?\\n", "  ").trim()
-        database.append(indexLookup, DBData.COMMENTS.name(), commentText)
+        database.append(currentUserIndexLookup, DBData.COMMENTS.name(), commentText)
+        incrementCounter(currentUserIndexLookup, JiraDBActions.COMMENTED, isSelf)
 
         comment.comments.forEach(replyComment -> {
-            processComment(indexLookup, replyComment.author.name, "COMMENTED", "REPLY", replyComment, indentation + 3)
+            // Use the original index lookup so we can determine if self
+            processComment(originalIndexLookup, replyComment.author.name, "COMMENTED", "REPLY", replyComment, indentation + 3)
         })
+
+        // TODO update counters here
     }
 
     List<AbstractFlexiDBInitColumn> generateDBSignature() {
