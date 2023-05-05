@@ -4,7 +4,9 @@
 - ### GetTeamSprints
   - Report of Sprints for a specified Team
 - ### SprintReportTeamAnalysis
-  - Report of Sprint Team members over specified Sprints
+  - Report of Sprint Team members (combined) over specified Sprints
+  ### SprintReportIndividualAnalysis
+  - Reports of Individual Team members over specified sprints 
 - ### SprintReportTeamCarryoverHours
   - Report Carrover Hours from Sprints of a specified Team 
 
