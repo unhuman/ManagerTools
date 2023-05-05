@@ -60,6 +60,7 @@ class CommandLineHelper {
     }
 
     List<String> getBoardTeamUsers(String boardId) {
+        // TODO: Change this to accept * and be required
         List<String> users = promptAndStore("Team users (optional, comma separated) for board: ${boardId}", false, ANY_MATCH_PATTERN, "${boardId}-users", true).split(",").toList()
         users = users.stream().map { it.trim() }.filter { it != null && !it.isEmpty() }.toList()
         return users
