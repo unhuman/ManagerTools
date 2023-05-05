@@ -14,6 +14,9 @@ class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
         // Load the command line helper here for ability to manage users / team
         CommandLineHelper commandLineHelper = new CommandLineHelper(".managerTools.cfg")
         teamUsers = commandLineHelper.getBoardTeamUsers(commandLineOptions.'boardId')
+        if (teamUsers.get(0) == "*") {
+            teamUsers = Collections.emptyList()
+        }
     }
 
     @Override

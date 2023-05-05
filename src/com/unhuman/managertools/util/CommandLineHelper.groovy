@@ -6,6 +6,8 @@ import java.util.regex.Pattern
 
 class CommandLineHelper {
     private static final Pattern ANY_MATCH_PATTERN = Pattern.compile(".*")
+    // Users Match * or comma separated list
+    private static final Pattern USERS_MATCH_PATTERN = Pattern.compile("^\\*\$|^[a-zA-Z0-9\\.]+([,\\s]+[a-zA-Z0-9\\.]*)*\$")
     private static final Pattern DATE_PATTERN = Pattern.compile("\\d{4}-\\d{2}-\\d{2}")
     private static final Pattern NUMBERS_REQUIRED_PATTERN = Pattern.compile("\\d+")
     private static final Pattern FQDN_PATTERN = Pattern.compile("(\\w+\\.){2,}\\w+")
@@ -61,7 +63,7 @@ class CommandLineHelper {
 
     List<String> getBoardTeamUsers(String boardId) {
         // TODO: Change this to accept * and be required
-        List<String> users = promptAndStore("Team users (optional, comma separated) for board: ${boardId}", false, ANY_MATCH_PATTERN, "${boardId}-users", true).split(",").toList()
+        List<String> users = promptAndStore("Team users (optional, comma/space separated, * for all) for board: ${boardId}", false, USERS_MATCH_PATTERN, "${boardId}-users", true, "*").split(",").toList()
         users = users.stream().map { it.trim() }.filter { it != null && !it.isEmpty() }.toList()
         return users
     }
@@ -106,22 +108,28 @@ class CommandLineHelper {
 
     private String promptAndStore(String text, boolean isPassword, Pattern validationPattern,
                                   String defaultValueConfigKey, boolean promptForExistingValue) {
-        def defaultValue
+        return promptAndStore(text, isPassword, validationPattern, defaultValueConfigKey, promptForExistingValue, null)
+    }
+
+
+    private String promptAndStore(String text, boolean isPassword, Pattern validationPattern,
+                                  String defaultValueConfigKey, boolean promptForExistingValue, String defaultValue) {
+        def useDefaultValue = defaultValue
         if (defaultValueConfigKey && configFileManager.containsKey(defaultValueConfigKey)) {
-            defaultValue = configFileManager.getValue(defaultValueConfigKey)
+            useDefaultValue = (configFileManager.getValue(defaultValueConfigKey)) ? configFileManager.getValue(defaultValueConfigKey) : useDefaultValue
             if (!promptForExistingValue) {
-                System.out.println("Found ${defaultValueConfigKey} configuration value - ${defaultValue}")
-                return defaultValue
+                System.out.println("Found ${defaultValueConfigKey} configuration value - ${useDefaultValue}")
+                return useDefaultValue
             }
         }
 
-        text = (defaultValue) ? "${text} (press return to use existing value: ${isPassword ? "****" : defaultValue})" : text
+        text = (useDefaultValue) ? "${text} (press return to use default value: ${isPassword ? "****" : useDefaultValue})" : text
 
         while (true) {
             // We match anything here, but then later do our own check
             String input = prompt(text, isPassword, ANY_MATCH_PATTERN)
-            if (input.isEmpty() && defaultValue) {
-                return defaultValue
+            if (input.isEmpty() && useDefaultValue) {
+                return useDefaultValue
             } else if (defaultValueConfigKey &&
                     validationPattern.matcher(input).matches()) {
                 configFileManager.updateValue(defaultValueConfigKey, input)
