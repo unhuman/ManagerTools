@@ -4,12 +4,24 @@ import org.apache.hc.core5.http.NameValuePair
 import org.apache.hc.core5.http.message.BasicNameValuePair
 
 class BitbucketREST {
-    String bitbucketServer;
-    String cookies;
+    String bitbucketServer
+    AuthInfo authInfo
+
+    BitbucketREST(String bitbucketServer, String username, String password) {
+        this.bitbucketServer = bitbucketServer
+
+        // convert user / password to cookies
+        this.authInfo = new AuthInfo(username, password)
+
+//        String url = "${bitbucketServer}/site/oauth2/access_token"
+//        // -d grant_type=authorization_code
+    }
 
     BitbucketREST(String bitbucketServer, String cookies) {
         this.bitbucketServer = bitbucketServer
-        this.cookies = cookies
+
+
+        this.authInfo = new AuthInfo(cookies)
     }
 
     // Get activies (approvals, comments, etc)
@@ -19,6 +31,6 @@ class BitbucketREST {
         NameValuePair startPair = new BasicNameValuePair("start", "0")
         NameValuePair limitPair = new BasicNameValuePair("limit", "100")
         NameValuePair markupPair = new BasicNameValuePair("markup", "true")
-        return RestService.GetRequest(uri, cookies, startPair, limitPair, markupPair)
+        return RestService.GetRequest(uri, authInfo, startPair, limitPair, markupPair)
     }
 }

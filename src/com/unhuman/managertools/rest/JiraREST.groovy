@@ -5,13 +5,20 @@ import org.apache.hc.core5.http.message.BasicNameValuePair
 
 class JiraREST {
     String jiraServer
-    String cookies
+    AuthInfo authInfo
 
     private final int JQL_LIMIT = 250
 
+    JiraREST(String jiraServer, String username, String password) {
+        this.jiraServer = jiraServer
+
+        // convert user / password to cookies
+        this.authInfo = new AuthInfo(username, password)
+    }
+
     JiraREST(String jiraServer, String cookies) {
         this.jiraServer = jiraServer
-        this.cookies = cookies
+        this.authInfo = new AuthInfo(cookies)
     }
 
     // Get Sprints
@@ -21,7 +28,7 @@ class JiraREST {
         NameValuePair rapidViewIdPair = new BasicNameValuePair("includeHistoricSprints", "false")
         NameValuePair sprintIdPair = new BasicNameValuePair("includeFutureSprints", "false")
         NameValuePair timeIdPair = new BasicNameValuePair("_", System.currentTimeMillis().toString())
-        return RestService.GetRequest(uri, cookies, rapidViewIdPair, sprintIdPair, timeIdPair)
+        return RestService.GetRequest(uri, authInfo, rapidViewIdPair, sprintIdPair, timeIdPair)
     }
 
     // Get Sprint Report
@@ -31,7 +38,7 @@ class JiraREST {
         NameValuePair rapidViewIdPair = new BasicNameValuePair("rapidViewId", boardId)
         NameValuePair sprintIdPair = new BasicNameValuePair("sprintId", sprintId)
         NameValuePair timeIdPair = new BasicNameValuePair("_", System.currentTimeMillis().toString())
-        return RestService.GetRequest(uri, cookies, rapidViewIdPair, sprintIdPair, timeIdPair)
+        return RestService.GetRequest(uri, authInfo, rapidViewIdPair, sprintIdPair, timeIdPair)
     }
 
     //static Object getSprintReport(String user, String password, String boardId, String sprintId) {
@@ -47,7 +54,7 @@ class JiraREST {
     Object getTicket(String ticketId) {
         String uri = "https://${jiraServer}/rest/api/latest/issue/${ticketId}"
         NameValuePair timeIdPair = new BasicNameValuePair("_", System.currentTimeMillis().toString())
-        return RestService.GetRequest(uri, cookies, timeIdPair)
+        return RestService.GetRequest(uri, authInfo, timeIdPair)
     }
 
     // Get pull request data
@@ -58,14 +65,14 @@ class JiraREST {
         NameValuePair applicationTypePair = new BasicNameValuePair("applicationType", "stash")
         NameValuePair dataTypePair = new BasicNameValuePair("dataType", "pullrequest")
         NameValuePair timeIdPair = new BasicNameValuePair("_", System.currentTimeMillis().toString())
-        return RestService.GetRequest(uri, cookies, issueIdPair, applicationTypePair, dataTypePair, timeIdPair)
+        return RestService.GetRequest(uri, authInfo, issueIdPair, applicationTypePair, dataTypePair, timeIdPair)
     }
 
     // Simple JQL Query (Summary)
     // GET https://jira.x.com/rest/api/2/search?jql=summary~q1%20and%20summary~yellow
     Object jqlSummaryQuery(String jql) {
         String uri = "https://${jiraServer}/rest/api/2/search?startAt=0&maxResults=${JQL_LIMIT}&jql=${URLEncoder.encode(jql)}"
-        return RestService.GetRequest(uri, cookies)
+        return RestService.GetRequest(uri, authInfo)
     }
 
     // https://jira.x.com/rest/agile/1.0/issue/ISSUE-ID/estimation?boardId=BOARD-ID
@@ -74,6 +81,6 @@ class JiraREST {
         String uri = "https://${jiraServer}/rest/agile/1.0/issue/${ticketId}/estimation"
         NameValuePair boardIdPair = new BasicNameValuePair("boardId", boardId)
         String content = "{ \"value\": \"${estimateInSeconds / 60}m\"}" // API requires converted to minutes
-        return RestService.PutRequest(uri, cookies, content, boardIdPair)
+        return RestService.PutRequest(uri, authInfo, content, boardIdPair)
     }
 }

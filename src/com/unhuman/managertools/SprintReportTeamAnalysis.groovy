@@ -33,6 +33,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
     @Override
     def validateCustomCommandLineOptions() {
+        super.validateCustomCommandLineOptions()
         if (!getCommandLineOptions().'outputCSV'.endsWith(".csv")) {
             throw new RuntimeException("Output filename must end in .csv")
         }

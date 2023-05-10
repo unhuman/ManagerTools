@@ -9,11 +9,13 @@ import groovy.json.JsonSlurper
 import org.apache.hc.client5.http.config.RequestConfig
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient
 import org.apache.hc.client5.http.impl.classic.HttpClients
+import org.apache.hc.core5.http.Header
 import org.apache.hc.core5.http.HttpHeaders
 import org.apache.hc.core5.http.NameValuePair
 import org.apache.hc.core5.http.io.entity.StringEntity
 import org.apache.hc.core5.http.io.support.ClassicRequestBuilder
 import org.apache.hc.core5.http.message.BasicClassicHttpRequest
+import org.apache.http.message.BasicHeader
 
 import java.nio.charset.Charset
 import java.util.concurrent.ConcurrentHashMap
@@ -48,12 +50,12 @@ class RestService {
     }
 
 
-    static Object GetRequest(String uri, String authCookies, NameValuePair... parameters) {
+    static Object GetRequest(String uri, AuthInfo authInfo, NameValuePair... parameters) {
         BasicClassicHttpRequest request = ClassicRequestBuilder
                 .create("GET")
                 .setUri(uri)
                 .setHeader(HttpHeaders.ACCEPT, "application/json;charset=UTF-8")
-                .setHeader("Cookie", authCookies)
+                .setHeader(authInfo.getAuthHeader())
                 .setHeader(HttpHeaders.CONTENT_ENCODING, "application/json;charset=UTF-8")
                 .addParameters(parameters)
                 .build();
@@ -62,25 +64,12 @@ class RestService {
     }
 
 
-    static Object GetRequest(String uri, String user, String password, NameValuePair... parameters) {
-        BasicClassicHttpRequest request = ClassicRequestBuilder
-                .create("GET")
-                .setUri(uri)
-                .setHeader(HttpHeaders.ACCEPT, "application/json;charset=UTF-8")
-                .setHeader(HttpHeaders.AUTHORIZATION, getBasicAuth(user, password))
-                .setHeader(HttpHeaders.CONTENT_ENCODING, "application/json;charset=UTF-8")
-                .addParameters(parameters)
-                .build();
-
-        return executeRequest(request)
-    }
-
-    static Object PutRequest(String uri, String authCookies, String content, NameValuePair... parameters) {
+    static Object PutRequest(String uri, AuthInfo authInfo, String content, NameValuePair... parameters) {
         BasicClassicHttpRequest request = ClassicRequestBuilder
                 .create("PUT")
                 .setUri(uri)
                 .setHeader(HttpHeaders.ACCEPT, "application/json;charset=UTF-8")
-                .setHeader("Cookie", authCookies)
+                .setHeader(authInfo.getAuthHeader())
                 .setHeader(HttpHeaders.CONTENT_TYPE, "application/json;charset=UTF-8")
                 .addParameters(parameters)
                 .setEntity(new StringEntity(content))
@@ -111,9 +100,5 @@ class RestService {
                 .setConnectTimeout((long) 2L, TimeUnit.SECONDS)
                 .setResponseTimeout((long) 60L, TimeUnit.SECONDS)
                 .build()
-    }
-
-    private static String getBasicAuth(String user, String password) {
-        return "Basic "+ Base64.encoder.encodeToString("${user}:${password}".getBytes(Charset.defaultCharset()));
     }
 }

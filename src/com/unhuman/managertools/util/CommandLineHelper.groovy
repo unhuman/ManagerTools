@@ -6,6 +6,8 @@ import java.util.regex.Pattern
 
 class CommandLineHelper {
     private static final Pattern ANY_MATCH_PATTERN = Pattern.compile(".*")
+
+    private static final Pattern AUTH_PATTERN = Pattern.compile("(p|password|pw|c|cookie)")
     // Users Match * or comma separated list
     private static final Pattern USERS_MATCH_PATTERN = Pattern.compile("^\\*\$|^[a-zA-Z0-9\\.]+([,\\s]+[a-zA-Z0-9\\.]*)*\$")
     private static final Pattern DATE_PATTERN = Pattern.compile("\\d{4}-\\d{2}-\\d{2}")
@@ -20,8 +22,16 @@ class CommandLineHelper {
         }
     }
 
+    /**
+     * will return p for password or c for cookie
+     * @return
+     */
+    String getAuthMethod() {
+        return promptAndStore("Auth Method ${AUTH_PATTERN.toString()}", false, AUTH_PATTERN, "authMethod", true, "password").substring(0, 1)
+    }
+
     String getUsername() {
-        String username = promptAndStore("Username (or press enter for ${System.getProperty("user.name")})", false, ANY_MATCH_PATTERN, null)
+        String username = promptAndStore("Username (or press enter for ${System.getProperty("user.name")})", false, ANY_MATCH_PATTERN, null, false)
         if (username.isEmpty()) {
             username = System.getProperty("user.name")
         }
@@ -29,7 +39,7 @@ class CommandLineHelper {
     }
 
     String getPassword() {
-        return promptAndStore("Password", true, ANY_MATCH_PATTERN, null);
+        return promptAndStore("Password", true, ANY_MATCH_PATTERN, null, false);
     }
 
     String getSprintTeam() {
@@ -98,6 +108,7 @@ class CommandLineHelper {
                 input = new Scanner(System.in).nextLine().trim()
             }
 
+
             if (validationPattern.matcher(input).matches()) {
                 return input;
             }
@@ -112,6 +123,17 @@ class CommandLineHelper {
     }
 
 
+    /**
+     * Note: will not store data without defaultValueConfigKey
+     *
+     * @param text
+     * @param isPassword
+     * @param validationPattern
+     * @param defaultValueConfigKey
+     * @param promptForExistingValue
+     * @param defaultValue
+     * @return
+     */
     private String promptAndStore(String text, boolean isPassword, Pattern validationPattern,
                                   String defaultValueConfigKey, boolean promptForExistingValue, String defaultValue) {
         def useDefaultValue = defaultValue
@@ -130,9 +152,10 @@ class CommandLineHelper {
             String input = prompt(text, isPassword, ANY_MATCH_PATTERN)
             if (input.isEmpty() && useDefaultValue) {
                 return useDefaultValue
-            } else if (defaultValueConfigKey &&
-                    validationPattern.matcher(input).matches()) {
-                configFileManager.updateValue(defaultValueConfigKey, input)
+            } else if (validationPattern.matcher(input).matches()) {
+                if (defaultValueConfigKey) {
+                    configFileManager.updateValue(defaultValueConfigKey, input)
+                }
                 return input
             }
             System.out.println("Input must match regular expression: ${validationPattern}")

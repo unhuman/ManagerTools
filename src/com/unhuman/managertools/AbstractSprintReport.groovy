@@ -15,6 +15,7 @@ import org.apache.commons.cli.OptionGroup
 import java.util.stream.Collectors
 
 abstract class AbstractSprintReport extends Script {
+    private static final CONFIG_FILENAME = ".managerTools.cfg"
     protected JiraREST jiraREST
     protected BitbucketREST bitbucketREST
     private OptionAccessor commandLineOptions
@@ -85,18 +86,7 @@ abstract class AbstractSprintReport extends Script {
             return
         }
 
-        CommandLineHelper commandLineHelper = new CommandLineHelper(".managerTools.cfg")
-
-        // Get server information
-        String jiraServer = commandLineHelper.getJiraServer()
-        String bitbucketServer = commandLineHelper.getBitbucketServer()
-
-        // Get authentication information
-        String jiraCookies = commandLineHelper.getJiraCookies()
-        String bitbucketCookies = commandLineHelper.getBitbucketCookies()
-
-        jiraREST = new JiraREST(jiraServer, jiraCookies)
-        bitbucketREST = new BitbucketREST(bitbucketServer, bitbucketCookies)
+        setupServices()
 
         if (commandLineOptions.'limit') {
             GetTeamSprints getTeamSprints = new GetTeamSprints(jiraREST)
@@ -110,5 +100,39 @@ abstract class AbstractSprintReport extends Script {
 
     protected OptionAccessor getCommandLineOptions() {
         return commandLineOptions
+    }
+
+    protected void setupServices() {
+        CommandLineHelper commandLineHelper = new CommandLineHelper(CONFIG_FILENAME)
+
+        // Get server information
+        String jiraServer = commandLineHelper.getJiraServer()
+        String bitbucketServer = commandLineHelper.getBitbucketServer()
+
+        // Get auth method
+        String authMethod = "c" // commandLineHelper.getAuthMethod()
+
+        switch (authMethod) {
+            case "p":
+                String username = commandLineHelper.getUsername()
+                String password = commandLineHelper.getPassword()
+
+                jiraREST = new JiraREST(jiraServer, username, password)
+                bitbucketREST = new BitbucketREST(bitbucketServer, username, password)
+
+
+                break
+            case "c":
+                // Get authentication information
+                String jiraCookies = commandLineHelper.getJiraCookies()
+                String bitbucketCookies = commandLineHelper.getBitbucketCookies()
+
+                jiraREST = new JiraREST(jiraServer, jiraCookies)
+                bitbucketREST = new BitbucketREST(bitbucketServer, bitbucketCookies)
+                break
+            default:
+                throw new RuntimeException("Invalid auth method: ${authMethod}")
+        }
+
     }
 }

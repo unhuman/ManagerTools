@@ -38,12 +38,12 @@ class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
         }
 
         // 1. Iterate through all users
-        // 1.    Iterate through sprints
-        // 2.       Report all rows for that user
-        // 3.       Sum up those rows
-        // 4.       Report totals
+        // 2.    Iterate through sprints
+        // 3.       Report all rows for that user
+        // 4.       Sum up those rows
+        // 5.       Report totals
         //
-        // 5. Report total results of all totals
+        // 6. Report total results of all totals
 
         StringBuilder sb = new StringBuilder(4096)
         users.each {user -> {
