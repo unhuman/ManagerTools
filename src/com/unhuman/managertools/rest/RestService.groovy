@@ -9,13 +9,11 @@ import groovy.json.JsonSlurper
 import org.apache.hc.client5.http.config.RequestConfig
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient
 import org.apache.hc.client5.http.impl.classic.HttpClients
-import org.apache.hc.core5.http.Header
 import org.apache.hc.core5.http.HttpHeaders
 import org.apache.hc.core5.http.NameValuePair
 import org.apache.hc.core5.http.io.entity.StringEntity
 import org.apache.hc.core5.http.io.support.ClassicRequestBuilder
 import org.apache.hc.core5.http.message.BasicClassicHttpRequest
-import org.apache.http.message.BasicHeader
 
 import java.nio.charset.Charset
 import java.util.concurrent.ConcurrentHashMap

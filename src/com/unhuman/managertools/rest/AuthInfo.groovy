@@ -44,5 +44,4 @@ class AuthInfo {
     private String getBasicAuth() {
         return "Basic " + Base64.encoder.encodeToString("${username}:${password}".getBytes(Charset.defaultCharset()));
     }
-
 }

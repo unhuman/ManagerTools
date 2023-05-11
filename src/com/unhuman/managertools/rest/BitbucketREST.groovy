@@ -1,5 +1,10 @@
 package com.unhuman.managertools.rest
 
+@Grapes([
+        @Grab(group='org.apache.httpcomponents.core5', module='httpcore5', version='5.2.1'),
+        @Grab(group='org.apache.httpcomponents.client5', module='httpclient5', version='5.2.1')
+])
+
 import org.apache.hc.core5.http.NameValuePair
 import org.apache.hc.core5.http.message.BasicNameValuePair
 
