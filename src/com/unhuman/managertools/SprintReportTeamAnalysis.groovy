@@ -49,14 +49,17 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         processedItems = new HashSet<>()
 
         // populate the database
-        sprintIds.each(sprintId -> {
+        System.out.println("Processing ${sprintIds.size()} sprints...")
+        for (int i = 0; i < sprintIds.size(); i++) {
+            String sprintId = sprintIds.get(i)
+
             Object data = jiraREST.getSprintReport(boardId, sprintId)
-            System.out.println(data.sprint.name)
+            System.out.println("${i+1} / ${sprintIds.size()}: ${data.sprint.name}")
 
             // Gather ticket data for completed and incomplete work
             getIssueCategoryInformation(data.sprint, data.contents.completedIssues)
             getIssueCategoryInformation(data.sprint, data.contents.issuesNotCompletedInCurrentSprint)
-        })
+        }
 
         // Generate the CSV file - we'll do some column adjustments
         generateOutput()
@@ -181,7 +184,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
             def prInfo = jiraREST.getTicketPullRequestInfo(issueId.toString())
             prInfo.detail.each(prDetail -> {
-                System.out.println("${ticket} / Issue ${issueId} has ${prDetail.pullRequests.size()} PRs")
+                System.out.println("   ${ticket} / Issue ${issueId} has ${prDetail.pullRequests.size()} PRs")
                 prDetail.pullRequests.each(pullRequest -> {
                     // can get approvers out of ^^^
                     // check comment count before polling for comments
@@ -191,7 +194,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
                     def prActivities = bitbucketREST.getActivities(prUrl)
 
-                    System.out.println("   PR ${ticket} / ${prId} has ${prActivities.values.size()} activities")
+                    System.out.println("      PR ${ticket} / ${prId} has ${prActivities.values.size()} activities")
                     // process from oldest to newest (reverse)
                     for (int i = prActivities.values.size() - 1; i >= 0; i--) {
                         prActivity = prActivities.values.get(i)
