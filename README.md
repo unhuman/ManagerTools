@@ -16,7 +16,11 @@
 - `SprintReportTeamAnalysis` - Generates report of team metrics
 - `SprintReportTeamCarryoverHours` - Generates report of team's carryover
 
-## Setup
+## Execution
+- From the `src/` directory:
+  - `groovy com/unhuman/managertools/SCRIPT.groovy parameters...`
+
+## Developer Setup
 ### IntelliJ must add Ivy
 1. Project Structure / Modules.
 1. Get Apache Ivy with dependencies. 
@@ -30,3 +34,4 @@
 
 ## Notes
 - data is stored in ~/.managerTools.cfg
+- there was difficulty getting long input, so for that input, zsh/vared is used to accept input

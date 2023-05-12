@@ -195,14 +195,13 @@ class CommandLineHelper {
                 try {
                     process.wait()
                 } catch (InterruptedException ie) {
-                    ie.printStackTrace()
+                    throw new RuntimeException("Problem accepting input from zsh / vared", ie)
                 }
             }
+            if (process.exitValue() != 0) {
+                throw new RuntimeException("Problem running zsh to get value: ${process.exitValue()}")
+            }
             String value = process.getInputStream().readLines()[0]
-            // this causes problems
-            //            if (process.exitValue() != 0) {
-            //                throw new RuntimeException("Problem running zsh to get value")
-            //            }
             return value
         }
     }
