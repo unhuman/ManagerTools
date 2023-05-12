@@ -21,9 +21,13 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     static final String TOTAL_PREFIX = "TOTAL_"
 
     static final SimpleDateFormat DATE_PARSER = new SimpleDateFormat("dd/MMM/yy")
+    static final SimpleDateFormat DATE_TIME_PARSER = new SimpleDateFormat("dd/MMM/yy K:mm a")
     static final SimpleDateFormat DATE_OUTPUT = new SimpleDateFormat("yyyy/MM/dd");
 
     FlexiDB database
+    // We need to track items we have processed to prevent them from appearing twice
+    // This can occur when a PR winds up linked to multiple tickets
+    Set<Object> processedItems
 
     @Override
     def addCustomCommandLineOptions(CliBuilder cli) {
@@ -42,6 +46,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     @Override
     def process(String boardId, List<String> sprintIds) {
         database = new FlexiDB(generateDBSignature())
+        processedItems = new HashSet<>()
 
         // populate the database
         sprintIds.each(sprintId -> {
@@ -161,10 +166,14 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         }
     }
 
-    def getIssueCategoryInformation(Object sprint, List<Object> issueList) {
+    def getIssueCategoryInformation(final Object sprint, List<Object> issueList) {
         String sprintName = sprint.name
         String startDate = cleanDate(sprint.startDate)
         String endDate = cleanDate(sprint.endDate)
+
+        // Track exact time for ensuring operations occur within sprint
+        Date sprintStartTime = DATE_TIME_PARSER.parse(sprint.startDate)
+        Date sprintEndTime = DATE_TIME_PARSER.parse(sprint.endDate)
 
         issueList.each(issue -> {
             def ticket = issue.key
@@ -213,6 +222,16 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                             // this was logged
                             continue
                         }
+
+                        // If we have already processed this activity or the activity didn't occur in this sprint, don't include it
+                        if (processedItems.contains(prActivity.id)
+                                || sprintStartTime.getTime() > prActivity.createdDate
+                                || prActivity.createdDate >= sprintEndTime.getTime()) {
+                            continue
+                        }
+
+                        // Track we have processed this item
+                        processedItems.add(prActivity.id)
 
                         switch (prActivityAction) {
                             case JiraDBActions.APPROVED.name():
