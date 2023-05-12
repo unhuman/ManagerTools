@@ -14,8 +14,8 @@ class CommandLineHelper {
     }
 
     private static final Pattern AUTH_PATTERN = Pattern.compile("(p|password|pw|c|cookie)")
-    // Users Match * or comma separated list
-    private static final Pattern USERS_MATCH_PATTERN = Pattern.compile("^\\*\$|^[a-zA-Z0-9\\.]+([,\\s]+[a-zA-Z0-9\\.]*)*\$")
+    // Users Match * (authors), ** (users), or comma separated list
+    private static final Pattern USERS_MATCH_PATTERN = Pattern.compile("^\\*{1,2}\$|^[a-zA-Z0-9\\.]+([,\\s]+[a-zA-Z0-9\\.]*)*\$")
     private static final Pattern DATE_PATTERN = Pattern.compile("\\d{4}-\\d{2}-\\d{2}")
     private static final Pattern NUMBERS_REQUIRED_PATTERN = Pattern.compile("\\d+")
     private static final Pattern FQDN_PATTERN = Pattern.compile("(\\w+\\.){2,}\\w+")
@@ -79,8 +79,7 @@ class CommandLineHelper {
     }
 
     List<String> getBoardTeamUsers(String boardId) {
-        // TODO: Change this to accept * and be required
-        List<String> users = promptAndStore("Team users (optional, comma/space separated, * for all) for board: ${boardId}", TextSecurity.NONE, USERS_MATCH_PATTERN, "${boardId}-users", true, "*").split(",").toList()
+        List<String> users = promptAndStore("Team users (optional, comma/space separated, * for all authors, ** for all users) for board: ${boardId}", TextSecurity.NONE, USERS_MATCH_PATTERN, "${boardId}-users", true, "*").split(",").toList()
         users = users.stream().map { it.trim() }.filter { it != null && !it.isEmpty() }.toList()
         return users
     }

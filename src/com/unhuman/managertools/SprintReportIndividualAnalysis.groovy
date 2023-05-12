@@ -2,6 +2,7 @@ package com.unhuman.managertools
 
 import com.unhuman.flexidb.FlexiDBQueryColumn
 import com.unhuman.flexidb.data.FlexiDBRow
+import com.unhuman.managertools.data.DBData
 import com.unhuman.managertools.data.DBIndexData
 import com.unhuman.managertools.util.CommandLineHelper
 
@@ -14,9 +15,6 @@ class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
         // Load the command line helper here for ability to manage users / team
         CommandLineHelper commandLineHelper = new CommandLineHelper(".managerTools.cfg")
         teamUsers = commandLineHelper.getBoardTeamUsers(commandLineOptions.'boardId')
-        if (teamUsers.get(0) == "*") {
-            teamUsers = Collections.emptyList()
-        }
     }
 
     @Override
@@ -25,7 +23,18 @@ class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
         List<String> columnOrder = generateColumnsOrder()
 
         List<String> sprints = database.findUniqueValues(DBIndexData.SPRINT.name())
-        LinkedHashSet<String> users = new LinkedHashSet<>(database.findUniqueValues(DBIndexData.USER.name()))
+
+        Set<String> authors = new LinkedHashSet<>(database.findUniqueValues(DBData.AUTHOR.name()))
+        Set<String> users = new LinkedHashSet<>(database.findUniqueValues(DBIndexData.USER.name()))
+
+        // Adjust the teamUsers list to either (*) authors or (**) all users
+        if (teamUsers.size() == 1) {
+            if (teamUsers.get(0) == "*") { // authors
+                teamUsers = authors.toList()
+            } else if (teamUsers.get(0) == "**") { // all users
+                teamUsers = users.toList()
+            }
+        }
 
         // Try to get values out of the database for user and case-insensitively up-convert the matches,
         // otherwise preserve unknown values (they won't matter)
