@@ -146,6 +146,7 @@ class CommandLineHelper {
      */
     private String promptAndStore(String text, TextSecurity textSecurity, Pattern validationPattern,
                                   String defaultValueConfigKey, boolean promptForExistingValue, String defaultValue) {
+
         def useDefaultValue = defaultValue
         if (defaultValueConfigKey && configFileManager.containsKey(defaultValueConfigKey)) {
             useDefaultValue = (configFileManager.getValue(defaultValueConfigKey)) ? configFileManager.getValue(defaultValueConfigKey) : useDefaultValue
@@ -179,6 +180,7 @@ class CommandLineHelper {
         boolean isWindows = System.properties['os.name'].toLowerCase().contains('windows')
         // https://stackoverflow.com/questions/15339148/check-if-java-code-is-running-from-intellij-eclipse-etc-or-command-line
         boolean isIDE = System.getProperty("java.class.path").contains("idea_rt.jar")
+                || System.getenv("XPC_SERVICE_NAME").contains("intellij") // detect "run"
 
         // Use console if Windows or running from an IDE
         if (isWindows || isIDE) {
@@ -189,6 +191,7 @@ class CommandLineHelper {
                 return new Scanner(System.in).nextLine().trim()
             }
         } else {
+            //
             Process process = ["zsh", "-c", 'unset tmp; vared -p "' + promptText + ': " -c tmp; echo $tmp; unset tmp'].execute()
             synchronized (process) {
                 try {
