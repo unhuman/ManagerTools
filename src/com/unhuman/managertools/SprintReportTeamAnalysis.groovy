@@ -20,6 +20,9 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     static final String SELF_PREFIX = "SELF_"
     static final String TOTAL_PREFIX = "TOTAL_"
 
+    static final String PR_PREFIX = "PR_"
+    static final String COMMIT_PREFIX = "COMMIT_"
+
     static final SimpleDateFormat DATE_PARSER = new SimpleDateFormat("dd/MMM/yy")
     static final SimpleDateFormat DATE_TIME_PARSER = new SimpleDateFormat("dd/MMM/yy K:mm a")
     static final SimpleDateFormat DATE_OUTPUT = new SimpleDateFormat("yyyy/MM/dd");
@@ -210,11 +213,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         }
 
                         // Generate index to look for data
-                        List<FlexiDBQueryColumn> indexLookup = new ArrayList<>()
-                        indexLookup.add(new FlexiDBQueryColumn(DBIndexData.SPRINT.name(), sprintName))
-                        indexLookup.add(new FlexiDBQueryColumn(DBIndexData.TICKET.name(), ticket))
-                        indexLookup.add(new FlexiDBQueryColumn(DBIndexData.PR_ID.name(), prId))
-                        indexLookup.add(new FlexiDBQueryColumn(DBIndexData.USER.name(), userName))
+                        List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, userName)
 
                         database.setValue(indexLookup, DBData.START_DATE.name(), startDate)
                         database.setValue(indexLookup, DBData.END_DATE.name(), endDate)
@@ -265,7 +264,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     def prCommits = bitbucketREST.getCommits(prUrl)
 
                     for (int i = prCommits.values.size() - 1; i >= 0; i--) {
-                        commit = prCommits.values.get(i)
+                        def commit = prCommits.values.get(i)
                         String commitSHA = commit.id
                         Long commitTimestamp = commit.committerTimestamp
 
@@ -287,37 +286,60 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         }
 
                         // Generate index to look for data
-                        List<FlexiDBQueryColumn> indexLookup = new ArrayList<>()
-                        indexLookup.add(new FlexiDBQueryColumn(DBIndexData.SPRINT.name(), sprintName))
-                        indexLookup.add(new FlexiDBQueryColumn(DBIndexData.TICKET.name(), ticket))
-                        indexLookup.add(new FlexiDBQueryColumn(DBIndexData.PR_ID.name(), prId))
-                        indexLookup.add(new FlexiDBQueryColumn(DBIndexData.USER.name(), userName))
+                        List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, userName)
                         boolean isSelf = (userName.equals(prAuthor))
 
-                        def diffsResponse = bitbucketREST.getDiffs(prUrl, commitSHA)
-                        diffsResponse.diffs.forEach { diff -> {
-                            diff.hunks.forEach(hunk -> {
-                                hunk.segments.forEach(segment -> {
-                                    // TODO: within a hunk, multiple segments (likely) indicates a MODIFIED
-                                    //       these segments seem to have REMOVED and ADDED both
-
-                                    switch(segment.type) {
-                                        case "ADDED":
-                                            incrementCounter(indexLookup, JiraDBActions.ADDED, isSelf, segment.lines.size())
-                                            break
-                                        case "REMOVED":
-                                            incrementCounter(indexLookup, JiraDBActions.REMOVED, isSelf, segment.lines.size())
-                                            break
-                                        case "MODIFIED":
-                                            break
-                                    }
-                                })
-                            })
-                        }}
+                        def diffsResponse = bitbucketREST.getCommitDiffs(prUrl, commitSHA)
+                        processDiffs(COMMIT_PREFIX, diffsResponse, indexLookup, isSelf)
                     }
+
+                    // Process Pull Request data
+                    def diffsResponse = bitbucketREST.getDiffs(prUrl)
+
+                    // Generate index to look for data
+                    // NOTICE: In this mode, all attributions go to the PR author
+                    List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, prAuthor)
+                    processDiffs(PR_PREFIX, diffsResponse, indexLookup, true)
                 })
             })
         })
+    }
+
+    protected List<FlexiDBQueryColumn> createIndexLookup(String sprintName, ticket, prId, String userName) {
+        List<FlexiDBQueryColumn> indexLookup = new ArrayList<>()
+        indexLookup.add(new FlexiDBQueryColumn(DBIndexData.SPRINT.name(), sprintName))
+        indexLookup.add(new FlexiDBQueryColumn(DBIndexData.TICKET.name(), ticket))
+        indexLookup.add(new FlexiDBQueryColumn(DBIndexData.PR_ID.name(), prId))
+        indexLookup.add(new FlexiDBQueryColumn(DBIndexData.USER.name(), userName))
+        return indexLookup
+    }
+
+    protected void processDiffs(String prefix, def diffsResponse, List<FlexiDBQueryColumn> indexLookup, boolean isSelf) {
+        diffsResponse.diffs.forEach { diff ->
+            {
+                diff.hunks.forEach(hunk -> {
+                    hunk.segments.forEach(segment -> {
+
+                        // TODO: within a hunk, multiple segments (likely) indicates a MODIFIED
+                        //       these segments seem to have REMOVED and ADDED both
+
+                        JiraDBActions action = JiraDBActions.valueOf(prefix + segment.type)
+                        switch (segment.type) {
+                            case "ADDED":
+                                // Note this is silly for now, since it's the same as REMOVED, for now
+                                incrementCounter(indexLookup, action, isSelf, segment.lines.size())
+                                break
+                            case "REMOVED":
+                                // Note this is silly for now, since it's the same as ADDED, for now
+                                incrementCounter(indexLookup, action, isSelf, segment.lines.size())
+                                break
+                            case "MODIFIED":
+                                break
+                        }
+                    })
+                })
+            }
+        }
     }
 
     /**

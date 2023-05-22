@@ -36,7 +36,7 @@ class BitbucketREST {
     }
 
     // Get activities (approvals, comments, etc)
-    // https://{bitbucket}/rest/api/latest/projects/{project}/repos/{repo}/pull-requests/78/activities?avatarSize=48&start=0&limit=25&markup=true
+    // https://{bitbucket}/rest/api/latest/projects/{project}/repos/{repo}/pull-requests/{prId}/activities?avatarSize=48&start=0&limit=25&markup=true
     Object getActivities(String prUrl) {
         String uri = "${prUrl}/activities"
         NameValuePair startPair = new BasicNameValuePair("start", STARTING_PAGE)
@@ -58,18 +58,27 @@ class BitbucketREST {
 
     // Get commit changes https://{bitbucket}/rest/api/latest/projects/{project}/repos/{repo}/commits/{commitSHA}/changes
 
+    // Get Pull Request (PR) diff: https://{bitbucket}}/rest/api/latest/projects/{project}}/repos/{repo}}/pull-requests/{prID}/diff
+    Object getDiffs(String prUrl) {
+        String uri = "${prUrl}/diff"
+        NameValuePair startPair = new BasicNameValuePair("start", STARTING_PAGE)
+        NameValuePair limitPair = new BasicNameValuePair("limit", PAGE_SIZE_LIMIT)
+        NameValuePair contextPair = new BasicNameValuePair("contextLines", "0")
+        return RestService.GetRequest(uri, authInfo, startPair, limitPair, contextPair)
+    }
+
     // Get commit diff: https://{bitbucket}}/rest/api/latest/projects/{project}/repos/{repo}}/commits/{commitSHA}/diff?contextLines=0
-    Object getDiffs(String prUrl, String commitSHA) {
+    Object getCommitDiffs(String prUrl, String commitSHA) {
         Matcher projectUrlMatcher = FIND_PROJECT_URL.matcher(prUrl)
         // Trim off PR info to get project/repo path
         if (!projectUrlMatcher.matches()) {
             throw new RuntimeException("Couldn't extract Project URL from: ${prUrl}")
         }
-        String repoUri = "${projectUrlMatcher.group(1)}/commits/${commitSHA}/diff"
+        String uri = "${projectUrlMatcher.group(1)}/commits/${commitSHA}/diff"
 
         NameValuePair startPair = new BasicNameValuePair("start", STARTING_PAGE)
         NameValuePair limitPair = new BasicNameValuePair("limit", PAGE_SIZE_LIMIT)
         NameValuePair contextPair = new BasicNameValuePair("contextLines", "0")
-        return RestService.GetRequest(repoUri, authInfo, startPair, limitPair, contextPair)
+        return RestService.GetRequest(uri, authInfo, startPair, limitPair, contextPair)
     }
 }
