@@ -8,7 +8,7 @@
   ### SprintReportIndividualAnalysis
   - Reports of Individual Team members over specified sprints 
 - ### SprintReportTeamCarryoverHours
-  - Report Carrover Hours from Sprints of a specified Team 
+  - Report Carryover Hours from Sprints of a specified Team 
 
 ## Scripts
 - `JiraCopyTicketEstimates` - Copies time estimates from tickets matching criteria
@@ -16,15 +16,20 @@
 - `SprintReportTeamAnalysis` - Generates report of team metrics
 - `SprintReportTeamCarryoverHours` - Generates report of team's carryover
 
+## Report Notes
+- PR_ADDED, PR_REMOVED, and PR_MODIFIED values are always attributed to the author, regardless of the committer
+- PR_ADDED, PR_REMOVED, and PR_MODIFIED values are not time-checked against the sprints, so those values will duplicate for carryover tickets
+
 ## Execution
 - From the `src/` directory:
   - `groovy com/unhuman/managertools/SCRIPT.groovy parameters...`
+- Cookie values are required to have these scripts function.  Copy Value them from your browsers Development Tools / Request Headers / Cookie
 
 ## Developer Setup
 ### IntelliJ must add Ivy
-1. Project Structure / Modules.
-1. Get Apache Ivy with dependencies. 
-1. Add both the Ivy binary and all the dependencies of Ivy (lib subfolder).
+1. Project Structure / Modules
+1. Get Apache Ivy with dependencies 
+1. Add both the Ivy binary and all the dependencies of Ivy (lib subfolder)
 1. Note the issues with unit tests and Grape Grab, below
 
 ## Tests
@@ -32,6 +37,6 @@
 1. From the `src/` directory
 1. Run: `groovy -Dgroovy.grape.report.downloads=true ../tests/com/unhuman/flexidb/FlexiDBTests.groovy`
 
-## Notes
-- data is stored in ~/.managerTools.cfg
-- there was difficulty getting long input, so for that input, zsh/vared is used to accept input
+## Developer Notes
+- Data is stored in `~/.managerTools.cfg`
+- There was difficulty getting long input from the terminal, so for that input, `zsh/vared` is used to accept input
