@@ -100,6 +100,17 @@ class FlexiDB {
      * @return
      */
     int incrementField(Collection<FlexiDBQueryColumn> columnFilters, String incrementField) {
+        return incrementField(columnFilters, incrementField, 1)
+    }
+
+    /**
+     *
+     * @param columnFilters
+     * @param incrementField
+     * @param increment
+     * @return
+     */
+    int incrementField(Collection<FlexiDBQueryColumn> columnFilters, String incrementField, int increment) {
         validateColumn(incrementField)
 
         FlexiDBRow row = findOrCreateRow(columnFilters)
@@ -108,7 +119,7 @@ class FlexiDB {
                 ((FlexiDBInitDataColumn) columnFinder.get(incrementField)).getDefaultValue() != null)
                 ? ((FlexiDBInitDataColumn) columnFinder.get(incrementField)).getDefaultValue() : 0
 
-        int newValue = ((row.get(incrementField) != null) ? row.get(incrementField) : defaultValue) + 1
+        int newValue = ((row.get(incrementField) != null) ? row.get(incrementField) : defaultValue) + increment
         row.put(incrementField, newValue)
         return newValue
     }

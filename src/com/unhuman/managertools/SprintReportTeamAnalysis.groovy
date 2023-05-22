@@ -192,6 +192,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     def prAuthor = pullRequest.author.name // Below, we try to update this to match the username
                     def prUrl = pullRequest.url
 
+                    // Get and process activities (comments, etc)
                     def prActivities = bitbucketREST.getActivities(prUrl)
 
                     System.out.println("      PR ${ticket} / ${prId} has ${prActivities.values.size()} activities")
@@ -232,7 +233,6 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                                 || prActivity.createdDate >= sprintEndTime.getTime()) {
                             continue
                         }
-
                         // Track we have processed this item
                         processedItems.add(prActivity.id)
 
@@ -260,6 +260,61 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         // increment counters (total and then specific) based on detailed configuration
                         incrementCounter(indexLookup, prActivityAction, isSelf)
                     }
+
+                    // Get and process commits
+                    def prCommits = bitbucketREST.getCommits(prUrl)
+
+                    for (int i = prCommits.values.size() - 1; i >= 0; i--) {
+                        commit = prCommits.values.get(i)
+                        String commitSHA = commit.id
+                        Long commitTimestamp = commit.committerTimestamp
+
+                        // If we have already processed this activity or the activity didn't occur in this sprint, don't include it
+                        // TODO: Duplicate of operations for activities
+                        if (processedItems.contains(commitSHA)
+                                || sprintStartTime.getTime() > commitTimestamp
+                                || commitTimestamp >= sprintEndTime.getTime()) {
+                            continue
+                        }
+                        // Track we have processed this item
+                        processedItems.add(commitSHA)
+
+                        String userName = commit.committer.name
+                        // Skip this if not desired (unlikely in this case)
+                        // TODO: Duplicate of operations for activities
+                        if (IGNORE_USERS.contains(userName)) {
+                            continue
+                        }
+
+                        // Generate index to look for data
+                        List<FlexiDBQueryColumn> indexLookup = new ArrayList<>()
+                        indexLookup.add(new FlexiDBQueryColumn(DBIndexData.SPRINT.name(), sprintName))
+                        indexLookup.add(new FlexiDBQueryColumn(DBIndexData.TICKET.name(), ticket))
+                        indexLookup.add(new FlexiDBQueryColumn(DBIndexData.PR_ID.name(), prId))
+                        indexLookup.add(new FlexiDBQueryColumn(DBIndexData.USER.name(), userName))
+                        boolean isSelf = (userName.equals(prAuthor))
+
+                        def diffsResponse = bitbucketREST.getDiffs(prUrl, commitSHA)
+                        diffsResponse.diffs.forEach { diff -> {
+                            diff.hunks.forEach(hunk -> {
+                                hunk.segments.forEach(segment -> {
+                                    // TODO: within a hunk, multiple segments (likely) indicates a MODIFIED
+                                    //       these segments seem to have REMOVED and ADDED both
+
+                                    switch(segment.type) {
+                                        case "ADDED":
+                                            incrementCounter(indexLookup, JiraDBActions.ADDED, isSelf, segment.lines.size())
+                                            break
+                                        case "REMOVED":
+                                            incrementCounter(indexLookup, JiraDBActions.REMOVED, isSelf, segment.lines.size())
+                                            break
+                                        case "MODIFIED":
+                                            break
+                                    }
+                                })
+                            })
+                        }}
+                    }
                 })
             })
         })
@@ -273,13 +328,24 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
      * @param dbActivityAction
      */
     protected void incrementCounter(ArrayList<FlexiDBQueryColumn> indexLookup, JiraDBActions prActivityAction, boolean isSelf) {
+        incrementCounter(indexLookup, prActivityAction, isSelf, 1)
+    }
+
+    /**
+     * Increment counters for data provided
+     * @param indexLookup
+     * @param prActivityAction
+     * @param isSelf
+     * @param dbActivityAction
+     */
+    protected void incrementCounter(ArrayList<FlexiDBQueryColumn> indexLookup, JiraDBActions prActivityAction, boolean isSelf, int increment) {
         JiraDBActions dbActivityAction = prActivityAction
         if (commandLineOptions.'detailed') {
             database.incrementField(indexLookup, TOTAL_PREFIX + prActivityAction.name())
             dbActivityAction = (isSelf)
                     ? JiraDBActions.valueOf(SELF_PREFIX + prActivityAction.name()) : prActivityAction
         }
-        database.incrementField(indexLookup, dbActivityAction.name())
+        database.incrementField(indexLookup, dbActivityAction.name(), increment)
     }
 
     /**

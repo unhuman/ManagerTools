@@ -1,6 +1,11 @@
 package com.unhuman.managertools.data
 
 enum JiraDBActions {
+    // Code Changes
+    ADDED(0), SELF_ADDED(0), TOTAL_ADDED(0),
+    REMOVED(0), SELF_REMOVED(0), TOTAL_REMOVED(0),
+
+    // Activities on PRs
     APPROVED(0), SELF_APPROVED(0), TOTAL_APPROVED(0),
     COMMENTED(0), SELF_COMMENTED(0), TOTAL_COMMENTED(0),
     DECLINED(0), SELF_DECLINED(0), TOTAL_DECLINED(0),
