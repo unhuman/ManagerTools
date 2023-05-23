@@ -67,7 +67,7 @@ class BitbucketREST {
         return RestService.GetRequest(uri, authInfo, startPair, limitPair, contextPair)
     }
 
-    // Get commit diff: https://{bitbucket}}/rest/api/latest/projects/{project}/repos/{repo}}/commits/{commitSHA}/diff?contextLines=0
+    // Get commit diff: https://{bitbucket}}/rest/api/latest/projects/{project}/repos/{repo}/commits/{commitSHA}/diff?contextLines=0
     Object getCommitDiffs(String prUrl, String commitSHA) {
         Matcher projectUrlMatcher = FIND_PROJECT_URL.matcher(prUrl)
         // Trim off PR info to get project/repo path

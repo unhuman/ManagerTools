@@ -318,25 +318,48 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         diffsResponse.diffs.forEach { diff ->
             {
                 diff.hunks.forEach(hunk -> {
-                    hunk.segments.forEach(segment -> {
+                    int added = 0
+                    int removed = 0
 
+                    int sourceStart = hunk.sourceLine
+                    int sourceEnd = sourceStart + hunk.sourceSpan - 1
+                    int destinationStart = hunk.destinationLine
+                    int destinationEnd = destinationStart + hunk.destinationSpan - 1
+
+                    // Calculate the overlap as modified count
+                    int modified = (sourceEnd > 0 && destinationEnd > 0) && (sourceStart <= destinationEnd) && (destinationStart <= sourceEnd)
+                            ? Math.min(sourceEnd, destinationEnd) - Math.max(sourceStart, destinationStart) + 1 // always at least one line
+                            : 0
+
+                    hunk.segments.forEach(segment -> {
                         // TODO: within a hunk, multiple segments (likely) indicates a MODIFIED
                         //       these segments seem to have REMOVED and ADDED both
-
-                        JiraDBActions action = JiraDBActions.valueOf(prefix + segment.type)
                         switch (segment.type) {
+
+                            // TODO:
+                            // for every line, track source + destination to see if a value is added, deleted, or modified
+
+
                             case "ADDED":
-                                // Note this is silly for now, since it's the same as REMOVED, for now
-                                incrementCounter(indexLookup, action, isSelf, segment.lines.size())
+                                added += segment.lines.size()
                                 break
                             case "REMOVED":
                                 // Note this is silly for now, since it's the same as ADDED, for now
-                                incrementCounter(indexLookup, action, isSelf, segment.lines.size())
-                                break
-                            case "MODIFIED":
+                                removed += segment.lines.size()
                                 break
                         }
                     })
+
+                    // TODO: Make sure this is correct logic
+                    // the modified lines are the smaller of the overlap (I think this may be over-simplified)
+                    int modified2 = Math.min(added, removed)
+                    
+                    added -= modified
+                    removed -= modified
+
+                    incrementCounter(indexLookup, JiraDBActions.valueOf(prefix + "ADDED"), isSelf, added)
+                    incrementCounter(indexLookup, JiraDBActions.valueOf(prefix + "REMOVED"), isSelf, removed)
+                    incrementCounter(indexLookup, JiraDBActions.valueOf(prefix + "MODIFIED"), isSelf, modified)
                 })
             }
         }
