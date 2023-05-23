@@ -317,6 +317,10 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     protected void processDiffs(String prefix, def diffsResponse, List<FlexiDBQueryColumn> indexLookup, boolean isSelf) {
         diffsResponse.diffs.forEach { diff ->
             {
+                // sometimes these can be null - file comments is an example
+                if (diff.hunks == null) {
+                    return
+                }
                 diff.hunks.forEach(hunk -> {
                     int added = 0
                     int removed = 0
