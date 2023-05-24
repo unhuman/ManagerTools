@@ -214,10 +214,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
                         // Generate index to look for data
                         List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, userName)
-
-                        database.setValue(indexLookup, DBData.START_DATE.name(), startDate)
-                        database.setValue(indexLookup, DBData.END_DATE.name(), endDate)
-                        database.setValue(indexLookup, DBData.AUTHOR.name(), prAuthor)
+                        populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
 
                         // Get / ensure we have a known action
                         JiraDBActions prActivityAction = JiraDBActions.getResolvedValue((String) prActivity.action)
@@ -287,6 +284,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
                         // Generate index to look for data
                         List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, userName)
+                        populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
+
                         boolean isSelf = (userName.equals(prAuthor))
 
                         def diffsResponse = bitbucketREST.getCommitDiffs(prUrl, commitSHA)
@@ -299,6 +298,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     // Generate index to look for data
                     // NOTICE: In this mode, all attributions go to the PR author
                     List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, prAuthor)
+                    populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
                     processDiffs(PR_PREFIX, diffsResponse, indexLookup, true)
                 })
             })
@@ -314,6 +314,12 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         return indexLookup
     }
 
+    protected void populateBaselineDBInfo(List<FlexiDBQueryColumn> indexLookup, String startDate, String endDate, String prAuthor) {
+        database.setValue(indexLookup, DBData.START_DATE.name(), startDate)
+        database.setValue(indexLookup, DBData.END_DATE.name(), endDate)
+        database.setValue(indexLookup, DBData.AUTHOR.name(), prAuthor)
+    }
+
     protected void processDiffs(String prefix, def diffsResponse, List<FlexiDBQueryColumn> indexLookup, boolean isSelf) {
         diffsResponse.diffs.forEach { diff ->
             {
@@ -325,16 +331,6 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     int added = 0
                     int removed = 0
 
-                    int sourceStart = hunk.sourceLine
-                    int sourceEnd = sourceStart + hunk.sourceSpan - 1
-                    int destinationStart = hunk.destinationLine
-                    int destinationEnd = destinationStart + hunk.destinationSpan - 1
-
-                    // Calculate the overlap as modified count
-                    int modified = (sourceEnd > 0 && destinationEnd > 0) && (sourceStart <= destinationEnd) && (destinationStart <= sourceEnd)
-                            ? Math.min(sourceEnd, destinationEnd) - Math.max(sourceStart, destinationStart) + 1 // always at least one line
-                            : 0
-
                     hunk.segments.forEach(segment -> {
                         // TODO: within a hunk, multiple segments (likely) indicates a MODIFIED
                         //       these segments seem to have REMOVED and ADDED both
@@ -342,7 +338,6 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
                             // TODO:
                             // for every line, track source + destination to see if a value is added, deleted, or modified
-
 
                             case "ADDED":
                                 added += segment.lines.size()
@@ -354,16 +349,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         }
                     })
 
-                    // TODO: Make sure this is correct logic
-                    // the modified lines are the smaller of the overlap (I think this may be over-simplified)
-                    int modified2 = Math.min(added, removed)
-                    
-                    added -= modified
-                    removed -= modified
-
                     incrementCounter(indexLookup, JiraDBActions.valueOf(prefix + "ADDED"), isSelf, added)
                     incrementCounter(indexLookup, JiraDBActions.valueOf(prefix + "REMOVED"), isSelf, removed)
-                    incrementCounter(indexLookup, JiraDBActions.valueOf(prefix + "MODIFIED"), isSelf, modified)
                 })
             }
         }

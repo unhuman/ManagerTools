@@ -31,12 +31,12 @@ abstract class AbstractSprintReport extends Script {
     abstract def process(String boardId, List<String> sprintIds)
 
     // this is an example of a very simple thing done
-//    def process(String boardId, List<String> sprintIds) {
-//        sprintIds.each { sprintId -> {
-//            Object data = jiraREST.getSprintReport(boardId, sprintId)
-//            System.out.println(data.sprint.name)
-//        }}
-//    }
+    //    def process(String boardId, List<String> sprintIds) {
+    //        sprintIds.each { sprintId -> {
+    //            Object data = jiraREST.getSprintReport(boardId, sprintId)
+    //            System.out.println(data.sprint.name)
+    //        }}
+    //    }
 
     /**
      * Implementations can override this to support custom options
