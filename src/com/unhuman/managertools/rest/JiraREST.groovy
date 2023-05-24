@@ -41,12 +41,15 @@ class JiraREST {
             values.addAll(response.values)
             startAt += response.maxResults
         } while (!response.isLast)
+
+        // TODO: Sort this list by endDate
+
         return values
     }
 
-
     // Get Sprint Report
     // https://jira.x.com/rest/greenhopper/1.0/rapid/charts/sprintreport?rapidViewId=679&sprintId=26636&_=1679081186799
+    // an alternative would be: https://jira.X.com/rest/agile/1.0/sprint/26636/issue but it is much slower
     Object getSprintReport(String boardId, String sprintId) {
         String uri = "https://${jiraServer}/rest/greenhopper/1.0/rapid/charts/sprintreport"
         NameValuePair rapidViewIdPair = new BasicNameValuePair("rapidViewId", boardId)
@@ -54,14 +57,6 @@ class JiraREST {
         NameValuePair timeIdPair = new BasicNameValuePair("_", System.currentTimeMillis().toString())
         return RestService.GetRequest(uri, authInfo, rapidViewIdPair, sprintIdPair, timeIdPair)
     }
-
-    //static Object getSprintReport(String user, String password, String boardId, String sprintId) {
-    //    String uri = "https://${jiraServer}/rest/greenhopper/1.0/rapid/charts/sprintreport"
-    //    NameValuePair rapidViewIdPair = new BasicNameValuePair("rapidViewId", boardId)
-    //    NameValuePair sprintIdPair = new BasicNameValuePair("sprintId", sprintId)
-    //    NameValuePair timeIdPair = new BasicNameValuePair("_", "1679335101555")
-    //    return RestService.GetRequest(uri, user, password, rapidViewIdPair, sprintIdPair, timeIdPair)
-    //}
 
     // get ticket info
     // https://jira.x.com/rest/api/latest/issue/ISSUE-ID
