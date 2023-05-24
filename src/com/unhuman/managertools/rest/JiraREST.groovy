@@ -26,15 +26,24 @@ class JiraREST {
         this.authInfo = new AuthInfo(cookies)
     }
 
-    // Get Sprints
-    // https://jira.x.com/rest/greenhopper/1.0/sprintquery/679?includeHistoricSprints=false&includeFutureSprints=false&_=1679081186798
-    Object getSprints(String boardId) {
-        String uri = "https://${jiraServer}/rest/greenhopper/1.0/sprintquery/${boardId}"
-        NameValuePair rapidViewIdPair = new BasicNameValuePair("includeHistoricSprints", "false")
-        NameValuePair sprintIdPair = new BasicNameValuePair("includeFutureSprints", "false")
-        NameValuePair timeIdPair = new BasicNameValuePair("_", System.currentTimeMillis().toString())
-        return RestService.GetRequest(uri, authInfo, rapidViewIdPair, sprintIdPair, timeIdPair)
+    // Get Sprints v2
+    // https://jira.x.com/rest/agile/1.0/board/679/sprint
+    List<Object> getSprints(String boardId) {
+        int startAt = 0
+        List<Object> values = new ArrayList<>()
+        def response
+        do {
+            String uri = "https://${jiraServer}/rest/agile/1.0/board/${boardId}/sprint"
+            NameValuePair rapidViewIdPair = new BasicNameValuePair("state", "active,closed")
+            NameValuePair sprintIdPair = new BasicNameValuePair("startAt", startAt.toString())
+            NameValuePair timeIdPair = new BasicNameValuePair("_", System.currentTimeMillis().toString())
+            response = RestService.GetRequest(uri, authInfo, rapidViewIdPair, sprintIdPair, timeIdPair)
+            values.addAll(response.values)
+            startAt += response.maxResults
+        } while (!response.isLast)
+        return values
     }
+
 
     // Get Sprint Report
     // https://jira.x.com/rest/greenhopper/1.0/rapid/charts/sprintreport?rapidViewId=679&sprintId=26636&_=1679081186799

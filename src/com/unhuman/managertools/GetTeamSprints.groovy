@@ -45,30 +45,30 @@ class GetTeamSprints extends Script {
         jiraREST = new JiraREST(jiraServer, jiraCookies)
 
         Object data = getClosedRecentSprints(options.'boardId', (options.'limit') ? Integer.parseInt(options.'limit') : null)
-        data.sprints.each { sprint ->
+        data.each { sprint ->
             System.out.println("${sprint.id}: ${sprint.name}")
         }
     }
 
-    Object getClosedRecentSprints(String boardId, Integer limitCount) {
+    List<Object> getClosedRecentSprints(String boardId, Integer limitCount) {
         Object data = jiraREST.getSprints(boardId)
 
         // invert the order of sprints (most recent first)
-        Collections.reverse(data.sprints)
+        Collections.reverse(data)
 
-        for (int i = data.sprints.size() - 1; i >= 0; --i) {
-            def sprint = data.sprints.get(i);
+        for (int i = data.size() - 1; i >= 0; --i) {
+            def sprint = data.get(i);
             if (!sprint.state.toUpperCase().equals("CLOSED")) {
-                data.sprints.removeAt(i)
+                data.removeAt(i)
             }
         }
 
         if (limitCount != null) {
-            data.sprints = data.sprints.subList(0, limitCount)
+            data = data.subList(0, limitCount)
         }
 
         // Flip what's left to order back the way we want it
-        Collections.reverse(data.sprints)
+        Collections.reverse(data)
 
         return data
     }

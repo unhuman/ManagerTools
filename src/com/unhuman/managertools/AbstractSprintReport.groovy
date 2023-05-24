@@ -91,7 +91,7 @@ abstract class AbstractSprintReport extends Script {
         if (commandLineOptions.'limit') {
             GetTeamSprints getTeamSprints = new GetTeamSprints(jiraREST)
             def sprintData = getTeamSprints.getClosedRecentSprints(commandLineOptions.'boardId', Integer.parseInt(commandLineOptions.'limit'))
-            sprintIds = sprintData.sprints.stream().map(sprint -> sprint.id.toString()).collect(Collectors.toUnmodifiableList())
+            sprintIds = sprintData.stream().map(sprint -> sprint.id.toString()).collect(Collectors.toUnmodifiableList())
         } else {
             // limit and sprintIds are required / mutually exclusive, so just use what we get
             sprintIds = commandLineOptions.'sprintIds'.split(',')
