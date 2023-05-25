@@ -35,7 +35,6 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     @Override
     def addCustomCommandLineOptions(CliBuilder cli) {
         cli.o(longOpt: 'outputCSV', required: true, args: 1, argName: 'outputCSV', 'Output filename (.csv)')
-        cli.d(longOpt: 'detailed', args: 1, argName: 'detailed', 'Detailed breakdown of participation counts')
     }
 
     @Override
@@ -205,7 +204,6 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         String userName = prActivity.user.name
                         // try to match up the names better
                         prAuthor = (prAuthor.equals(prActivity.user.displayName)) ? userName : prAuthor
-                        boolean isSelf = (userName.equals(prAuthor))
 
                         // Skip this if not desired
                         if (IGNORE_USERS.contains(userName)) {
@@ -253,8 +251,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                                 break
                         }
 
-                        // increment counters (total and then specific) based on detailed configuration
-                        incrementCounter(indexLookup, prActivityAction, isSelf)
+                        // increment counter
+                        incrementCounter(indexLookup, prActivityAction)
                     }
 
                     // Get and process commits
@@ -286,16 +284,14 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, userName)
                         populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
 
-                        boolean isSelf = (userName.equals(prAuthor))
-
                         def diffsResponse = bitbucketREST.getCommitDiffs(prUrl, commitSHA)
-                        processDiffs(COMMIT_PREFIX, diffsResponse, indexLookup, isSelf)
+                        processDiffs(COMMIT_PREFIX, diffsResponse, indexLookup)
 
                         // Add pr commit messages to database
                         commitMessage = commit.message.replaceAll("(\\r|\\n)?\\n", "  ").trim()
                         database.append(indexLookup, DBData.COMMIT_MESSAGES.name(), commitMessage, true)
                         // TODO: Add counter for commits
-                        // incrementCounter(currentUserIndexLookup, JiraDBActions.COMMIT, isSelf)
+                        // incrementCounter(currentUserIndexLookup, JiraDBActions.COMMIT)
                     }
 
                     // Process Pull Request data
@@ -305,7 +301,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     // NOTICE: In this mode, all attributions go to the PR author
                     List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, prAuthor)
                     populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
-                    processDiffs(PR_PREFIX, diffsResponse, indexLookup, true)
+                    processDiffs(PR_PREFIX, diffsResponse, indexLookup)
                 })
             })
         })
@@ -326,7 +322,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         database.setValue(indexLookup, DBData.AUTHOR.name(), prAuthor)
     }
 
-    protected void processDiffs(String prefix, def diffsResponse, List<FlexiDBQueryColumn> indexLookup, boolean isSelf) {
+    protected void processDiffs(String prefix, def diffsResponse, List<FlexiDBQueryColumn> indexLookup) {
         diffsResponse.diffs.forEach { diff ->
             {
                 // sometimes these can be null - file comments is an example
@@ -355,8 +351,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         }
                     })
 
-                    incrementCounter(indexLookup, JiraDBActions.valueOf(prefix + "ADDED"), isSelf, added)
-                    incrementCounter(indexLookup, JiraDBActions.valueOf(prefix + "REMOVED"), isSelf, removed)
+                    incrementCounter(indexLookup, JiraDBActions.valueOf(prefix + "ADDED"), added)
+                    incrementCounter(indexLookup, JiraDBActions.valueOf(prefix + "REMOVED"), removed)
                 })
             }
         }
@@ -366,27 +362,20 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
      * Increment counters for data provided
      * @param indexLookup
      * @param prActivityAction
-     * @param isSelf
      * @param dbActivityAction
      */
-    protected void incrementCounter(ArrayList<FlexiDBQueryColumn> indexLookup, JiraDBActions prActivityAction, boolean isSelf) {
-        incrementCounter(indexLookup, prActivityAction, isSelf, 1)
+    protected void incrementCounter(ArrayList<FlexiDBQueryColumn> indexLookup, JiraDBActions prActivityAction) {
+        incrementCounter(indexLookup, prActivityAction, 1)
     }
 
     /**
      * Increment counters for data provided
      * @param indexLookup
      * @param prActivityAction
-     * @param isSelf
      * @param dbActivityAction
      */
-    protected void incrementCounter(ArrayList<FlexiDBQueryColumn> indexLookup, JiraDBActions prActivityAction, boolean isSelf, int increment) {
+    protected void incrementCounter(ArrayList<FlexiDBQueryColumn> indexLookup, JiraDBActions prActivityAction, int increment) {
         JiraDBActions dbActivityAction = prActivityAction
-        if (commandLineOptions.'detailed') {
-            database.incrementField(indexLookup, TOTAL_PREFIX + prActivityAction.name())
-            dbActivityAction = (isSelf)
-                    ? JiraDBActions.valueOf(SELF_PREFIX + prActivityAction.name()) : prActivityAction
-        }
         database.incrementField(indexLookup, dbActivityAction.name(), increment)
     }
 
@@ -412,9 +401,6 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
      */
     def processComment(List<FlexiDBQueryColumn> originalIndexLookup, String userName, String action, String commentAction, Object comment, int indentation) {
 
-        // TODO: this self tracking & lookup handling are a bit wonky
-        boolean isSelf = userName.equals(originalIndexLookup.stream().filter { it.getName() == DBIndexData.USER.name() }.toList()[0].getMatchValue())
-
         // recreate the indexLookup with the actual user
         List<FlexiDBQueryColumn> currentUserIndexLookup = new ArrayList<>(originalIndexLookup.stream().filter { it.getName() != DBIndexData.USER.name() }.toList())
         currentUserIndexLookup.add(new FlexiDBQueryColumn(DBIndexData.USER.name(), userName))
@@ -437,7 +423,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                 userName)
 
         database.append(currentUserIndexLookup, DBData.COMMENTS.name(), commentText, true)
-        incrementCounter(currentUserIndexLookup, JiraDBActions.COMMENTED, isSelf)
+        incrementCounter(currentUserIndexLookup, JiraDBActions.COMMENTED)
 
         // Recursively process responses
         comment.comments.forEach(replyComment -> {
@@ -458,7 +444,6 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         for (int i = 0; i < JiraDBActions.values().length; i++) {
             JiraDBActions action = JiraDBActions.values()[i]
             columns.add(new FlexiDBInitDataColumn(action.name(), action.getDefaultValue()))
-            i += (commandLineOptions.'detailed') ? 0 : JiraDBActions.DETAIL_DATA_SKIP_COUNT
         }
 
         // Relevant Jira / Bitbucket Data
