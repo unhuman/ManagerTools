@@ -75,8 +75,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         columnOrder.add(1, DBData.START_DATE.name())
         columnOrder.remove(DBData.END_DATE.name())
         columnOrder.add(2, DBData.END_DATE.name())
-        // comments are currently generated last - if things changed, might need to manage that here
-        columnOrder
+        // comments & commit messages are currently generated last - if things changed, might need to manage that here
+        return columnOrder
     }
 
     protected void generateOutput() {
@@ -290,6 +290,12 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
                         def diffsResponse = bitbucketREST.getCommitDiffs(prUrl, commitSHA)
                         processDiffs(COMMIT_PREFIX, diffsResponse, indexLookup, isSelf)
+
+                        // Add pr commit messages to database
+                        commitMessage = commit.message.replaceAll("(\\r|\\n)?\\n", "  ").trim()
+                        database.append(indexLookup, DBData.COMMIT_MESSAGES.name(), commitMessage, true)
+                        // TODO: Add counter for commits
+                        // incrementCounter(currentUserIndexLookup, JiraDBActions.COMMIT, isSelf)
                     }
 
                     // Process Pull Request data
@@ -446,7 +452,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             i += (commandLineOptions.'detailed') ? 0 : JiraDBActions.DETAIL_DATA_SKIP_COUNT
         }
 
-        // Relevant Jira Data
+        // Relevant Jira / Bitbucket Data
         DBData.values().each { data -> {
             columns.add(new FlexiDBInitDataColumn(data.name(), data.getDefaultValue()))
         }}

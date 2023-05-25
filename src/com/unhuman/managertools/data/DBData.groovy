@@ -4,7 +4,8 @@ enum DBData {
     START_DATE("startDate", null),
     END_DATE("endDate", null),
     AUTHOR("author", null),
-    COMMENTS("comments", Collections.emptyList())
+    COMMENTS("comments", Collections.emptyList()),
+    COMMIT_MESSAGES(null, Collections.emptyList())
 
     private String jiraField
     private Object defaultValue
