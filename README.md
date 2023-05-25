@@ -17,8 +17,9 @@
 - `SprintReportTeamCarryoverHours` - Generates report of team's carryover
 
 ## Report Notes
-- PR_ADDED, PR_REMOVED, and PR_MODIFIED values are always attributed to the author, regardless of the committer
-- PR_ADDED, PR_REMOVED, and PR_MODIFIED values are not time-checked against the sprints, so those values will duplicate for carryover tickets
+- PR_ADDED, PR_REMOVED, and PR_MODIFIED values are always attributed to the author, regardless of the committer.
+- PR_ADDED, PR_REMOVED, and PR_MODIFIED values are not time-checked against the sprints, so those values will duplicate for carryover tickets.
+- Nested comments could be mis-attributed to the wrong sprint.  Nested comments are attributed to the same sprint as the initial comment. 
 
 ## Execution
 - From the `src/` directory:

@@ -427,6 +427,15 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
         // Update comments
         commentText = commentText.replaceAll("(\\r|\\n)?\\n", "  ").trim()
+
+        // Ensure we have baseline info for this user (copy times from original comment)
+        // TODO: Since comments are nested, we are attributing them to the time of the first / parent
+        // TODO: This may lead to mis-attribution to sprint based on the parent.
+        populateBaselineDBInfo(currentUserIndexLookup,
+                database.getValue(originalIndexLookup, DBData.START_DATE.name()),
+                database.getValue(originalIndexLookup, DBData.END_DATE.name()),
+                userName)
+
         database.append(currentUserIndexLookup, DBData.COMMENTS.name(), commentText, true)
         incrementCounter(currentUserIndexLookup, JiraDBActions.COMMENTED, isSelf)
 
