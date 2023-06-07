@@ -32,7 +32,7 @@ enum JiraDBActions {
         try {
             return JiraDBActions.valueOf(desiredAction)
         } catch (Exception e) {
-            System.out.println("   Unknown Jira action: ${desiredAction}")
+            System.err.println("Unknown Jira action: ${desiredAction}")
             return null
         }
     }

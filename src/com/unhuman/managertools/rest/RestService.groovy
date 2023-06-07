@@ -1,5 +1,6 @@
 package com.unhuman.managertools.rest
 
+import com.unhuman.managertools.rest.exceptions.RESTException
 @Grapes([
         @Grab(group='org.apache.httpcomponents.core5', module='httpcore5', version='5.2.1'),
         @Grab(group='org.apache.httpcomponents.client5', module='httpclient5', version='5.2.1')
@@ -82,7 +83,7 @@ class RestService {
                 .with { httpClient ->
                     httpClient.execute(request).withCloseable { response ->
                         if (response.getCode() < 200 || response.getCode() > 299) {
-                            throw new RuntimeException("Error: Status ${response.getCode()}")
+                            throw new RESTException(response.getCode(), "Unable to retrieve requested url", request.getUri().toString())
                         }
                         InputStream inputStream = response.getEntity().getContent()
                         String text = new String(inputStream.readAllBytes(), Charset.defaultCharset())

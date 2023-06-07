@@ -1,5 +1,7 @@
 package com.unhuman.managertools.rest
 
+import com.unhuman.managertools.rest.exceptions.RESTException
+import org.apache.hc.core5.http.HttpStatus
 @Grapes([
         @Grab(group='org.apache.httpcomponents.core5', module='httpcore5', version='5.2.1'),
         @Grab(group='org.apache.httpcomponents.client5', module='httpclient5', version='5.2.1')
@@ -51,7 +53,15 @@ class BitbucketREST {
         String uri = "${prUrl}/commits"
         NameValuePair startPair = new BasicNameValuePair("start", STARTING_PAGE)
         NameValuePair limitPair = new BasicNameValuePair("limit", PAGE_SIZE_LIMIT)
-        return RestService.GetRequest(uri, authInfo, startPair, limitPair)
+        try {
+            return RestService.GetRequest(uri, authInfo, startPair, limitPair)
+        } catch (RESTException re) {
+            if (re.getStatusCode() != HttpStatus.SC_NOT_FOUND) {
+                throw re
+            }
+            System.err.println("Unable to retrieve commits ${re.toString()}")
+            return null
+        }
     }
 
     // Get commit information https://{bitbucket}/rest/api/latest/projects/{project}/repos/{repo}/commits/{commitSHA}
@@ -64,7 +74,16 @@ class BitbucketREST {
         NameValuePair startPair = new BasicNameValuePair("start", STARTING_PAGE)
         NameValuePair limitPair = new BasicNameValuePair("limit", PAGE_SIZE_LIMIT)
         NameValuePair contextPair = new BasicNameValuePair("contextLines", "0")
-        return RestService.GetRequest(uri, authInfo, startPair, limitPair, contextPair)
+
+        try {
+            return RestService.GetRequest(uri, authInfo, startPair, limitPair, contextPair)
+        } catch (RESTException re) {
+            if (re.getStatusCode() != HttpStatus.SC_NOT_FOUND) {
+                throw re
+            }
+            System.err.println("Unable to retrieve diffs ${re.toString()}")
+            return null
+        }
     }
 
     // Get commit diff: https://{bitbucket}}/rest/api/latest/projects/{project}/repos/{repo}/commits/{commitSHA}/diff?contextLines=0

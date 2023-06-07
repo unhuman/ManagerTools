@@ -25,6 +25,7 @@
 - From the `src/` directory:
   - `groovy com/unhuman/managertools/SCRIPT.groovy parameters...`
 - Cookie values are required to have these scripts function.  Copy Value them from your browsers Development Tools / Request Headers / Cookie
+- https://github.com/unhuman/browser-cookies-copier makes it easy to copy the cookies needed by this tool
 
 ## Developer Setup
 ### IntelliJ must add Ivy
