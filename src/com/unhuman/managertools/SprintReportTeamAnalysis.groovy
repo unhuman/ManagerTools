@@ -123,10 +123,13 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
      * @return
      */
     StringBuilder findRowsAndAppendCSVData(ArrayList<FlexiDBQueryColumn> rowsFilter, StringBuilder sb, overallTotalsRow) {
+        List<FlexiDBRow> rows = database.findRows(rowsFilter, true)
+        if (rows.size() == 0) {
+            return sb
+        }
+
         // Determine the list of columns to report
         List<String> columnOrder = generateColumnsOrder()
-
-        List<FlexiDBRow> rows = database.findRows(rowsFilter, true)
 
         // Render rows
         FlexiDBRow sprintTotalsRow = new FlexiDBRow(columnOrder.size())
