@@ -257,7 +257,9 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
                     // Get and process commits
                     def prCommits = bitbucketREST.getCommits(prUrl)
-
+                    if (prCommits == null) {
+                        return
+                    }
                     for (int i = prCommits.values.size() - 1; i >= 0; i--) {
                         def commit = prCommits.values.get(i)
                         String commitSHA = commit.id
@@ -285,7 +287,9 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
 
                         def diffsResponse = bitbucketREST.getCommitDiffs(prUrl, commitSHA)
-                        processDiffs(COMMIT_PREFIX, diffsResponse, indexLookup)
+                        if (diffsResponse != null) {
+                            processDiffs(COMMIT_PREFIX, diffsResponse, indexLookup)
+                        }
 
                         // Add pr commit messages to database
                         def commitMessage = commit.message.replaceAll("(\\r|\\n)?\\n", "  ").trim()
@@ -294,14 +298,16 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         // incrementCounter(currentUserIndexLookup, JiraDBActions.COMMIT)
                     }
 
-                    // Process Pull Request data
-                    def diffsResponse = bitbucketREST.getDiffs(prUrl)
-
                     // Generate index to look for data
                     // NOTICE: In this mode, all attributions go to the PR author
                     List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, prAuthor)
                     populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
-                    processDiffs(PR_PREFIX, diffsResponse, indexLookup)
+
+                    // Process Pull Request data
+                    def diffsResponse = bitbucketREST.getDiffs(prUrl)
+                    if (diffsResponse != null) {
+                        processDiffs(PR_PREFIX, diffsResponse, indexLookup)
+                    }
                 })
             })
         })
