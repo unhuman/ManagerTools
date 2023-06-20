@@ -1,5 +1,6 @@
 package com.unhuman.managertools
 
+import com.unhuman.managertools.rest.GithubREST
 @Grapes([
         @Grab(group='commons-cli', module='commons-cli', version='1.5.0')
 ])
@@ -18,6 +19,7 @@ abstract class AbstractSprintReport extends Script {
     private static final CONFIG_FILENAME = ".managerTools.cfg"
     protected JiraREST jiraREST
     protected BitbucketREST bitbucketREST
+    protected GithubREST githubREST
     private OptionAccessor commandLineOptions
     private List<String> sprintIds
 
@@ -120,7 +122,6 @@ abstract class AbstractSprintReport extends Script {
                 jiraREST = new JiraREST(jiraServer, username, password)
                 bitbucketREST = new BitbucketREST(bitbucketServer, username, password)
 
-
                 break
             case "c":
                 // Get authentication information
@@ -129,10 +130,14 @@ abstract class AbstractSprintReport extends Script {
 
                 jiraREST = new JiraREST(jiraServer, jiraCookies)
                 bitbucketREST = new BitbucketREST(bitbucketServer, bitbucketCookies)
+
                 break
             default:
                 throw new RuntimeException("Invalid auth method: ${authMethod}")
         }
 
+        // Github always uses token-based auth
+        String githubToken = commandLineHelper.getGithubToken()
+        githubREST = new GithubREST(githubToken)
     }
 }

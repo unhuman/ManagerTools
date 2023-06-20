@@ -78,6 +78,10 @@ class CommandLineHelper {
         return promptAndStore("Bitbucket Cookies (DevTools/Request/Cookie)", TextSecurity.MASK, ANY_MATCH_PATTERN, "bitbucketCookies", true)
     }
 
+    String getGithubToken() {
+        return promptAndStore("Github Token", TextSecurity.MASK, ANY_MATCH_PATTERN, "githubToken", true)
+    }
+
     List<String> getBoardTeamUsers(String boardId) {
         List<String> users = promptAndStore("Team users (optional, comma/space separated, * for all authors, ** for all users) for board: ${boardId}", TextSecurity.NONE, USERS_MATCH_PATTERN, "${boardId}-users", true, "*").split(",").toList()
         users = users.stream().map { it.trim() }.filter { it != null && !it.isEmpty() }.toList()

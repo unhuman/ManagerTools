@@ -23,7 +23,7 @@ class JiraREST {
 
     JiraREST(String jiraServer, String cookies) {
         this.jiraServer = jiraServer
-        this.authInfo = new AuthInfo(cookies)
+        this.authInfo = new AuthInfo(AuthInfo.AuthType.Cookies, cookies)
     }
 
     // Get Sprints v2
@@ -41,9 +41,14 @@ class JiraREST {
             values.addAll(response.values)
             startAt += response.maxResults
         } while (!response.isLast)
-
+        
         // TODO: Sort this list by endDate
-
+        Collections.sort(values, new Comparator<Object>() {
+            @Override
+            int compare(Object o1, Object o2) {
+                return o1.endDate.compareTo(o2.endDate)
+            }
+        })
         return values
     }
 
@@ -74,7 +79,12 @@ class JiraREST {
         NameValuePair applicationTypePair = new BasicNameValuePair("applicationType", "stash")
         NameValuePair dataTypePair = new BasicNameValuePair("dataType", "pullrequest")
         NameValuePair timeIdPair = new BasicNameValuePair("_", System.currentTimeMillis().toString())
-        return RestService.GetRequest(uri, authInfo, issueIdPair, applicationTypePair, dataTypePair, timeIdPair)
+        Object stashData = RestService.GetRequest(uri, authInfo, issueIdPair, applicationTypePair, dataTypePair, timeIdPair)
+
+        applicationTypePair = new BasicNameValuePair("applicationType", "github")
+        Object githubData = RestService.GetRequest(uri, authInfo, issueIdPair, applicationTypePair, dataTypePair, timeIdPair)
+
+        return stashData + githubData
     }
 
     // Simple JQL Query (Summary)

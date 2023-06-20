@@ -6,42 +6,41 @@ import org.apache.hc.core5.http.message.BasicHeader
 import java.nio.charset.Charset
 
 class AuthInfo {
-    private String username
-    private String password
-    private String cookies
+    enum AuthType { Basic, Cookies, Bearer }
+    private AuthType authType
+    private String authentication
 
     AuthInfo(String username, String password) {
-        this.username = username
-        this.password = password
+        this.authType = AuthType.Basic
+        this.authentication = getBasicAuth(username, password)
     }
 
-    AuthInfo(String cookies) {
-        this.cookies = cookies
-    }
-
-    String getUsername() {
-        return username
-    }
-
-    String getPassword() {
-        return password
-    }
-
-    String getCookies() {
-        return cookies
+    AuthInfo(AuthType authType, String cookiesOrToken) {
+        if (![AuthType.Cookies, AuthType.Bearer].contains(authType)) {
+            throw new RuntimeException("Invalid AuthType provided: ${authType}")
+        }
+        this.authType = authType
+        this.authentication = (authType == AuthType.Bearer) ? getBearer(cookiesOrToken) : cookiesOrToken
     }
 
     Header getAuthHeader() {
-        if (username != null && password != null) {
-            return new BasicHeader("Authorization", getBasicAuth())
+        switch (authType) {
+            case AuthType.Basic:
+            case AuthType.Bearer:
+                return new BasicHeader("Authorization", authentication)
+            case AuthType.Cookies:
+                return new BasicHeader("Cookie", authentication)
+            default:
+                throw new RuntimeException("Invalid AuthInfo")
         }
-        if (cookies != null) {
-            return new BasicHeader("Cookie", cookies)
-        }
-        throw new RuntimeException("Invalid AuthInfo")
     }
 
-    private String getBasicAuth() {
-        return "Basic " + Base64.encoder.encodeToString("${username}:${password}".getBytes(Charset.defaultCharset()));
+    private static String getBasicAuth(String username, String password) {
+        return "Basic ${Base64.encoder.encodeToString("${username}:${password}".getBytes(Charset.defaultCharset()))}"
     }
+
+    private static String getBearer(String token) {
+        return "Bearer ${token}"
+    }
+
 }

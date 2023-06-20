@@ -9,6 +9,7 @@ import com.unhuman.flexidb.init.FlexiDBInitIndexColumn
 import com.unhuman.managertools.data.DBData
 import com.unhuman.managertools.data.DBIndexData
 import com.unhuman.managertools.data.JiraDBActions
+import com.unhuman.managertools.rest.SourceControlREST
 import groovy.cli.commons.CliBuilder
 
 import java.text.SimpleDateFormat
@@ -195,10 +196,13 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     // check comment count before polling for comments
                     def prId = (pullRequest.id.startsWith("#") ? pullRequest.id.substring(1) : pullRequest.id)
                     def prAuthor = pullRequest.author.name // Below, we try to update this to match the username
-                    def prUrl = pullRequest.url
+                    String prUrl = pullRequest.url
+
+                    SourceControlREST sourceControlREST = (prUrl.contains("github")) ? githubREST : bitbucketREST
+                    prUrl = sourceControlREST.apiConvert(prUrl)
 
                     // Get and process activities (comments, etc)
-                    def prActivities = bitbucketREST.getActivities(prUrl)
+                    def prActivities = sourceControlREST.getActivities(prUrl)
 
                     System.out.println("      PR ${ticket} / ${prId} has ${prActivities.values.size()} activities")
                     // process from oldest to newest (reverse)
@@ -259,7 +263,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     }
 
                     // Get and process commits
-                    def prCommits = bitbucketREST.getCommits(prUrl)
+                    def prCommits = sourceControlREST.getCommits(prUrl)
                     if (prCommits == null) {
                         return
                     }
@@ -289,7 +293,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, userName)
                         populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
 
-                        def diffsResponse = bitbucketREST.getCommitDiffs(prUrl, commitSHA)
+                        def diffsResponse = sourceControlREST.getCommitDiffs(prUrl, commitSHA)
                         if (diffsResponse != null) {
                             processDiffs(COMMIT_PREFIX, diffsResponse, indexLookup)
                         }
@@ -307,7 +311,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
 
                     // Process Pull Request data
-                    def diffsResponse = bitbucketREST.getDiffs(prUrl)
+                    def diffsResponse = sourceControlREST.getDiffs(prUrl)
                     if (diffsResponse != null) {
                         processDiffs(PR_PREFIX, diffsResponse, indexLookup)
                     }

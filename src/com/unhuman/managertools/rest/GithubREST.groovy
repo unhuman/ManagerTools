@@ -13,33 +13,27 @@ import org.apache.hc.core5.http.message.BasicNameValuePair
 import java.util.regex.Matcher
 import java.util.regex.Pattern
 
-class BitbucketREST extends SourceControlREST {
+class GithubREST extends SourceControlREST {
     private static final String STARTING_PAGE = "0"
     private static final String PAGE_SIZE_LIMIT = "100"
     private static final Pattern FIND_PROJECT_URL = Pattern.compile("(.*)/pull-requests/[\\d]+")
 
-    String bitbucketServer
     AuthInfo authInfo
 
-    BitbucketREST(String bitbucketServer, String username, String password) {
-        this.bitbucketServer = bitbucketServer
-
-        // convert user / password to cookies
-        this.authInfo = new AuthInfo(username, password)
-
-//        String url = "${bitbucketServer}/site/oauth2/access_token"
-//        // -d grant_type=authorization_code
+    GithubREST(String bearerToken) {
+        this.authInfo = new AuthInfo(AuthInfo.AuthType.Bearer, bearerToken)
     }
 
-    BitbucketREST(String bitbucketServer, String cookies) {
-        this.bitbucketServer = bitbucketServer
-        this.authInfo = new AuthInfo(AuthInfo.AuthType.Cookies, cookies)
+    @Override
+    String apiConvert(String prUrl) {
+        return prUrl
+                .replace("://github.com/", "://api.github.com/repos/")
+                .replace("/pull/", "/pulls/")
     }
 
     // Get activities (approvals, comments, etc)
-    // https://{bitbucket}/rest/api/latest/projects/{project}/repos/{repo}/pull-requests/{prId}/activities?avatarSize=48&start=0&limit=25&markup=true
     Object getActivities(String prUrl) {
-        String uri = "${prUrl}/activities"
+        String uri = "${prUrl}/comments"
         NameValuePair startPair = new BasicNameValuePair("start", STARTING_PAGE)
         NameValuePair limitPair = new BasicNameValuePair("limit", PAGE_SIZE_LIMIT)
         NameValuePair markupPair = new BasicNameValuePair("markup", "true")
@@ -47,7 +41,6 @@ class BitbucketREST extends SourceControlREST {
     }
 
     // Get Commits
-    // https://{bitbucket}/rest/api/latest/projects/{project}/repos/{repo}/pull-requests/115/commits
     Object getCommits(String prUrl) {
         String uri = "${prUrl}/commits"
         NameValuePair startPair = new BasicNameValuePair("start", STARTING_PAGE)
@@ -63,11 +56,11 @@ class BitbucketREST extends SourceControlREST {
         }
     }
 
-    // Get commit information https://{bitbucket}/rest/api/latest/projects/{project}/repos/{repo}/commits/{commitSHA}
+    // Get commit information
 
-    // Get commit changes https://{bitbucket}/rest/api/latest/projects/{project}/repos/{repo}/commits/{commitSHA}/changes
+    // Get commit changes
 
-    // Get Pull Request (PR) diff: https://{bitbucket}}/rest/api/latest/projects/{project}}/repos/{repo}}/pull-requests/{prID}/diff
+    // Get Pull Request (PR) diffs
     Object getDiffs(String prUrl) {
         String uri = "${prUrl}/diff"
         NameValuePair startPair = new BasicNameValuePair("start", STARTING_PAGE)
@@ -85,7 +78,7 @@ class BitbucketREST extends SourceControlREST {
         }
     }
 
-    // Get commit diff: https://{bitbucket}}/rest/api/latest/projects/{project}/repos/{repo}/commits/{commitSHA}/diff?contextLines=0
+    // Get commit diffs
     Object getCommitDiffs(String prUrl, String commitSHA) {
         Matcher projectUrlMatcher = FIND_PROJECT_URL.matcher(prUrl)
         // Trim off PR info to get project/repo path
