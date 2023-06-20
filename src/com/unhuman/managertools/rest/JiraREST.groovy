@@ -42,7 +42,13 @@ class JiraREST {
             startAt += response.maxResults
         } while (!response.isLast)
 
-        // TODO: Sort this list by endDate
+        // Sort this list by endDate
+        Collections.sort(values, new Comparator<Object>() {
+            @Override
+            int compare(Object o1, Object o2) {
+                return o1.endDate.compareTo(o2.endDate)
+            }
+        })
 
         return values
     }
