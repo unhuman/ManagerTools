@@ -203,7 +203,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     System.out.println("      PR ${ticket} / ${prId} has ${prActivities.values.size()} activities")
                     // process from oldest to newest (reverse)
                     for (int i = prActivities.values.size() - 1; i >= 0; i--) {
-                        prActivity = prActivities.values.get(i)
+                        def prActivity = prActivities.values.get(i)
                         String userName = prActivity.user.name
                         // try to match up the names better
                         prAuthor = (prAuthor.equals(prActivity.user.displayName)) ? userName : prAuthor
@@ -237,7 +237,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                             case JiraDBActions.APPROVED.name():
                                 break
                             case JiraDBActions.COMMENTED.name():
-                                processComment(indexLookup, prActivity)
+                                processComment(indexLookup, prAuthor, prActivity)
                                 // processComment updates counters due to nested data
                                 continue
                             case JiraDBActions.DECLINED.name():
@@ -391,16 +391,18 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     /**
      * process comments - this will update the counters since the data can be recursive
      * @param indexLookup
+     * @param prAuthor
      * @param prActivity
      * @return
      */
-    def processComment(List<FlexiDBQueryColumn> indexLookup, Object prActivity) {
-        processComment(indexLookup, prActivity.user.name, prActivity.action, prActivity.commentAction, prActivity.comment, 3)
+    def processComment(List<FlexiDBQueryColumn> indexLookup, String prAuthor, Object prActivity) {
+        processComment(indexLookup, prAuthor, prActivity.user.name, prActivity.action, prActivity.commentAction, prActivity.comment, 3)
     }
 
     /**
      * process comments - this will update the counters since the data can be recursive
      * @param indexLookup
+     * @param prAuthor
      * @param userName
      * @param action
      * @param commentAction
@@ -408,7 +410,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
      * @param indentation
      * @return
      */
-    def processComment(List<FlexiDBQueryColumn> originalIndexLookup, String userName, String action, String commentAction, Object comment, int indentation) {
+    def processComment(List<FlexiDBQueryColumn> originalIndexLookup, String prAuthor, String userName, String action, String commentAction, Object comment, int indentation) {
 
         // recreate the indexLookup with the actual user
         List<FlexiDBQueryColumn> currentUserIndexLookup = new ArrayList<>(originalIndexLookup.stream().filter { it.getName() != DBIndexData.USER.name() }.toList())
@@ -429,7 +431,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         populateBaselineDBInfo(currentUserIndexLookup,
                 database.getValue(originalIndexLookup, DBData.START_DATE.name()),
                 database.getValue(originalIndexLookup, DBData.END_DATE.name()),
-                userName)
+                prAuthor)
 
         database.append(currentUserIndexLookup, DBData.COMMENTS.name(), commentText, true)
         incrementCounter(currentUserIndexLookup, JiraDBActions.COMMENTED)
@@ -437,7 +439,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         // Recursively process responses
         comment.comments.forEach(replyComment -> {
             // Use the original index lookup so we can determine if self
-            processComment(originalIndexLookup, replyComment.author.name, JiraDBActions.COMMENTED.name(), "REPLY", replyComment, indentation + 3)
+            processComment(originalIndexLookup, prAuthor, replyComment.author.name, JiraDBActions.COMMENTED.name(), "REPLY", replyComment, indentation + 3)
         })
     }
 
