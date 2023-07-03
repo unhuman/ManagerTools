@@ -51,7 +51,7 @@ class GetTeamSprints extends Script {
     }
 
     List<Object> getClosedRecentSprints(String boardId, Integer limitCount) {
-        Object data = jiraREST.getSprints(boardId)
+        List<Object> data = jiraREST.getSprints(boardId)
 
         // invert the order of sprints (most recent first)
         Collections.reverse(data)
