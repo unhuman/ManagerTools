@@ -1,5 +1,6 @@
 package com.unhuman.managertools.rest
 
+import org.apache.groovy.json.internal.LazyMap
 @Grapes([
         @Grab(group='org.apache.httpcomponents.core5', module='httpcore5', version='5.2.1'),
         @Grab(group='org.apache.httpcomponents.client5', module='httpclient5', version='5.2.1')
@@ -76,15 +77,25 @@ class JiraREST {
     Object getTicketPullRequestInfo(String issueId) {
         String uri = "https://${jiraServer}/rest/dev-status/1.0/issue/detail"
         NameValuePair issueIdPair = new BasicNameValuePair("issueId", issueId)
-        NameValuePair applicationTypePair = new BasicNameValuePair("applicationType", "stash")
+
         NameValuePair dataTypePair = new BasicNameValuePair("dataType", "pullrequest")
         NameValuePair timeIdPair = new BasicNameValuePair("_", System.currentTimeMillis().toString())
-        Object stashData = RestService.GetRequest(uri, authInfo, issueIdPair, applicationTypePair, dataTypePair, timeIdPair)
 
+        // TODO: Make these async
+
+        // Make request for Stash data
+        NameValuePair applicationTypePair = new BasicNameValuePair("applicationType", "stash")
+        LazyMap stashData = (LazyMap) RestService.GetRequest(uri, authInfo, issueIdPair, dataTypePair, timeIdPair, applicationTypePair)
+
+        // Make request for GitHub data
         applicationTypePair = new BasicNameValuePair("applicationType", "github")
-        Object githubData = RestService.GetRequest(uri, authInfo, issueIdPair, applicationTypePair, dataTypePair, timeIdPair)
+        LazyMap githubData = (LazyMap) RestService.GetRequest(uri, authInfo, issueIdPair, dataTypePair, timeIdPair, applicationTypePair)
 
-        return stashData + githubData
+        // combine all PR data
+        List<Object> pullRequests = new ArrayList<>(stashData.detail.pullRequests[0])
+        pullRequests.addAll(githubData.detail.pullRequests[0])
+
+        return pullRequests
     }
 
     // Simple JQL Query (Summary)
