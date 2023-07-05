@@ -16,7 +16,6 @@ import java.util.regex.Pattern
 class GithubREST extends SourceControlREST {
     private static final String STARTING_PAGE = "0"
     private static final String PAGE_SIZE_LIMIT = "100"
-    private static final Pattern FIND_PROJECT_URL = Pattern.compile("(.*)/pull-requests/[\\d]+")
 
     AuthInfo authInfo
 
@@ -79,17 +78,14 @@ class GithubREST extends SourceControlREST {
     }
 
     // Get commit diffs
-    Object getCommitDiffs(String prUrl, String commitSHA) {
-        Matcher projectUrlMatcher = FIND_PROJECT_URL.matcher(prUrl)
-        // Trim off PR info to get project/repo path
-        if (!projectUrlMatcher.matches()) {
-            throw new RuntimeException("Couldn't extract Project URL from: ${prUrl}")
+    Object getCommitDiffs(String commitUrl, String commitSHA) {
+        // Do some validation
+        String commitEnding = "/commits/${commitSHA}"
+        if (!commitUrl.endsWith(commitEnding)) {
+            throw new RuntimeException("Invalid commitUrl ${commitUrl} not matching SHA: ${commitSHA}")
         }
-        String uri = "${projectUrlMatcher.group(1)}/commits/${commitSHA}/diff"
 
-        NameValuePair startPair = new BasicNameValuePair("start", STARTING_PAGE)
-        NameValuePair limitPair = new BasicNameValuePair("limit", PAGE_SIZE_LIMIT)
-        NameValuePair contextPair = new BasicNameValuePair("contextLines", "0")
-        return RestService.GetRequest(uri, authInfo, startPair, limitPair, contextPair)
+        Object commitData = RestService.GetRequest(commitUrl, authInfo)
+        return commitData
     }
 }

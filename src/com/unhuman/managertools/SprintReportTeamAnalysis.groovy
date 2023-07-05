@@ -197,7 +197,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                 def prAuthor = pullRequest.author.name // Below, we try to update this to match the username
                 String prUrl = pullRequest.url
 
-                SourceControlREST sourceControlREST = (prUrl.contains("github")) ? githubREST : bitbucketREST
+                boolean isGithub = prUrl.toLowerCase().contains("github.com/")
+                SourceControlREST sourceControlREST = (isGithub) ? githubREST : bitbucketREST
                 prUrl = sourceControlREST.apiConvert(prUrl)
 
                 // Get and process activities (comments, etc)
@@ -206,8 +207,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                 System.out.println("      PR ${ticket} / ${prId} has ${prActivities.values.size()} activities")
                 // process from oldest to newest (reverse)
                 for (int i = prActivities.values.size() - 1; i >= 0; i--) {
-                    def prActivity = prActivities.values.get(i)
-                    String userName = prActivity.user.name
+                    def prActivity = (prActivities instanceof List) ? prActivities[0] : prActivities.values.get(i)
+                    String userName = (isGithub) ? prActivity.user.login : prActivity.user.name
                     // try to match up the names better
                     prAuthor = (prAuthor.equals(prActivity.user.displayName)) ? userName : prAuthor
 
@@ -235,6 +236,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     }
                     // Track we have processed this item
                     processedItems.add(prActivity.id)
+
+                    // TODO: Github actions
 
                     switch (prActivityAction) {
                         case JiraDBActions.APPROVED.name():
@@ -267,9 +270,11 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     return
                 }
                 for (int i = prCommits.values.size() - 1; i >= 0; i--) {
-                    def commit = prCommits.values.get(i)
-                    String commitSHA = commit.id
-                    Long commitTimestamp = commit.committerTimestamp
+                    def commit = (prCommits instanceof List) ? prCommits.get(i) : prCommits.values.get(i)
+                    String commitSHA = (isGithub) ? commit.sha : commit.id
+                    Long commitTimestamp = (isGithub)
+                            ? java.time.Instant.parse(commit.commit.committer.date).getEpochSecond() * 1000 // ms
+                            : commit.committerTimestamp
 
                     // If we have already processed this activity or the activity didn't occur in this sprint, don't include it
                     // TODO: Duplicate of operations for activities
@@ -292,13 +297,15 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, userName)
                     populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
 
-                    def diffsResponse = sourceControlREST.getCommitDiffs(prUrl, commitSHA)
+                    String commitUrl = (isGithub) ? commit.url : prUrl
+
+                    def diffsResponse = sourceControlREST.getCommitDiffs(commitUrl, commitSHA)
                     if (diffsResponse != null) {
                         processDiffs(COMMIT_PREFIX, diffsResponse, indexLookup)
                     }
 
                     // Add pr commit messages to database
-                    def commitMessage = commit.message.replaceAll("(\\r|\\n)?\\n", "  ").trim()
+                    def commitMessage = ((isGithub) ? commit.commit.message : commit.message).replaceAll("(\\r|\\n)?\\n", "  ").trim()
                     database.append(indexLookup, DBData.COMMIT_MESSAGES.name(), commitMessage, true)
                     // TODO: Add counter for commits
                     // incrementCounter(currentUserIndexLookup, JiraDBActions.COMMIT)
@@ -334,6 +341,14 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     }
 
     protected void processDiffs(String prefix, def diffsResponse, List<FlexiDBQueryColumn> indexLookup) {
+        // If we have stats - just use them
+        if (diffsResponse.stats) {
+            incrementCounter(indexLookup, JiraDBActions.valueOf(prefix + "ADDED"), diffsResponse.stats.additions)
+            incrementCounter(indexLookup, JiraDBActions.valueOf(prefix + "REMOVED"), diffsResponse.stats.deletions)
+            return
+        }
+
+        // aggregate the total responses to get all the diffs
         diffsResponse.diffs.forEach { diff ->
             {
                 // sometimes these can be null - file comments is an example

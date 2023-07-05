@@ -27,7 +27,7 @@
 - Cookie values are required to have these scripts function.  Copy Value them from your browsers Development Tools / Request Headers / Cookie
 - https://github.com/unhuman/browser-cookies-copier makes it easy to copy the cookies needed by this tool
 - GitHub integration requires a Personal Access Token.  To create one, go to Account / Settings / Developer Settings.
-  - Permissions (Classic): repo (all), read:packages, read:user, read:discussion, read:project
+  - Permissions (Classic): repo (all), read:user, read:discussion
   - Configure SSO: Authorize your organization
 
 ## Developer Setup
