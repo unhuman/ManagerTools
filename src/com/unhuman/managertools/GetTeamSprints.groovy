@@ -25,6 +25,7 @@ class GetTeamSprints extends Script {
         cli.h(longOpt: 'help', 'Shows useful information')
         cli.b(longOpt: 'boardId', required: true, args: 1, argName: 'boardId', 'Sprint Board Id Number')
         cli.l(longOpt: 'limit', required: false, args: 1, argName: 'limitCount', 'Limit of count to get')
+        cli.q(longOpt: 'quietMode', 'Quiet mode (use default/stored values without prompt)')
 
         def options = cli.parse(this.args)
 
@@ -38,6 +39,9 @@ class GetTeamSprints extends Script {
         }
 
         CommandLineHelper commandLineHelper = new CommandLineHelper(".managerTools.cfg")
+        if (options.q) {
+            commandLineHelper.setQuietModeNoPrompts()
+        }
 
         String jiraServer = commandLineHelper.getJiraServer()
         String jiraCookies = commandLineHelper.getJiraCookies()
