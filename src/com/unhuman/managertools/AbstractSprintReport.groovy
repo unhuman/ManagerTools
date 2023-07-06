@@ -58,6 +58,7 @@ abstract class AbstractSprintReport extends Script {
         cli.width = 120
         cli.h(longOpt: 'help', 'Shows useful information')
         cli.b(longOpt: 'boardId', required: true, args: 1, argName: 'boardId', 'Sprint Board Id Number')
+        cli.q(longOpt: 'quietMode', 'Quiet mode (use default/stored values without prompt)')
 
         def optionGroup = new OptionGroup(required: true)
         optionGroup.with {
@@ -106,6 +107,9 @@ abstract class AbstractSprintReport extends Script {
 
     protected void setupServices() {
         CommandLineHelper commandLineHelper = new CommandLineHelper(CONFIG_FILENAME)
+        if (commandLineOptions.q) {
+            commandLineHelper.setQuietModeNoPrompts()
+        }
 
         // Get server information
         String jiraServer = commandLineHelper.getJiraServer()

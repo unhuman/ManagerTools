@@ -21,11 +21,16 @@ class CommandLineHelper {
     private static final Pattern FQDN_PATTERN = Pattern.compile("(\\w+\\.){2,}\\w+")
 
     ConfigFileManager configFileManager
+    private boolean quietMode = false
 
     CommandLineHelper(String configFilename) {
         if (configFilename) {
             configFileManager = new ConfigFileManager(configFilename)
         }
+    }
+
+    void setQuietModeNoPrompts() {
+        this.quietMode = true
     }
 
     /**
@@ -70,7 +75,6 @@ class CommandLineHelper {
     }
 
     String getJiraCookies() {
-        // TODO: Mask the prompted value
         return promptAndStore("Jira Cookies (DevTools/Request/Cookie)", TextSecurity.MASK, ANY_MATCH_PATTERN, "jiraCookies", true)
     }
 
@@ -105,6 +109,10 @@ class CommandLineHelper {
     }
 
     String prompt(String text, TextSecurity textSecurity, Pattern validationPattern) {
+        if (quietMode) {
+            return ""
+        }
+
         while (true) {
             String input
             if (System.console() != null) {
@@ -160,11 +168,11 @@ class CommandLineHelper {
             }
         }
 
-        text = (useDefaultValue) ? "${text} (press return to use default value: ${TextSecurity.NONE != textSecurity  ? "****" : useDefaultValue})" : text
+        String promptText = (useDefaultValue) ? "${text} (press return to use default value: ${TextSecurity.NONE != textSecurity  ? "****" : useDefaultValue})" : text
 
         while (true) {
             // We match anything here, but then later do our own check
-            String input = prompt(text, textSecurity, ANY_MATCH_PATTERN)
+            String input = prompt(promptText, textSecurity, ANY_MATCH_PATTERN)
             if (input.isEmpty() && useDefaultValue) {
                 return useDefaultValue
             } else if (validationPattern.matcher(input).matches()) {
@@ -173,6 +181,11 @@ class CommandLineHelper {
                 }
                 return input
             }
+
+            if (quietMode) {
+                throw new RuntimeException("Couldn't quietly get text: ${text}")
+            }
+            
             System.out.println("Input must match regular expression: ${validationPattern}")
         }
     }
