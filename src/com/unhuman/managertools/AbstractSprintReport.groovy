@@ -70,7 +70,7 @@ abstract class AbstractSprintReport extends Script {
         commandLineOptions = cli.parse(this.args)
 
         if (!commandLineOptions) {
-            return
+            System.exit(-1)
         }
 
         try {
