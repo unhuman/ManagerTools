@@ -61,13 +61,10 @@ class GithubREST extends SourceControlREST {
 
     // Get Pull Request (PR) diffs
     Object getDiffs(String prUrl) {
-        String uri = "${prUrl}/diff"
-        NameValuePair startPair = new BasicNameValuePair("start", STARTING_PAGE)
-        NameValuePair limitPair = new BasicNameValuePair("limit", PAGE_SIZE_LIMIT)
-        NameValuePair contextPair = new BasicNameValuePair("contextLines", "0")
+        String uri = "${prUrl}"
 
         try {
-            return RestService.GetRequest(uri, authInfo, startPair, limitPair, contextPair)
+            return RestService.GetRequest(uri, authInfo)
         } catch (RESTException re) {
             if (re.getStatusCode() != HttpStatus.SC_NOT_FOUND) {
                 throw re

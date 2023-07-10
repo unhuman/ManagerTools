@@ -341,10 +341,16 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     }
 
     protected void processDiffs(String prefix, def diffsResponse, List<FlexiDBQueryColumn> indexLookup) {
-        // If we have stats - just use them
+        // If we have stats - just use them (Github cases)
+        Integer additions = diffsResponse.additions
+        Integer deletions = diffsResponse.deletions
         if (diffsResponse.stats) {
-            incrementCounter(indexLookup, JiraDBActions.valueOf(prefix + "ADDED"), diffsResponse.stats.additions)
-            incrementCounter(indexLookup, JiraDBActions.valueOf(prefix + "REMOVED"), diffsResponse.stats.deletions)
+            additions = diffsResponse.stats.additions
+            deletions = diffsResponse.stats.deletions
+        }
+        if (additions != null || deletions != null) {
+            incrementCounter(indexLookup, JiraDBActions.valueOf(prefix + "ADDED"), additions)
+            incrementCounter(indexLookup, JiraDBActions.valueOf(prefix + "REMOVED"), deletions)
             return
         }
 
