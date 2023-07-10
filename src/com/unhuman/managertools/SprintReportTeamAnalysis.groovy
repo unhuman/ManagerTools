@@ -287,6 +287,20 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     processedItems.add(commitSHA)
 
                     String userName = commit.committer.name
+
+                    // Github can put the name in multiple places, which is paintful
+                    if (userName == null) {
+                        if (commit.commit != null) {
+                            userName = commit.commit.author.name
+                        }
+                    }
+
+                    if (userName == null) {
+                        if (commit.author != null) {
+                            userName = commit.author.login
+                        }
+                    }
+
                     // Skip this if not desired (unlikely in this case)
                     // TODO: Duplicate of operations for activities
                     if (IGNORE_USERS.contains(userName)) {
