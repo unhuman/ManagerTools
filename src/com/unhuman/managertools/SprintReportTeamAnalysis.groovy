@@ -286,10 +286,11 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     // Track we have processed this item
                     processedItems.add(commitSHA)
 
-                    String userName = commit.committer.name
+                    // Github can put the name in multiple places, which is painful
+                    String userName = (commit.committer != null) ? commit.committer.name : null
 
-                    // Github can put the name in multiple places, which is paintful
                     if (userName == null) {
+                        // nested commit.commit - madness
                         if (commit.commit != null) {
                             userName = commit.commit.author.name
                         }
@@ -308,6 +309,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     }
 
                     // Generate index to look for data
+                    // TODO: this could cause issues with a data disconnect between username + prAuthor
                     List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, userName)
                     populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
 
