@@ -57,6 +57,9 @@ class GetTeamSprints extends Script {
     List<Object> getClosedRecentSprints(String boardId, Integer limitCount) {
         List<Object> data = jiraREST.getSprints(boardId)
 
+        // filter out boards that show up here incorrectly
+        data = new ArrayList<>(data.stream().filter { retro -> retro.originBoardId.toString() == boardId }.toList())
+
         // invert the order of sprints (most recent first)
         Collections.reverse(data)
 
