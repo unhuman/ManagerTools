@@ -1,5 +1,6 @@
 package com.unhuman.managertools.rest
 
+import org.apache.groovy.json.internal.LazyMap
 @Grapes([
         @Grab(group='org.apache.httpcomponents.core5', module='httpcore5', version='5.2.1'),
         @Grab(group='org.apache.httpcomponents.client5', module='httpclient5', version='5.2.1')
@@ -8,22 +9,19 @@ package com.unhuman.managertools.rest
 import org.apache.hc.core5.http.NameValuePair
 import org.apache.hc.core5.http.message.BasicNameValuePair
 
-class JiraREST {
+class JiraREST extends RestService {
     String jiraServer
-    AuthInfo authInfo
 
     private final int JQL_LIMIT = 250
 
     JiraREST(String jiraServer, String username, String password) {
+        super(new AuthInfo(username, password))
         this.jiraServer = jiraServer
-
-        // convert user / password to cookies
-        this.authInfo = new AuthInfo(username, password)
     }
 
     JiraREST(String jiraServer, String cookies) {
+        super(new AuthInfo(AuthInfo.AuthType.Cookies, cookies))
         this.jiraServer = jiraServer
-        this.authInfo = new AuthInfo(cookies)
     }
 
     // Get Sprints v2
@@ -37,11 +35,11 @@ class JiraREST {
             NameValuePair rapidViewIdPair = new BasicNameValuePair("state", "active,closed")
             NameValuePair sprintIdPair = new BasicNameValuePair("startAt", startAt.toString())
             NameValuePair timeIdPair = new BasicNameValuePair("_", System.currentTimeMillis().toString())
-            response = RestService.GetRequest(uri, authInfo, rapidViewIdPair, sprintIdPair, timeIdPair)
+            response = getRequest(uri, rapidViewIdPair, sprintIdPair, timeIdPair)
             values.addAll(response.values)
             startAt += response.maxResults
         } while (!response.isLast)
-
+        
         // Sort this list by endDate
         Collections.sort(values, new Comparator<Object>() {
             @Override
@@ -49,7 +47,6 @@ class JiraREST {
                 return o1.endDate.compareTo(o2.endDate)
             }
         })
-
         return values
     }
 
@@ -61,7 +58,7 @@ class JiraREST {
         NameValuePair rapidViewIdPair = new BasicNameValuePair("rapidViewId", boardId)
         NameValuePair sprintIdPair = new BasicNameValuePair("sprintId", sprintId)
         NameValuePair timeIdPair = new BasicNameValuePair("_", System.currentTimeMillis().toString())
-        return RestService.GetRequest(uri, authInfo, rapidViewIdPair, sprintIdPair, timeIdPair)
+        return getRequest(uri, rapidViewIdPair, sprintIdPair, timeIdPair)
     }
 
     // get ticket info
@@ -69,7 +66,7 @@ class JiraREST {
     Object getTicket(String ticketId) {
         String uri = "https://${jiraServer}/rest/api/latest/issue/${ticketId}"
         NameValuePair timeIdPair = new BasicNameValuePair("_", System.currentTimeMillis().toString())
-        return RestService.GetRequest(uri, authInfo, timeIdPair)
+        return getRequest(uri, timeIdPair)
     }
 
     // Get pull request data
@@ -77,17 +74,32 @@ class JiraREST {
     Object getTicketPullRequestInfo(String issueId) {
         String uri = "https://${jiraServer}/rest/dev-status/1.0/issue/detail"
         NameValuePair issueIdPair = new BasicNameValuePair("issueId", issueId)
-        NameValuePair applicationTypePair = new BasicNameValuePair("applicationType", "stash")
+
         NameValuePair dataTypePair = new BasicNameValuePair("dataType", "pullrequest")
         NameValuePair timeIdPair = new BasicNameValuePair("_", System.currentTimeMillis().toString())
-        return RestService.GetRequest(uri, authInfo, issueIdPair, applicationTypePair, dataTypePair, timeIdPair)
+
+        // TODO: Make these async
+
+        // Make request for Stash data
+        NameValuePair applicationTypePair = new BasicNameValuePair("applicationType", "stash")
+        LazyMap stashData = (LazyMap) getRequest(uri, issueIdPair, dataTypePair, timeIdPair, applicationTypePair)
+
+        // Make request for GitHub data
+        applicationTypePair = new BasicNameValuePair("applicationType", "github")
+        LazyMap githubData = (LazyMap) getRequest(uri, issueIdPair, dataTypePair, timeIdPair, applicationTypePair)
+
+        // combine all PR data
+        List<Object> pullRequests = new ArrayList<>(stashData.detail.pullRequests[0])
+        pullRequests.addAll(githubData.detail.pullRequests[0])
+
+        return pullRequests
     }
 
     // Simple JQL Query (Summary)
     // GET https://jira.x.com/rest/api/2/search?jql=summary~q1%20and%20summary~yellow
     Object jqlSummaryQuery(String jql) {
         String uri = "https://${jiraServer}/rest/api/2/search?startAt=0&maxResults=${JQL_LIMIT}&jql=${URLEncoder.encode(jql)}"
-        return RestService.GetRequest(uri, authInfo)
+        return getRequest(uri)
     }
 
     // https://jira.x.com/rest/agile/1.0/issue/ISSUE-ID/estimation?boardId=BOARD-ID
@@ -96,6 +108,6 @@ class JiraREST {
         String uri = "https://${jiraServer}/rest/agile/1.0/issue/${ticketId}/estimation"
         NameValuePair boardIdPair = new BasicNameValuePair("boardId", boardId)
         String content = "{ \"value\": \"${estimateInSeconds / 60}m\"}" // API requires converted to minutes
-        return RestService.PutRequest(uri, authInfo, content, boardIdPair)
+        return putRequest(uri, content, boardIdPair)
     }
 }
