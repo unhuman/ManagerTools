@@ -64,11 +64,16 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             String sprintId = sprintIds.get(i)
 
             Object data = jiraREST.getSprintReport(boardId, sprintId)
-            System.out.println("${i+1} / ${sprintIds.size()}: ${data.sprint.name} (id: ${sprintId})")
 
-            // Gather ticket data for completed and incomplete work
-            getIssueCategoryInformation(data.sprint, data.contents.completedIssues)
-            getIssueCategoryInformation(data.sprint, data.contents.issuesNotCompletedInCurrentSprint)
+            def allIssues = new ArrayList()
+            allIssues.addAll(data.contents.completedIssues)
+            allIssues.addAll(data.contents.issuesNotCompletedInCurrentSprint)
+
+            System.out.println("${i+1} / ${sprintIds.size()}: ${data.sprint.name} (id: ${sprintId}" +
+                    ", issues: ${allIssues.size()})")
+
+            // Gather ticket data for all issues (completed and incomplete work)
+            getIssueCategoryInformation(data.sprint, allIssues)
         }
 
         // Generate the CSV file - we'll do some column adjustments
@@ -191,6 +196,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         Date sprintStartTime = DATE_TIME_PARSER.parse(sprint.startDate)
         Date sprintEndTime = DATE_TIME_PARSER.parse(sprint.endDate)
 
+        int counter = 0
         issueList.each(issue -> {
             def ticket = issue.key
             def issueId = issue.id
@@ -203,7 +209,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     return
                 }
             }
-            System.out.println("   ${ticket} / Issue ${issueId} has ${pullRequests.size()} PRs")
+            System.out.println("   ${++counter}/${issueList.size()}: ${ticket} / Issue ${issueId} has ${pullRequests.size()} PRs")
             pullRequests.each(pullRequest -> {
                 // can get approvers out of ^^^
                 // check comment count before polling for comments
