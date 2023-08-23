@@ -1,17 +1,14 @@
 package com.unhuman.managertools.rest
 
-import com.unhuman.managertools.rest.exceptions.RESTException
-import org.apache.hc.core5.http.HttpStatus
 @Grapes([
         @Grab(group='org.apache.httpcomponents.core5', module='httpcore5', version='5.2.1'),
         @Grab(group='org.apache.httpcomponents.client5', module='httpclient5', version='5.2.1')
 ])
 
+import com.unhuman.managertools.rest.exceptions.RESTException
+import org.apache.hc.core5.http.HttpStatus
 import org.apache.hc.core5.http.NameValuePair
 import org.apache.hc.core5.http.message.BasicNameValuePair
-
-import java.util.regex.Matcher
-import java.util.regex.Pattern
 
 class GithubREST extends SourceControlREST {
     private static final String STARTING_PAGE = "0"
@@ -45,7 +42,7 @@ class GithubREST extends SourceControlREST {
         try {
             return getRequest(uri, startPair, limitPair)
         } catch (RESTException re) {
-            if (re.getStatusCode() != HttpStatus.SC_NOT_FOUND) {
+            if (re.statusCode != HttpStatus.SC_FORBIDDEN && re.statusCode != HttpStatus.SC_NOT_FOUND) {
                 throw re
             }
             System.err.println("Unable to retrieve commits ${re.toString()}")
@@ -64,7 +61,7 @@ class GithubREST extends SourceControlREST {
         try {
             return getRequest(uri)
         } catch (RESTException re) {
-            if (re.getStatusCode() != HttpStatus.SC_NOT_FOUND) {
+            if (re.statusCode != HttpStatus.SC_FORBIDDEN && re.statusCode != HttpStatus.SC_NOT_FOUND) {
                 throw re
             }
             System.err.println("Unable to retrieve diffs ${re.toString()}")

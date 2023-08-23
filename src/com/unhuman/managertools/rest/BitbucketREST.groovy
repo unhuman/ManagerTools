@@ -1,12 +1,12 @@
 package com.unhuman.managertools.rest
 
-import com.unhuman.managertools.rest.exceptions.RESTException
-import org.apache.hc.core5.http.HttpStatus
 @Grapes([
         @Grab(group='org.apache.httpcomponents.core5', module='httpcore5', version='5.2.1'),
         @Grab(group='org.apache.httpcomponents.client5', module='httpclient5', version='5.2.1')
 ])
 
+import com.unhuman.managertools.rest.exceptions.RESTException
+import org.apache.hc.core5.http.HttpStatus
 import org.apache.hc.core5.http.NameValuePair
 import org.apache.hc.core5.http.message.BasicNameValuePair
 
@@ -52,7 +52,7 @@ class BitbucketREST extends SourceControlREST {
         try {
             return getRequest(uri, startPair, limitPair)
         } catch (RESTException re) {
-            if (re.getStatusCode() != HttpStatus.SC_NOT_FOUND) {
+            if (re.statusCode != HttpStatus.SC_FORBIDDEN && re.statusCode != HttpStatus.SC_NOT_FOUND) {
                 throw re
             }
             System.err.println("Unable to retrieve commits ${re.toString()}")
@@ -74,7 +74,7 @@ class BitbucketREST extends SourceControlREST {
         try {
             return getRequest(uri, startPair, limitPair, contextPair)
         } catch (RESTException re) {
-            if (re.getStatusCode() != HttpStatus.SC_NOT_FOUND) {
+            if (re.statusCode != HttpStatus.SC_FORBIDDEN && re.statusCode != HttpStatus.SC_NOT_FOUND) {
                 throw re
             }
             System.err.println("Unable to retrieve diffs ${re.toString()}")

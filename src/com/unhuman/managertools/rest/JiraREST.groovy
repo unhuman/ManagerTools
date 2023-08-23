@@ -1,11 +1,13 @@
 package com.unhuman.managertools.rest
 
-import org.apache.groovy.json.internal.LazyMap
 @Grapes([
         @Grab(group='org.apache.httpcomponents.core5', module='httpcore5', version='5.2.1'),
         @Grab(group='org.apache.httpcomponents.client5', module='httpclient5', version='5.2.1')
 ])
 
+import com.unhuman.managertools.rest.exceptions.RESTException
+import org.apache.groovy.json.internal.LazyMap
+import org.apache.hc.core5.http.HttpStatus
 import org.apache.hc.core5.http.NameValuePair
 import org.apache.hc.core5.http.message.BasicNameValuePair
 
@@ -80,18 +82,32 @@ class JiraREST extends RestService {
 
         // TODO: Make these async
 
+        // combine all PR data
+        List<Object> pullRequests = new ArrayList<>();
+
         // Make request for Stash data
         NameValuePair applicationTypePair = new BasicNameValuePair("applicationType", "stash")
-        LazyMap stashData = (LazyMap) getRequest(uri, issueIdPair, dataTypePair, timeIdPair, applicationTypePair)
+        try {
+            LazyMap stashData = (LazyMap) getRequest(uri, issueIdPair, dataTypePair, timeIdPair, applicationTypePair)
+            pullRequests.addAll(stashData.detail.pullRequests[0])
+        } catch(RESTException re) {
+            if (re.statusCode != HttpStatus.SC_FORBIDDEN && re.statusCode != HttpStatus.SC_NOT_FOUND) {
+                throw re
+            }
+            System.err.println("Unable to retrieve requested url ${re.toString()}")
+        }
 
         // Make request for GitHub data
         applicationTypePair = new BasicNameValuePair("applicationType", "github")
-        LazyMap githubData = (LazyMap) getRequest(uri, issueIdPair, dataTypePair, timeIdPair, applicationTypePair)
-
-        // combine all PR data
-        List<Object> pullRequests = new ArrayList<>(stashData.detail.pullRequests[0])
-        pullRequests.addAll(githubData.detail.pullRequests[0])
-
+        try {
+            LazyMap githubData = (LazyMap) getRequest(uri, issueIdPair, dataTypePair, timeIdPair, applicationTypePair)
+            pullRequests.addAll(githubData.detail.pullRequests[0])
+        } catch(RESTException re) {
+            if (re.statusCode != HttpStatus.SC_FORBIDDEN && re.statusCode != HttpStatus.SC_NOT_FOUND) {
+                throw re
+            }
+            System.err.println("Unable to retrieve requested url ${re.toString()}")
+        }
         return pullRequests
     }
 

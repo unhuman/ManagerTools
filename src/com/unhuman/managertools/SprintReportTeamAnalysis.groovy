@@ -1,5 +1,9 @@
 package com.unhuman.managertools
 
+@Grapes([
+        @Grab(group='org.apache.httpcomponents.core5', module='httpcore5', version='5.2.1'),
+])
+
 import com.unhuman.flexidb.FlexiDB
 import com.unhuman.flexidb.FlexiDBQueryColumn
 import com.unhuman.flexidb.data.FlexiDBRow
@@ -10,7 +14,10 @@ import com.unhuman.managertools.data.DBData
 import com.unhuman.managertools.data.DBIndexData
 import com.unhuman.managertools.data.JiraDBActions
 import com.unhuman.managertools.rest.SourceControlREST
+import com.unhuman.managertools.rest.exceptions.RESTException
 import groovy.cli.commons.CliBuilder
+import org.apache.hc.core5.http.HttpStatus
+
 
 import java.text.SimpleDateFormat
 
@@ -188,7 +195,14 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             def ticket = issue.key
             def issueId = issue.id
 
-            def pullRequests = jiraREST.getTicketPullRequestInfo(issueId.toString())
+            def pullRequests
+            try {
+                pullRequests = jiraREST.getTicketPullRequestInfo(issueId.toString())
+            } catch (RESTException re) {
+                if (re.statusCode != HttpStatus.SC_FORBIDDEN && re.statusCode != HttpStatus.SC_NOT_FOUND) {
+                    return
+                }
+            }
             System.out.println("   ${ticket} / Issue ${issueId} has ${pullRequests.size()} PRs")
             pullRequests.each(pullRequest -> {
                 // can get approvers out of ^^^
