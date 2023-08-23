@@ -19,21 +19,18 @@ class BitbucketREST extends SourceControlREST {
     private static final Pattern FIND_PROJECT_URL = Pattern.compile("(.*)/pull-requests/[\\d]+")
 
     String bitbucketServer
-    AuthInfo authInfo
 
     BitbucketREST(String bitbucketServer, String username, String password) {
+        super(new AuthInfo(username, password))
         this.bitbucketServer = bitbucketServer
-
-        // convert user / password to cookies
-        this.authInfo = new AuthInfo(username, password)
 
 //        String url = "${bitbucketServer}/site/oauth2/access_token"
 //        // -d grant_type=authorization_code
     }
 
     BitbucketREST(String bitbucketServer, String cookies) {
+        super(new AuthInfo(AuthInfo.AuthType.Cookies, cookies))
         this.bitbucketServer = bitbucketServer
-        this.authInfo = new AuthInfo(AuthInfo.AuthType.Cookies, cookies)
     }
 
     // Get activities (approvals, comments, etc)
@@ -43,7 +40,7 @@ class BitbucketREST extends SourceControlREST {
         NameValuePair startPair = new BasicNameValuePair("start", STARTING_PAGE)
         NameValuePair limitPair = new BasicNameValuePair("limit", PAGE_SIZE_LIMIT)
         NameValuePair markupPair = new BasicNameValuePair("markup", "true")
-        return RestService.GetRequest(uri, authInfo, startPair, limitPair, markupPair)
+        return getRequest(uri, startPair, limitPair, markupPair)
     }
 
     // Get Commits
@@ -53,7 +50,7 @@ class BitbucketREST extends SourceControlREST {
         NameValuePair startPair = new BasicNameValuePair("start", STARTING_PAGE)
         NameValuePair limitPair = new BasicNameValuePair("limit", PAGE_SIZE_LIMIT)
         try {
-            return RestService.GetRequest(uri, authInfo, startPair, limitPair)
+            return getRequest(uri, startPair, limitPair)
         } catch (RESTException re) {
             if (re.getStatusCode() != HttpStatus.SC_NOT_FOUND) {
                 throw re
@@ -75,7 +72,7 @@ class BitbucketREST extends SourceControlREST {
         NameValuePair contextPair = new BasicNameValuePair("contextLines", "0")
 
         try {
-            return RestService.GetRequest(uri, authInfo, startPair, limitPair, contextPair)
+            return getRequest(uri, startPair, limitPair, contextPair)
         } catch (RESTException re) {
             if (re.getStatusCode() != HttpStatus.SC_NOT_FOUND) {
                 throw re
@@ -97,6 +94,6 @@ class BitbucketREST extends SourceControlREST {
         NameValuePair startPair = new BasicNameValuePair("start", STARTING_PAGE)
         NameValuePair limitPair = new BasicNameValuePair("limit", PAGE_SIZE_LIMIT)
         NameValuePair contextPair = new BasicNameValuePair("contextLines", "0")
-        return RestService.GetRequest(uri, authInfo, startPair, limitPair, contextPair)
+        return getRequest(uri, startPair, limitPair, contextPair)
     }
 }

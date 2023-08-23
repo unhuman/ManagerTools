@@ -20,9 +20,14 @@ import java.nio.charset.Charset
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
-class RestService {
+abstract class RestService {
+    private final AuthInfo authInfo
 
     static Map<String, CloseableHttpClient> clients = new ConcurrentHashMap<>()
+
+    RestService(AuthInfo authInfo) {
+        this.authInfo = authInfo
+    }
 
     /**
      * Simple connection manager - re-uses connections
@@ -48,8 +53,7 @@ class RestService {
         }
     }
 
-
-    static Object GetRequest(String uri, AuthInfo authInfo, NameValuePair... parameters) {
+    Object getRequest(String uri, NameValuePair... parameters) {
         BasicClassicHttpRequest request = ClassicRequestBuilder
                 .create("GET")
                 .setUri(uri)
@@ -63,7 +67,7 @@ class RestService {
     }
 
 
-    static Object PutRequest(String uri, AuthInfo authInfo, String content, NameValuePair... parameters) {
+    Object putRequest(String uri, String content, NameValuePair... parameters) {
         BasicClassicHttpRequest request = ClassicRequestBuilder
                 .create("PUT")
                 .setUri(uri)
@@ -72,19 +76,21 @@ class RestService {
                 .setHeader(HttpHeaders.CONTENT_TYPE, "application/json;charset=UTF-8")
                 .addParameters(parameters)
                 .setEntity(new StringEntity(content))
-                .build();
+                .build()
 
         return executeRequest(request)
     }
 
 
-    private static Object executeRequest(BasicClassicHttpRequest request) {
+    private Object executeRequest(BasicClassicHttpRequest request) {
+        AuthInfo useAuthInfo = authInfo
         String responseData = getClient(request.getAuthority().getHostName())
                 .with { httpClient ->
                     httpClient.execute(request).withCloseable { response ->
                         if (response.getCode() < 200 || response.getCode() > 299) {
                             throw new RESTException(response.getCode(), "Unable to retrieve requested url", request.getUri().toString())
                         }
+                        useAuthInfo.updateCookies(response.getHeaders("Set-Cookie").toList())
                         InputStream inputStream = response.getEntity().getContent()
                         String text = new String(inputStream.readAllBytes(), Charset.defaultCharset())
                         return text

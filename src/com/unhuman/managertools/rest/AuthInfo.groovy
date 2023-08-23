@@ -4,8 +4,11 @@ import org.apache.hc.core5.http.Header
 import org.apache.hc.core5.http.message.BasicHeader
 
 import java.nio.charset.Charset
+import java.util.regex.Matcher
+import java.util.regex.Pattern
 
 class AuthInfo {
+    private static final Pattern EXTRACT_COOKIE_INFO = Pattern.compile("([^=]*)=([^;]*).*")
     enum AuthType { Basic, Cookies, Bearer }
     private AuthType authType
     private String authentication
@@ -21,6 +24,22 @@ class AuthInfo {
         }
         this.authType = authType
         this.authentication = (authType == AuthType.Bearer) ? getBearer(cookiesOrToken) : cookiesOrToken
+    }
+
+    void updateCookies(List<BasicHeader> cookies) {
+        if (AuthType.Cookies == authType) {
+            // Replace cookies in memory
+            for (int i = 0; i < cookies.size(); i++) {
+                BasicHeader cookie = cookies.get(i)
+                Matcher matcher = EXTRACT_COOKIE_INFO.matcher(cookie.getValue())
+                if (matcher.matches()) {
+                    String cookieName = matcher.group(1)
+                    String cookieValue = matcher.group(2)
+                    Pattern replaceFinder = Pattern.compile("${cookieName}=([^;]*)")
+                    authentication = authentication.replaceFirst(replaceFinder, "${cookieName}=${cookieValue}")
+                }
+            }
+        }
     }
 
     Header getAuthHeader() {

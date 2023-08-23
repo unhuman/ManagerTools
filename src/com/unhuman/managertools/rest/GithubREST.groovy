@@ -17,10 +17,8 @@ class GithubREST extends SourceControlREST {
     private static final String STARTING_PAGE = "0"
     private static final String PAGE_SIZE_LIMIT = "100"
 
-    AuthInfo authInfo
-
     GithubREST(String bearerToken) {
-        this.authInfo = new AuthInfo(AuthInfo.AuthType.Bearer, bearerToken)
+        super(new AuthInfo(AuthInfo.AuthType.Bearer, bearerToken))
     }
 
     @Override
@@ -36,7 +34,7 @@ class GithubREST extends SourceControlREST {
         NameValuePair startPair = new BasicNameValuePair("start", STARTING_PAGE)
         NameValuePair limitPair = new BasicNameValuePair("limit", PAGE_SIZE_LIMIT)
         NameValuePair markupPair = new BasicNameValuePair("markup", "true")
-        return RestService.GetRequest(uri, authInfo, startPair, limitPair, markupPair)
+        return getRequest(uri, startPair, limitPair, markupPair)
     }
 
     // Get Commits
@@ -45,7 +43,7 @@ class GithubREST extends SourceControlREST {
         NameValuePair startPair = new BasicNameValuePair("start", STARTING_PAGE)
         NameValuePair limitPair = new BasicNameValuePair("limit", PAGE_SIZE_LIMIT)
         try {
-            return RestService.GetRequest(uri, authInfo, startPair, limitPair)
+            return getRequest(uri, startPair, limitPair)
         } catch (RESTException re) {
             if (re.getStatusCode() != HttpStatus.SC_NOT_FOUND) {
                 throw re
@@ -64,7 +62,7 @@ class GithubREST extends SourceControlREST {
         String uri = "${prUrl}"
 
         try {
-            return RestService.GetRequest(uri, authInfo)
+            return getRequest(uri)
         } catch (RESTException re) {
             if (re.getStatusCode() != HttpStatus.SC_NOT_FOUND) {
                 throw re
@@ -82,7 +80,7 @@ class GithubREST extends SourceControlREST {
             throw new RuntimeException("Invalid commitUrl ${commitUrl} not matching SHA: ${commitSHA}")
         }
 
-        Object commitData = RestService.GetRequest(commitUrl, authInfo)
+        Object commitData = getRequest(commitUrl)
         return commitData
     }
 }

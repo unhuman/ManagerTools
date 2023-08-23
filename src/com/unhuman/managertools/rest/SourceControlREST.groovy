@@ -1,6 +1,10 @@
 package com.unhuman.managertools.rest
 
-abstract class SourceControlREST {
+abstract class SourceControlREST extends RestService {
+    SourceControlREST(AuthInfo authInfo) {
+        super(authInfo)
+    }
+
     // Get activities (approvals, comments, etc)
     abstract Object getActivities(String prUrl)
 
