@@ -57,7 +57,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             String sprintId = sprintIds.get(i)
 
             Object data = jiraREST.getSprintReport(boardId, sprintId)
-            System.out.println("${i+1} / ${sprintIds.size()}: ${data.sprint.name}")
+            System.out.println("${i+1} / ${sprintIds.size()}: ${data.sprint.name} (id: ${sprintId})")
 
             // Gather ticket data for completed and incomplete work
             getIssueCategoryInformation(data.sprint, data.contents.completedIssues)
@@ -217,10 +217,6 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         continue
                     }
 
-                    // Generate index to look for data
-                    List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, userName)
-                    populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
-
                     // Get / ensure we have a known action
                     JiraDBActions prActivityAction = JiraDBActions.getResolvedValue((String) prActivity.action)
                     if (prActivityAction == null) {
@@ -234,6 +230,11 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                             || prActivity.createdDate >= sprintEndTime.getTime()) {
                         continue
                     }
+
+                    // Generate index to look for data
+                    List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, userName)
+                    populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
+
                     // Track we have processed this item
                     processedItems.add(prActivity.id)
 
@@ -327,15 +328,19 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     // incrementCounter(currentUserIndexLookup, JiraDBActions.COMMIT)
                 }
 
-                // Generate index to look for data
+                // only populate pull request data if there was commit activity
                 // NOTICE: In this mode, all attributions go to the PR author
                 List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, prAuthor)
-                populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
-
-                // Process Pull Request data
-                def diffsResponse = sourceControlREST.getDiffs(prUrl)
-                if (diffsResponse != null) {
+                if (database.findRows(indexLookup, false)
+                    && (database.getValue(indexLookup, JiraDBActions.COMMIT_ADDED.toString()) > 0
+                        || database.getValue(indexLookup, JiraDBActions.COMMIT_REMOVED.toString()) > 0)) {
+                     // Process Pull Request data
+                     def diffsResponse = sourceControlREST.getDiffs(prUrl)
+                     if (diffsResponse != null) {
+                        // Generate index to look for data
+                        populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
                     processDiffs(PR_PREFIX, diffsResponse, indexLookup)
+                    }
                 }
             })
         })
