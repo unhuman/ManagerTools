@@ -1,5 +1,6 @@
 package com.unhuman.managertools
 
+import com.unhuman.managertools.rest.exceptions.RESTException
 @Grapes([
         @Grab(group='commons-cli', module='commons-cli', version='1.5.0')
 ])
@@ -12,6 +13,7 @@ import com.unhuman.managertools.rest.JiraREST
 import groovy.cli.commons.CliBuilder
 import groovy.cli.commons.OptionAccessor
 import org.apache.commons.cli.OptionGroup
+import org.apache.hc.core5.http.HttpStatus
 
 import java.util.stream.Collectors
 
@@ -92,9 +94,18 @@ abstract class AbstractSprintReport extends Script {
         setupServices()
 
         if (commandLineOptions.'limit') {
-            GetTeamSprints getTeamSprints = new GetTeamSprints(jiraREST)
-            def sprintData = getTeamSprints.getClosedRecentSprints(commandLineOptions.'boardId', Integer.parseInt(commandLineOptions.'limit'))
-            sprintIds = sprintData.stream().map(sprint -> sprint.id.toString()).collect(Collectors.toUnmodifiableList())
+            try {
+                GetTeamSprints getTeamSprints = new GetTeamSprints(jiraREST)
+                def sprintData = getTeamSprints.getClosedRecentSprints(commandLineOptions.'boardId', Integer.parseInt(commandLineOptions.'limit'))
+                sprintIds = sprintData.stream().map(sprint -> sprint.id.toString()).collect(Collectors.toUnmodifiableList())
+            } catch (RESTException re) {
+                if (re.statusCode == HttpStatus.SC_BAD_REQUEST) {
+                    // No sprintIds = this could be Kanban board
+                    sprintIds = null
+                } else {
+                    throw re
+                }
+            }
         } else {
             // limit and sprintIds are required / mutually exclusive, so just use what we get
             sprintIds = commandLineOptions.'sprintIds'.split(',')
