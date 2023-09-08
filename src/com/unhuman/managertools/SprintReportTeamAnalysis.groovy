@@ -31,9 +31,9 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     static final String PR_PREFIX = "PR_"
     static final String COMMIT_PREFIX = "COMMIT_"
 
-    static final SimpleDateFormat DATE_PARSER = new SimpleDateFormat("dd/MMM/yy")
-    static final SimpleDateFormat DATE_TIME_PARSER = new SimpleDateFormat("dd/MMM/yy K:mm a")
-    static final SimpleDateFormat DATE_OUTPUT = new SimpleDateFormat("yyyy/MM/dd");
+    static final SimpleDateFormat DATE_PARSER = new SimpleDateFormat("dd/MMM/yy", Locale.US)
+    static final SimpleDateFormat DATE_TIME_PARSER = new SimpleDateFormat("dd/MMM/yy h:mm a", Locale.US)
+    static final SimpleDateFormat DATE_OUTPUT = new SimpleDateFormat("yyyy/MM/dd", Locale.US);
 
     FlexiDB database
     // We need to track items we have processed to prevent them from appearing twice
