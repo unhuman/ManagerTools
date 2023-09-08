@@ -212,7 +212,7 @@ class CommandLineHelper {
             Process process = ["zsh", "-c", 'unset tmp; vared -p "' + promptText + ': " -c tmp; echo $tmp; unset tmp'].execute()
             synchronized (process) {
                 try {
-                    process.wait()
+                    process.waitFor()
                 } catch (InterruptedException ie) {
                     throw new RuntimeException("Problem accepting input from zsh / vared", ie)
                 }
