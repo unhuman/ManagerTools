@@ -12,7 +12,7 @@ import com.unhuman.flexidb.init.FlexiDBInitDataColumn
 import com.unhuman.flexidb.init.FlexiDBInitIndexColumn
 import com.unhuman.managertools.data.DBData
 import com.unhuman.managertools.data.DBIndexData
-import com.unhuman.managertools.data.JiraDBActions
+import com.unhuman.managertools.data.UserActivity
 import com.unhuman.managertools.rest.SourceControlREST
 import com.unhuman.managertools.rest.exceptions.RESTException
 import groovy.cli.commons.CliBuilder
@@ -238,7 +238,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     }
 
                     // Get / ensure we have a known action
-                    JiraDBActions prActivityAction = JiraDBActions.getResolvedValue((String) prActivity.action)
+                    UserActivity prActivityAction = UserActivity.getResolvedValue((String) prActivity.action)
                     if (prActivityAction == null) {
                         // this was logged
                         continue
@@ -261,23 +261,23 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     // TODO: Github actions
 
                     switch (prActivityAction) {
-                        case JiraDBActions.APPROVED.name():
+                        case UserActivity.APPROVED.name():
                             break
-                        case JiraDBActions.COMMENTED.name():
+                        case UserActivity.COMMENTED.name():
                             processComment(indexLookup, prAuthor, prActivity)
                             // processComment updates counters due to nested data
                             continue
-                        case JiraDBActions.DECLINED.name():
+                        case UserActivity.DECLINED.name():
                             break
-                        case JiraDBActions.MERGED.name():
+                        case UserActivity.MERGED.name():
                             break
-                        case JiraDBActions.OPENED.name():
+                        case UserActivity.OPENED.name():
                             break
-                        case JiraDBActions.RESCOPED.name():
+                        case UserActivity.RESCOPED.name():
                             break
-                        case JiraDBActions.UNAPPROVED.name():
+                        case UserActivity.UNAPPROVED.name():
                             break
-                        case JiraDBActions.UPDATED.name():
+                        case UserActivity.UPDATED.name():
                             break
                     }
 
@@ -352,8 +352,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                 // NOTICE: In this mode, all attributions go to the PR author
                 List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, prAuthor)
                 if (database.findRows(indexLookup, false)
-                    && (database.getValue(indexLookup, JiraDBActions.COMMIT_ADDED.toString()) > 0
-                        || database.getValue(indexLookup, JiraDBActions.COMMIT_REMOVED.toString()) > 0)) {
+                    && (database.getValue(indexLookup, UserActivity.COMMIT_ADDED.toString()) > 0
+                        || database.getValue(indexLookup, UserActivity.COMMIT_REMOVED.toString()) > 0)) {
                      // Process Pull Request data
                      def diffsResponse = sourceControlREST.getDiffs(prUrl)
                      if (diffsResponse != null) {
@@ -390,8 +390,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             deletions = diffsResponse.stats.deletions
         }
         if (additions != null || deletions != null) {
-            incrementCounter(indexLookup, JiraDBActions.valueOf(prefix + "ADDED"), additions)
-            incrementCounter(indexLookup, JiraDBActions.valueOf(prefix + "REMOVED"), deletions)
+            incrementCounter(indexLookup, UserActivity.valueOf(prefix + "ADDED"), additions)
+            incrementCounter(indexLookup, UserActivity.valueOf(prefix + "REMOVED"), deletions)
             return
         }
 
@@ -424,8 +424,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         }
                     })
 
-                    incrementCounter(indexLookup, JiraDBActions.valueOf(prefix + "ADDED"), added)
-                    incrementCounter(indexLookup, JiraDBActions.valueOf(prefix + "REMOVED"), removed)
+                    incrementCounter(indexLookup, UserActivity.valueOf(prefix + "ADDED"), added)
+                    incrementCounter(indexLookup, UserActivity.valueOf(prefix + "REMOVED"), removed)
                 })
             }
         }
@@ -437,7 +437,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
      * @param prActivityAction
      * @param dbActivityAction
      */
-    protected void incrementCounter(ArrayList<FlexiDBQueryColumn> indexLookup, JiraDBActions prActivityAction) {
+    protected void incrementCounter(ArrayList<FlexiDBQueryColumn> indexLookup, UserActivity prActivityAction) {
         incrementCounter(indexLookup, prActivityAction, 1)
     }
 
@@ -447,8 +447,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
      * @param prActivityAction
      * @param dbActivityAction
      */
-    protected void incrementCounter(ArrayList<FlexiDBQueryColumn> indexLookup, JiraDBActions prActivityAction, int increment) {
-        JiraDBActions dbActivityAction = prActivityAction
+    protected void incrementCounter(ArrayList<FlexiDBQueryColumn> indexLookup, UserActivity prActivityAction, int increment) {
+        UserActivity dbActivityAction = prActivityAction
         database.incrementField(indexLookup, dbActivityAction.name(), increment)
     }
 
@@ -498,12 +498,12 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                 prAuthor)
 
         database.append(currentUserIndexLookup, DBData.COMMENTS.name(), commentText, true)
-        incrementCounter(currentUserIndexLookup, JiraDBActions.COMMENTED)
+        incrementCounter(currentUserIndexLookup, UserActivity.COMMENTED)
 
         // Recursively process responses
         comment.comments.forEach(replyComment -> {
             // Use the original index lookup so we can determine if self
-            processComment(originalIndexLookup, prAuthor, replyComment.author.name, JiraDBActions.COMMENTED.name(), "REPLY", replyComment, indentation + 3)
+            processComment(originalIndexLookup, prAuthor, replyComment.author.name, UserActivity.COMMENTED.name(), "REPLY", replyComment, indentation + 3)
         })
     }
 
@@ -516,8 +516,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         }}
 
         // JiraDB Actions to the data columns
-        for (int i = 0; i < JiraDBActions.values().length; i++) {
-            JiraDBActions action = JiraDBActions.values()[i]
+        for (int i = 0; i < UserActivity.values().length; i++) {
+            UserActivity action = UserActivity.values()[i]
             columns.add(new FlexiDBInitDataColumn(action.name(), action.getDefaultValue()))
         }
 

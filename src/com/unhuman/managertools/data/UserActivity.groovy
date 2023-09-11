@@ -1,6 +1,6 @@
 package com.unhuman.managertools.data
 
-enum JiraDBActions {
+enum UserActivity {
     // Code Changes
     PR_ADDED(0),
     PR_REMOVED(0),
@@ -20,7 +20,7 @@ enum JiraDBActions {
 
     private Object defaultValue
 
-    private JiraDBActions(Object defaultValue) {
+    private UserActivity(Object defaultValue) {
         this.defaultValue = defaultValue
     }
 
@@ -28,11 +28,11 @@ enum JiraDBActions {
         return defaultValue
     }
 
-    static JiraDBActions getResolvedValue(String desiredAction) {
+    static UserActivity getResolvedValue(String desiredAction) {
         try {
-            return JiraDBActions.valueOf(desiredAction)
+            return UserActivity.valueOf(desiredAction)
         } catch (Exception e) {
-            System.err.println("Unknown Jira action: ${desiredAction}")
+            System.err.println("Unknown action: ${desiredAction}")
             return null
         }
     }
