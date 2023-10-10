@@ -71,7 +71,7 @@ class GetTeamSprints extends Script {
         }
 
         if (limitCount != null) {
-            data = data.subList(0, limitCount)
+            data = data.subList(0, Math.min(limitCount, data.size()))
         }
 
         // Flip what's left to order back the way we want it
