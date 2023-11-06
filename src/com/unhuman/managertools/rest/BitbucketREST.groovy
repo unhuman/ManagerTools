@@ -13,6 +13,9 @@ import org.apache.hc.core5.http.message.BasicNameValuePair
 import java.util.regex.Matcher
 import java.util.regex.Pattern
 
+// The data format by bitbucket is the reference implementation
+// other implementations of Source Control must convert their data to look like BitBucket
+
 class BitbucketREST extends SourceControlREST {
     private static final String STARTING_PAGE = "0"
     private static final String PAGE_SIZE_LIMIT = "100"

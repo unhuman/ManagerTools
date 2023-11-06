@@ -201,7 +201,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             def ticket = issue.key
             def issueId = issue.id
 
-            def pullRequests
+            def pullRequests = []
             try {
                 pullRequests = jiraREST.getTicketPullRequestInfo(issueId.toString())
             } catch (RESTException re) {
@@ -217,8 +217,10 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                 def prAuthor = pullRequest.author.name // Below, we try to update this to match the username
                 String prUrl = pullRequest.url
 
+                // based on the PR - determine where the source is - choosing github or (default) bitbucket
                 boolean isGithub = prUrl.toLowerCase().contains("github.com/")
                 SourceControlREST sourceControlREST = (isGithub) ? githubREST : bitbucketREST
+
                 prUrl = sourceControlREST.apiConvert(prUrl)
 
                 // Get and process activities (comments, etc)
@@ -228,7 +230,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                 // process from oldest to newest (reverse)
                 for (int i = prActivities.values.size() - 1; i >= 0; i--) {
                     def prActivity = (prActivities instanceof List) ? prActivities[0] : prActivities.values.get(i)
-                    String userName = (isGithub) ? prActivity.user.login : prActivity.user.name
+                    String userName = prActivity.user.name
                     // try to match up the names better
                     prAuthor = (prAuthor.equals(prActivity.user.displayName)) ? userName : prAuthor
 
@@ -292,10 +294,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                 }
                 for (int i = prCommits.values.size() - 1; i >= 0; i--) {
                     def commit = (prCommits instanceof List) ? prCommits.get(i) : prCommits.values.get(i)
-                    String commitSHA = (isGithub) ? commit.sha : commit.id
-                    Long commitTimestamp = (isGithub)
-                            ? java.time.Instant.parse(commit.commit.committer.date).getEpochSecond() * 1000 // ms
-                            : commit.committerTimestamp
+                    String commitSHA = commit.id
+                    Long commitTimestamp = commit.committerTimestamp
 
                     // If we have already processed this activity or the activity didn't occur in this sprint, don't include it
                     // TODO: Duplicate of operations for activities
@@ -308,20 +308,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     processedItems.add(commitSHA)
 
                     // Github can put the name in multiple places, which is painful
-                    String userName = (commit.committer != null) ? commit.committer.name : null
-
-                    if (userName == null) {
-                        // nested commit.commit - madness
-                        if (commit.commit != null) {
-                            userName = commit.commit.author.name
-                        }
-                    }
-
-                    if (userName == null) {
-                        if (commit.author != null) {
-                            userName = commit.author.login
-                        }
-                    }
+                    String userName = commit.committer.name
 
                     // Skip this if not desired (unlikely in this case)
                     // TODO: Duplicate of operations for activities
@@ -334,7 +321,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, userName)
                     populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
 
-                    String commitUrl = (isGithub) ? commit.url : prUrl
+                    // use the commit url if there is one, else use that from the PR
+                    String commitUrl = (commit.url != null) ? commit.url : prUrl
 
                     def diffsResponse = sourceControlREST.getCommitDiffs(commitUrl, commitSHA)
                     if (diffsResponse != null) {
@@ -342,7 +330,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     }
 
                     // Add pr commit messages to database
-                    def commitMessage = ((isGithub) ? commit.commit.message : commit.message).replaceAll("(\\r|\\n)?\\n", "  ").trim()
+                    def commitMessage = commit.message.replaceAll("(\\r|\\n)?\\n", "  ").trim()
                     database.append(indexLookup, DBData.COMMIT_MESSAGES.name(), commitMessage, true)
                     // TODO: Add counter for commits
                     // incrementCounter(currentUserIndexLookup, JiraDBActions.COMMIT)
@@ -363,6 +351,27 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     }
                 }
             })
+
+            // Find comments in Jira - we do this after we process PR's so we can allocate to an appropriate
+            // PR.
+            // TODO: This is currently broken
+//            try {
+//                // TODO: Cache this request since we may need to refer back to the same data
+//                def jiraComments = jiraREST.getTicket(ticket).fields.comment.comments
+//                jiraComments.each(comment -> {
+//                    def commentText = comment.body
+//                    def commentDate = (comment.updated != null) ? comment.updated : comment.created
+//                    def commentAuthor = (comment.updated != null) ? comment.updateAuthor.name : comment.author.name
+//
+//                    processComment(indexLookup, prAuthor, prActivity)
+//                })
+//            } catch (NullPointerException npe) {
+//                System.err.println("Ticket: ${ticket} could not find comments")
+//            } catch (RESTException re) {
+//                if (re.statusCode != HttpStatus.SC_FORBIDDEN && re.statusCode != HttpStatus.SC_NOT_FOUND) {
+//                    return
+//                }
+//            }
         })
     }
 
@@ -501,10 +510,12 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         incrementCounter(currentUserIndexLookup, UserActivity.COMMENTED)
 
         // Recursively process responses
-        comment.comments.forEach(replyComment -> {
-            // Use the original index lookup so we can determine if self
-            processComment(originalIndexLookup, prAuthor, replyComment.author.name, UserActivity.COMMENTED.name(), "REPLY", replyComment, indentation + 3)
-        })
+        if (comment.comments != null) {
+            comment.comments.forEach(replyComment -> {
+                // Use the original index lookup so we can determine if self
+                processComment(originalIndexLookup, prAuthor, replyComment.author.name, UserActivity.COMMENTED.name(), "REPLY", replyComment, indentation + 3)
+            })
+        }
     }
 
     List<AbstractFlexiDBInitColumn> generateDBSignature() {
