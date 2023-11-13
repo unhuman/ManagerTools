@@ -24,12 +24,14 @@ class FlexiDB {
     private final List<String> originalColumnOrder
     private final int indexedColumnCount
 
+    private boolean caseInsensitiveIndex
     Map<FlexiDBIndexKey, LinkedHashSet<FlexiDBRow>> indexes
 
     /**
      * @param columnSignature
      */
-    FlexiDB(List<AbstractFlexiDBInitColumn> columnSignature) {
+    FlexiDB(List<AbstractFlexiDBInitColumn> columnSignature, boolean caseInsensitiveIndex = false) {
+        this.caseInsensitiveIndex = caseInsensitiveIndex
         indexedColumnCount = 0
         originalColumnOrder = new ArrayList<>()
         // to optimize lookups, store a mapping of String to column
@@ -97,20 +99,10 @@ class FlexiDB {
      *
      * @param columnFilters
      * @param incrementField
-     * @return
-     */
-    int incrementField(Collection<FlexiDBQueryColumn> columnFilters, String incrementField) {
-        return incrementField(columnFilters, incrementField, 1)
-    }
-
-    /**
-     *
-     * @param columnFilters
-     * @param incrementField
      * @param increment
      * @return
      */
-    int incrementField(Collection<FlexiDBQueryColumn> columnFilters, String incrementField, int increment) {
+    int incrementField(Collection<FlexiDBQueryColumn> columnFilters, String incrementField, int increment = 1) {
         validateColumn(incrementField)
 
         FlexiDBRow row = findOrCreateRow(columnFilters)
@@ -200,8 +192,8 @@ class FlexiDB {
         for (FlexiDBQueryColumn columnFilter: columnFilters) { // cannot use each since can't break out
             String desiredColumnName = columnFilter.getName()
             Object desiredColumnValue = columnFilter.getMatchValue()
-            LinkedHashSet<FlexiDBRow> filterRows = indexes.get(new FlexiDBIndexKey(desiredColumnName, desiredColumnValue))
 
+            LinkedHashSet<FlexiDBRow> filterRows = indexes.get(createFlexiDBIndexKey(desiredColumnName, desiredColumnValue))
             filterRows = (filterRows != null) ? filterRows.clone() : Collections.emptySet()
 
             // either use the data if we had none or determine the intersection
@@ -241,7 +233,7 @@ class FlexiDB {
                 row.put(columnFilter.getName(), columnFilter.getMatchValue())
 
                 // index the data
-                FlexiDBIndexKey indexKey = new FlexiDBIndexKey(columnFilter.getName(), columnFilter.getMatchValue())
+                FlexiDBIndexKey indexKey = createFlexiDBIndexKey(columnFilter.getName(), columnFilter.getMatchValue())
                 LinkedHashSet<FlexiDBRow> indexedRows = (indexes.containsKey(indexKey)) ? indexes.get(indexKey) : new LinkedHashSet<>()
                 indexedRows.add(row)
                 indexes.put(indexKey, indexedRows)
@@ -250,6 +242,13 @@ class FlexiDB {
         }
 
         return row
+    }
+
+    FlexiDBIndexKey createFlexiDBIndexKey(String columnName, Object value) {
+        if (caseInsensitiveIndex && value instanceof String) {
+            value = value.toLowerCase()
+        }
+        FlexiDBIndexKey indexKey = new FlexiDBIndexKey(columnName, value)
     }
 
     List<String> getOriginalColumnOrder() {
