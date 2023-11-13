@@ -38,9 +38,10 @@
 1. Note the issues with unit tests and Grape Grab, below
 
 ## Tests
-1. IntelliJ has problems: `No suitable ClassLoader found for grab`
-1. From the `src/` directory
-1. Run: `groovy -Dgroovy.grape.report.downloads=true ../tests/com/unhuman/flexidb/FlexiDBTests.groovy`
+1. IntelliJ has problems: `No suitable ClassLoader found for grab`  
+Adding `-Dgroovy.grape.enable=false` to the test configuration may help.
+1. Command Line, from the `src/` directory:  
+Run: `groovy -Dgroovy.grape.report.downloads=true ../tests/com/unhuman/flexidb/FlexiDBTests.groovy`
 
 ## Developer Notes
 - Data is stored in `~/.managerTools.cfg`

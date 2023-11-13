@@ -1,7 +1,7 @@
 package com.unhuman.flexidb.data
 
 @Grapes(
-        @Grab(group='org.apache.commons', module='commons-text', version='1.10.0')
+        @Grab(group='org.apache.commons', module='commons-text', version='1.11.0')
 )
 
 import org.apache.commons.text.StringEscapeUtils
