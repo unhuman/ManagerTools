@@ -22,11 +22,11 @@ class ConfigFileManager {
         return state.containsKey(key)
     }
 
-    String getValue(String key) {
+    Object getValue(String key) {
         return state[key]
     }
 
-    void updateValue(String key, String value) {
+    void updateValue(String key, Object value) {
         state[key] = value
         File file = new File(filename)
         file.delete()

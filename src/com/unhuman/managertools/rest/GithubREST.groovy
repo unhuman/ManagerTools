@@ -7,18 +7,23 @@ import com.unhuman.managertools.data.UserActivity
 ])
 
 import com.unhuman.managertools.rest.exceptions.RESTException
+import com.unhuman.managertools.util.CommandLineHelper
 import org.apache.hc.core5.http.HttpStatus
 import org.apache.hc.core5.http.NameValuePair
 import org.apache.hc.core5.http.message.BasicNameValuePair
 
-import java.lang.reflect.Array
+import java.util.regex.Pattern
 
 class GithubREST extends SourceControlREST {
     private static final String STARTING_PAGE = "0"
     private static final String PAGE_SIZE_LIMIT = "100"
+    private static final Pattern JIRA_NAME_PATTERN = Pattern.compile(/\w.*/)
 
-    GithubREST(String bearerToken) {
+    private CommandLineHelper commandLineHelper
+
+    GithubREST(CommandLineHelper commandLineHelper, String bearerToken) {
         super(new AuthInfo(AuthInfo.AuthType.Bearer, bearerToken))
+        this.commandLineHelper = commandLineHelper
     }
 
     @Override
@@ -40,7 +45,7 @@ class GithubREST extends SourceControlREST {
         // make this data look the same as bitbucket
         for (int i = activities.values.size() - 1; i >= 0; i--) {
             def activity = (activities instanceof List) ? activities[0] : activities.values.get(i)
-            activity.user.name = activity.user.login
+            activity.user.name = mapNameToJiraName(activity.user.login)
 
             activity.createdDate = java.time.Instant.parse(activity.created_at).getEpochSecond() * 1000 // ms
 
@@ -87,7 +92,7 @@ class GithubREST extends SourceControlREST {
                     }
                 }
 
-                commit.committer.name = userName
+                commit.committer.name = mapNameToJiraName(userName)
             }
 
             return commits
@@ -129,5 +134,27 @@ class GithubREST extends SourceControlREST {
 
         Object commitData = getRequest(commitUrl)
         return commitData
+    }
+
+    @Override
+    String mapNameToJiraName(String name) {
+        // all references to name will be lowercase
+        name = name.toLowerCase()
+        TreeMap<String, String> bitBucketJiraNameMappings = commandLineHelper.getValue("bitbucketJiraMappings")
+
+        if (bitBucketJiraNameMappings == null) {
+            bitBucketJiraNameMappings = new TreeMap<>()
+        }
+
+        if (bitBucketJiraNameMappings.containsKey(name)) {
+            return bitBucketJiraNameMappings.get(name)
+        }
+
+        // prompt for name (simple validation)
+        String jiraName = commandLineHelper.performPrompt("Enter Jira username for BitBucket user ${name}", CommandLineHelper.TextSecurity.NONE, JIRA_NAME_PATTERN)
+
+        bitBucketJiraNameMappings.put(name, jiraName)
+        commandLineHelper.storeValue("bitbucketJiraMappings", bitBucketJiraNameMappings)
+        return jiraName
     }
 }

@@ -22,7 +22,7 @@ import org.apache.hc.core5.http.HttpStatus
 import java.text.SimpleDateFormat
 
 class SprintReportTeamAnalysis extends AbstractSprintReport {
-    static final List<String> IGNORE_USERS = ["codeowners", "DeployMan"]
+    static final List<String> IGNORE_USERS = ["codeowners".toLowerCase(), "DeployMan".toLowerCase()]
     static final List<String> IGNORE_COMMENTS = ["Tasks to Complete Before Merging Pull Request"]
 
     static final String SELF_PREFIX = "SELF_"
@@ -211,15 +211,15 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             }
             System.out.println("   ${++counter}/${issueList.size()}: ${ticket} / Issue ${issueId} has ${pullRequests.size()} PRs")
             pullRequests.each(pullRequest -> {
+                // based on the PR - determine where the source is - choosing github or (default) bitbucket
+                String prUrl = pullRequest.url
+                boolean isGithub = prUrl.toLowerCase().contains("github.com/")
+                SourceControlREST sourceControlREST = (isGithub) ? githubREST : bitbucketREST
+
                 // can get approvers out of ^^^
                 // check comment count before polling for comments
                 def prId = (pullRequest.id.startsWith("#") ? pullRequest.id.substring(1) : pullRequest.id)
-                def prAuthor = pullRequest.author.name // Below, we try to update this to match the username
-                String prUrl = pullRequest.url
-
-                // based on the PR - determine where the source is - choosing github or (default) bitbucket
-                boolean isGithub = prUrl.toLowerCase().contains("github.com/")
-                SourceControlREST sourceControlREST = (isGithub) ? githubREST : bitbucketREST
+                def prAuthor = sourceControlREST.mapNameToJiraName(pullRequest.author.name) // Below, we try to update this to match the username
 
                 prUrl = sourceControlREST.apiConvert(prUrl)
 
@@ -230,12 +230,13 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                 // process from oldest to newest (reverse)
                 for (int i = prActivities.values.size() - 1; i >= 0; i--) {
                     def prActivity = (prActivities instanceof List) ? prActivities[0] : prActivities.values.get(i)
-                    String userName = prActivity.user.name
+                    // map the user name from source control
+                    String userName = prActivity.user.name // already mapped from getActivities()
                     // try to match up the names better
                     prAuthor = (prAuthor.equals(prActivity.user.displayName)) ? userName : prAuthor
 
                     // Skip this if not desired
-                    if (IGNORE_USERS.contains(userName)) {
+                    if (IGNORE_USERS.contains(userName.toLowerCase())) {
                         continue
                     }
 
@@ -312,7 +313,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
                     // Skip this if not desired (unlikely in this case)
                     // TODO: Duplicate of operations for activities
-                    if (IGNORE_USERS.contains(userName)) {
+                    if (IGNORE_USERS.contains(userName.toLowerCase())) {
                         continue
                     }
 

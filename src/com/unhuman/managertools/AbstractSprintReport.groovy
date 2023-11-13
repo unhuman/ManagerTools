@@ -153,6 +153,6 @@ abstract class AbstractSprintReport extends Script {
 
         // Github always uses token-based auth
         String githubToken = commandLineHelper.getGithubToken()
-        githubREST = new GithubREST(githubToken)
+        githubREST = new GithubREST(commandLineHelper, githubToken)
     }
 }

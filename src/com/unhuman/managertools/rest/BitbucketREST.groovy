@@ -99,4 +99,10 @@ class BitbucketREST extends SourceControlREST {
         NameValuePair contextPair = new BasicNameValuePair("contextLines", "0")
         return getRequest(uri, startPair, limitPair, contextPair)
     }
+
+    @Override
+    String mapNameToJiraName(String name) {
+        // Bitbucket is the same as Jira, so do nothing
+        return name
+    }
 }

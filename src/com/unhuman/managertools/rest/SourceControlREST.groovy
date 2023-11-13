@@ -21,4 +21,6 @@ abstract class SourceControlREST extends RestService {
     String apiConvert(String prUrl) {
         return prUrl
     }
+
+    abstract String mapNameToJiraName(String name)
 }

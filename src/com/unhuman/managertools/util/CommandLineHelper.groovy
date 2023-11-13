@@ -113,6 +113,10 @@ class CommandLineHelper {
             return ""
         }
 
+        performPrompt(text, textSecurity, validationPattern)
+    }
+
+    String performPrompt(String text, TextSecurity textSecurity, Pattern validationPattern) {
         while (true) {
             String input
             if (System.console() != null) {
@@ -224,4 +228,13 @@ class CommandLineHelper {
             return value
         }
     }
+
+    Object getValue(String key) {
+        return configFileManager.getValue(key)
+    }
+
+    void storeValue(String key, Object value) {
+        configFileManager.updateValue(key, value)
+    }
+
 }
