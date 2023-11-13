@@ -55,7 +55,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
     @Override
     def process(String boardId, List<String> sprintIds) {
-        database = new FlexiDB(generateDBSignature())
+        database = new FlexiDB(generateDBSignature(), true)
         processedItems = new HashSet<>()
 
         // populate the database
