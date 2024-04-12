@@ -1,5 +1,7 @@
 package com.unhuman.managertools
 
+import com.unhuman.managertools.rest.NullREST
+import com.unhuman.managertools.rest.SourceControlREST
 import com.unhuman.managertools.rest.exceptions.RESTException
 @Grapes([
         @Grab(group='commons-cli', module='commons-cli', version='1.5.0')
@@ -20,8 +22,8 @@ import java.util.stream.Collectors
 abstract class AbstractSprintReport extends Script {
     private static final CONFIG_FILENAME = ".managerTools.cfg"
     protected JiraREST jiraREST
-    protected BitbucketREST bitbucketREST
-    protected GithubREST githubREST
+    protected SourceControlREST bitbucketREST
+    protected SourceControlREST githubREST
     private OptionAccessor commandLineOptions
     private List<String> sprintIds
 
@@ -135,7 +137,9 @@ abstract class AbstractSprintReport extends Script {
                 String password = commandLineHelper.getPassword()
 
                 jiraREST = new JiraREST(jiraServer, username, password)
-                bitbucketREST = new BitbucketREST(bitbucketServer, username, password)
+                bitbucketREST = (password != null && password.length() > 0)
+                        ? new BitbucketREST(bitbucketServer, username, password)
+                        : new NullREST("bitbucket")
 
                 break
             case "c":
@@ -144,8 +148,9 @@ abstract class AbstractSprintReport extends Script {
                 String bitbucketCookies = commandLineHelper.getBitbucketCookies()
 
                 jiraREST = new JiraREST(jiraServer, jiraCookies)
-                bitbucketREST = new BitbucketREST(bitbucketServer, bitbucketCookies)
-
+                bitbucketREST = (bitbucketCookies != null && bitbucketCookies.length() > 0)
+                        ? new BitbucketREST(bitbucketServer, bitbucketCookies)
+                        : new NullREST("bitbucket")
                 break
             default:
                 throw new RuntimeException("Invalid auth method: ${authMethod}")
@@ -153,6 +158,8 @@ abstract class AbstractSprintReport extends Script {
 
         // Github always uses token-based auth
         String githubToken = commandLineHelper.getGithubToken()
-        githubREST = new GithubREST(commandLineHelper, githubToken)
+        githubREST = (githubToken != null && githubToken.length() > 0)
+                ? new GithubREST(commandLineHelper, githubToken)
+                : new NullREST("github")
     }
 }

@@ -92,7 +92,14 @@ class GithubREST extends SourceControlREST {
                     }
                 }
 
-                commit.committer.name = mapNameToJiraName(userName)
+                try {
+                    if (commit.committer == null) {
+                        commit.committer = new HashMap<>()
+                    }
+                    commit.committer.name = mapNameToJiraName(userName)
+                } catch (Exception e) {
+                    System.err.println(e)
+                }
             }
 
             return commits
@@ -151,7 +158,7 @@ class GithubREST extends SourceControlREST {
         }
 
         // prompt for name (simple validation)
-        String jiraName = commandLineHelper.performPrompt("Enter Jira username for BitBucket user ${name}", CommandLineHelper.TextSecurity.NONE, JIRA_NAME_PATTERN)
+        String jiraName = commandLineHelper.performPrompt("Enter Jira username for Github user ${name}", CommandLineHelper.TextSecurity.NONE, JIRA_NAME_PATTERN)
 
         bitBucketJiraNameMappings.put(name, jiraName)
         commandLineHelper.storeValue("bitbucketJiraMappings", bitBucketJiraNameMappings)
