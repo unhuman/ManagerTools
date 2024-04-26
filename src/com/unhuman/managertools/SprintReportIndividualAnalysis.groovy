@@ -18,7 +18,7 @@ class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
             commandLineHelper.setQuietModeNoPrompts()
         }
 
-        teamUsers = commandLineHelper.getBoardTeamUsers(commandLineOptions.'boardId')
+        teamUsers = commandLineHelper.getBoardTeamUsers(boardId)
     }
 
     @Override
@@ -77,7 +77,8 @@ class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
             appendSummary(sb, overallTotalsRow)
 
             // Write to file
-            String filename = getCommandLineOptions().'outputCSV'.replace(".csv", "-${commandLineOptions.'boardId'}-${user}.csv")
+            String dataIndicator = (teamName != null) ? teamName : boardId
+            String filename = getCommandLineOptions().'outputCSV'.replace(".csv", "-${dataIndicator}-${user}.csv")
             writeResultsFile(filename, sb)
         }}
     }

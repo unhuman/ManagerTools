@@ -54,7 +54,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     }
 
     @Override
-    def process(String boardId, List<String> sprintIds) {
+    def process(String teamName, String boardId, List<String> sprintIds) {
         database = new FlexiDB(generateDBSignature(), true)
         processedItems = new HashSet<>()
 
@@ -124,7 +124,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         appendSummary(sb, overallTotalsRow)
 
         // Write file
-        String filename = getCommandLineOptions().'outputCSV'.replace(".csv", "-${commandLineOptions.'boardId'}.csv")
+        String dataIndicator = (teamName != null) ? teamName : boardId
+        String filename = getCommandLineOptions().'outputCSV'.replace(".csv", "-${dataIndicator}.csv")
         writeResultsFile(filename, sb)
     }
 

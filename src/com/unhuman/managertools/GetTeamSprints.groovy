@@ -23,6 +23,7 @@ class GetTeamSprints extends Script {
         def cli = new CliBuilder(usage: 'GetTeamSprints [options]', header: 'Options:');
         cli.width = 120
         cli.h(longOpt: 'help', 'Shows useful information')
+        // TODO: Make take either boardId or teamName - similar to AbstractSprintReport
         cli.b(longOpt: 'boardId', required: true, args: 1, argName: 'boardId', 'Sprint Board Id Number')
         cli.l(longOpt: 'limit', required: false, args: 1, argName: 'limitCount', 'Limit of count to get')
         cli.q(longOpt: 'quietMode', 'Quiet mode (use default/stored values without prompt)')

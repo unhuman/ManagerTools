@@ -29,6 +29,10 @@ class CommandLineHelper {
         }
     }
 
+    ConfigFileManager getConfigFileManager() {
+        return configFileManager
+    }
+
     void setQuietModeNoPrompts() {
         this.quietMode = true
     }

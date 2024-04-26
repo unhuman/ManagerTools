@@ -26,18 +26,21 @@ abstract class AbstractSprintReport extends Script {
     protected SourceControlREST githubREST
     private OptionAccessor commandLineOptions
     private List<String> sprintIds
+    protected String boardId
+    protected String teamName
 
     /**
      * Implementations should override this functionality.
      * @param commandLineOptions
+     * @param teamName
      * @param boardId
      * @param sprintIds
      * @return
      */
-    abstract def process(String boardId, List<String> sprintIds)
+    abstract def process(String teamName, String boardId, List<String> sprintIds)
 
     // this is an example of a very simple thing done
-    //    def process(String boardId, List<String> sprintIds) {
+    //    def process(String teamName, String boardId, List<String> sprintIds) {
     //        sprintIds.each { sprintId -> {
     //            Object data = jiraREST.getSprintReport(boardId, sprintId)
     //            System.out.println(data.sprint.name)
@@ -54,14 +57,20 @@ abstract class AbstractSprintReport extends Script {
 
     def run() {
         setupRun()
-        process(commandLineOptions.'boardId', sprintIds)
+        process(teamName, boardId, sprintIds)
     }
 
     protected void setupRun() {
         CliBuilder cli = new CliBuilder(usage: 'SprintReportTeamAnalysis [options]', header: 'Options:');
         cli.width = 120
         cli.h(longOpt: 'help', 'Shows useful information')
-        cli.b(longOpt: 'boardId', required: true, args: 1, argName: 'boardId', 'Sprint Board Id Number')
+        def boardOrTeamGroup = new OptionGroup(required: true)
+        boardOrTeamGroup.with {
+            addOption(cli.option('b', [longOpt: 'boardId', args: 1, argName: 'boardId'], 'Sprint Board Id Number'))
+            addOption(cli.option('t', [longOpt: 'teamName', args: 1, argName: 'team'], 'Sprint Team Name'))
+        }
+        cli.options.addOptionGroup(boardOrTeamGroup)
+
         cli.q(longOpt: 'quietMode', 'Quiet mode (use default/stored values without prompt)')
 
         def optionGroup = new OptionGroup(required: true)
@@ -98,7 +107,7 @@ abstract class AbstractSprintReport extends Script {
         if (commandLineOptions.'limit') {
             try {
                 GetTeamSprints getTeamSprints = new GetTeamSprints(jiraREST)
-                def sprintData = getTeamSprints.getClosedRecentSprints(commandLineOptions.'boardId', Integer.parseInt(commandLineOptions.'limit'))
+                def sprintData = getTeamSprints.getClosedRecentSprints(boardId, Integer.parseInt(commandLineOptions.'limit'))
                 sprintIds = sprintData.stream().map(sprint -> sprint.id.toString()).collect(Collectors.toUnmodifiableList())
             } catch (RESTException re) {
                 if (re.statusCode == HttpStatus.SC_BAD_REQUEST) {
@@ -161,5 +170,22 @@ abstract class AbstractSprintReport extends Script {
         githubREST = (githubToken != null && githubToken.length() > 0)
                 ? new GithubREST(commandLineHelper, githubToken)
                 : new NullREST("github")
+
+
+        // TODO: Extract team name and boardId
+        teamName = (commandLineOptions.'teamName') ? commandLineOptions.'teamName' : null
+        boardId = (commandLineOptions.'boardId') ? commandLineOptions.'boardId' : null
+        if (boardId == null) {
+            // look up boardId from team name
+            String lookupValue = "teamMappings.${teamName}"
+            boardId = commandLineHelper.getConfigFileManager().getValue(lookupValue)
+        }
+
+        // TODO: find team name if only boardId is provided
+
+        // if Board Id is null, then we have a problem
+        if (boardId == null) {
+            throw new RuntimeException("boardId is required")
+        }
     }
 }
