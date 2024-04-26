@@ -1,6 +1,5 @@
 package com.unhuman.managertools.util
 
-import org.codehaus.groovy.util.StringUtil
 
 import java.util.regex.Pattern
 
@@ -90,8 +89,12 @@ class CommandLineHelper {
         return promptAndStore("Github Token", TextSecurity.MASK, ANY_MATCH_PATTERN, "githubToken", true)
     }
 
-    List<String> getBoardTeamUsers(String boardId) {
-        List<String> users = promptAndStore("Team users (optional, comma/space separated, * for all authors, ** for all users) for board: ${boardId}", TextSecurity.NONE, USERS_MATCH_PATTERN, "${boardId}-users", true, "*").split(",").toList()
+    List<String> getTeamBoardUsers(String teamName, String boardId) {
+        String configKey = (teamName != null) ? "teamUsers.${teamName}" : "${boardId}-users"
+        String typeIndicator = (teamName != null) ? "team" : "board"
+        String item = (teamName != null) ? teamName : boardId
+        List<String> users = promptAndStore("Team users (optional, comma/space separated, * for all authors, ** for all users) for ${typeIndicator}: ${item}",
+                TextSecurity.NONE, USERS_MATCH_PATTERN, configKey, true, "*").split(",").toList()
         users = users.stream().map { it.trim() }.filter { it != null && !it.isEmpty() }.toList()
         return users
     }

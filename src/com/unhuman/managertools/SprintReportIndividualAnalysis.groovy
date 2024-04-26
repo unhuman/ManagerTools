@@ -18,7 +18,7 @@ class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
             commandLineHelper.setQuietModeNoPrompts()
         }
 
-        teamUsers = commandLineHelper.getBoardTeamUsers(boardId)
+        teamUsers = commandLineHelper.getTeamBoardUsers(teamName, boardId)
     }
 
     @Override

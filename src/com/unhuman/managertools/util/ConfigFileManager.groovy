@@ -24,7 +24,8 @@ class ConfigFileManager {
         def keys = key.split("\\.")
         def current = state
         for (String k : keys) {
-            if (!current.containsKey(k)) {
+            def matchedKey = current.keySet().find { it.toLowerCase().equals(k.toLowerCase()) }
+            if (matchedKey == null) {
                 return false
             }
             current = current[k]
