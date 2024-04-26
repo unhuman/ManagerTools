@@ -73,9 +73,10 @@ class BitbucketREST extends SourceControlREST {
         NameValuePair startPair = new BasicNameValuePair("start", STARTING_PAGE)
         NameValuePair limitPair = new BasicNameValuePair("limit", PAGE_SIZE_LIMIT)
         NameValuePair contextPair = new BasicNameValuePair("contextLines", "0")
+        NameValuePair ignoreWhitespacePair = new BasicNameValuePair("whitespace", "ignore-all")
 
         try {
-            return getRequest(uri, startPair, limitPair, contextPair)
+            return getRequest(uri, startPair, limitPair, contextPair, ignoreWhitespacePair)
         } catch (RESTException re) {
             if (re.statusCode != HttpStatus.SC_FORBIDDEN && re.statusCode != HttpStatus.SC_NOT_FOUND) {
                 throw re
@@ -97,7 +98,9 @@ class BitbucketREST extends SourceControlREST {
         NameValuePair startPair = new BasicNameValuePair("start", STARTING_PAGE)
         NameValuePair limitPair = new BasicNameValuePair("limit", PAGE_SIZE_LIMIT)
         NameValuePair contextPair = new BasicNameValuePair("contextLines", "0")
-        return getRequest(uri, startPair, limitPair, contextPair)
+        NameValuePair ignoreWhitespacePair = new BasicNameValuePair("whitespace", "ignore-all")
+
+        return getRequest(uri, startPair, limitPair, contextPair, ignoreWhitespacePair)
     }
 
     @Override
