@@ -94,12 +94,12 @@ abstract class AbstractSprintReport extends Script {
         } catch (Exception e) {
             System.out.println(e.getMessage())
             cli.usage()
-            return
+            System.exit(-1)
         }
 
         if (commandLineOptions.h) {
             cli.usage()
-            return
+            System.exit(0)
         }
 
         setupServices()
