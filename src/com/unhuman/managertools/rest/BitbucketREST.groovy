@@ -74,11 +74,13 @@ class BitbucketREST extends SourceControlREST {
         NameValuePair limitPair = new BasicNameValuePair("limit", PAGE_SIZE_LIMIT)
         NameValuePair contextPair = new BasicNameValuePair("contextLines", "0")
         NameValuePair ignoreWhitespacePair = new BasicNameValuePair("whitespace", "ignore-all")
+        NameValuePair noComments = new BasicNameValuePair("ignoreComments", "true")
 
         try {
-            return getRequest(uri, startPair, limitPair, contextPair, ignoreWhitespacePair)
+            return getRequest(uri, startPair, limitPair, contextPair, ignoreWhitespacePair, noComments)
         } catch (RESTException re) {
-            if (re.statusCode != HttpStatus.SC_FORBIDDEN && re.statusCode != HttpStatus.SC_NOT_FOUND) {
+            if (re.statusCode != HttpStatus.SC_FORBIDDEN && re.statusCode != HttpStatus.SC_NOT_FOUND
+                    && re.statusCode != HttpStatus.SC_INTERNAL_SERVER_ERROR) {
                 throw re
             }
             System.err.println("Unable to retrieve diffs ${re.toString()}")
@@ -99,8 +101,9 @@ class BitbucketREST extends SourceControlREST {
         NameValuePair limitPair = new BasicNameValuePair("limit", PAGE_SIZE_LIMIT)
         NameValuePair contextPair = new BasicNameValuePair("contextLines", "0")
         NameValuePair ignoreWhitespacePair = new BasicNameValuePair("whitespace", "ignore-all")
+        NameValuePair noComments = new BasicNameValuePair("ignoreComments", "true")
 
-        return getRequest(uri, startPair, limitPair, contextPair, ignoreWhitespacePair)
+        return getRequest(uri, startPair, limitPair, contextPair, ignoreWhitespacePair, noComments)
     }
 
     @Override

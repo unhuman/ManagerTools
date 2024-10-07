@@ -123,7 +123,8 @@ class GithubREST extends SourceControlREST {
         try {
             return getRequest(uri)
         } catch (RESTException re) {
-            if (re.statusCode != HttpStatus.SC_FORBIDDEN && re.statusCode != HttpStatus.SC_NOT_FOUND) {
+            if (re.statusCode != HttpStatus.SC_FORBIDDEN && re.statusCode != HttpStatus.SC_NOT_FOUND
+                    && re.statusCode != HttpStatus.SC_INTERNAL_SERVER_ERROR) {
                 throw re
             }
             System.err.println("Unable to retrieve diffs ${re.toString()}")

@@ -227,6 +227,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                 // Get and process activities (comments, etc)
                 def prActivities = sourceControlREST.getActivities(prUrl)
 
+                def commentBlockers = new ArrayList<CommentBlocker>()
+
                 System.out.println("      PR ${ticket} / ${prId} has ${prActivities.values.size()} activities")
                 // process from oldest to newest (reverse)
                 for (int i = prActivities.values.size() - 1; i >= 0; i--) {
@@ -268,7 +270,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         case UserActivity.APPROVED.name():
                             break
                         case UserActivity.COMMENTED.name():
-                            processComment(indexLookup, prAuthor, prActivity)
+                            processComment(commentBlockers, indexLookup, prAuthor, prActivity)
                             // processComment updates counters due to nested data
                             continue
                         case UserActivity.DECLINED.name():
@@ -349,7 +351,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                      if (diffsResponse != null) {
                         // Generate index to look for data
                         populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
-                    processDiffs(PR_PREFIX, diffsResponse, indexLookup)
+                        processDiffs(PR_PREFIX, diffsResponse, indexLookup)
                     }
                 }
             })
@@ -406,6 +408,24 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             return
         }
 
+        // copilot suggested this as a way to find all the content
+        int addedCalculated = 0
+        int removedCalculated = 0
+        diffsResponse.diffs.each { diff ->
+            diff.hunks.each { hunk ->
+                hunk.segments.each { segment ->
+                    addedCalculated += (segment.type == "ADDED") ? segment.lines.size() : 0
+                    removedCalculated += (segment.type == "REMOVED") ? segment.lines.size() : 0
+
+//                    segment.lines.each { line ->
+//                        println("${segment.type}: ${line}")
+//                    }
+                }
+            }
+        }
+
+        int addedCalculated2 = 0
+        int removedCalculated2 = 0
         // aggregate the total responses to get all the diffs
         diffsResponse.diffs.forEach { diff ->
             {
@@ -435,10 +455,14 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         }
                     })
 
-                    incrementCounter(indexLookup, UserActivity.valueOf(prefix + "ADDED"), added)
-                    incrementCounter(indexLookup, UserActivity.valueOf(prefix + "REMOVED"), removed)
+                    addedCalculated2 = incrementCounter(indexLookup, UserActivity.valueOf(prefix + "ADDED"), added)
+                    removedCalculated2 = incrementCounter(indexLookup, UserActivity.valueOf(prefix + "REMOVED"), removed)
                 })
             }
+        }
+
+        if (prefix.startsWith(getPR_PREFIX()) && ((addedCalculated != addedCalculated2) || (removedCalculated != removedCalculated2))) {
+            System.out.println("Add1: ${addedCalculated} Add2: ${addedCalculated2} Remove1: ${removedCalculated} Remove2: ${removedCalculated2}")
         }
     }
 
@@ -448,8 +472,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
      * @param prActivityAction
      * @param dbActivityAction
      */
-    protected void incrementCounter(ArrayList<FlexiDBQueryColumn> indexLookup, UserActivity prActivityAction) {
-        incrementCounter(indexLookup, prActivityAction, 1)
+    protected int incrementCounter(ArrayList<FlexiDBQueryColumn> indexLookup, UserActivity prActivityAction) {
+        return incrementCounter(indexLookup, prActivityAction, 1)
     }
 
     /**
@@ -458,9 +482,9 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
      * @param prActivityAction
      * @param dbActivityAction
      */
-    protected void incrementCounter(ArrayList<FlexiDBQueryColumn> indexLookup, UserActivity prActivityAction, int increment) {
+    protected int incrementCounter(ArrayList<FlexiDBQueryColumn> indexLookup, UserActivity prActivityAction, int increment) {
         UserActivity dbActivityAction = prActivityAction
-        database.incrementField(indexLookup, dbActivityAction.name(), increment)
+        return database.incrementField(indexLookup, dbActivityAction.name(), increment)
     }
 
     /**
@@ -470,12 +494,13 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
      * @param prActivity
      * @return
      */
-    def processComment(List<FlexiDBQueryColumn> indexLookup, String prAuthor, Object prActivity) {
-        processComment(indexLookup, prAuthor, prActivity.user.name, prActivity.action, prActivity.commentAction, prActivity.comment, 3)
+    def processComment(List commentBlockers, List<FlexiDBQueryColumn> indexLookup, String prAuthor, Object prActivity) {
+        processComment(commentBlockers, indexLookup, prAuthor, prActivity.user.name, prActivity.action, prActivity.commentAction, prActivity.comment, 3)
     }
 
     /**
      * process comments - this will update the counters since the data can be recursive
+     * @param commentBlockers (data kept to prevent associated comments from being processed)
      * @param indexLookup
      * @param prAuthor
      * @param userName
@@ -485,7 +510,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
      * @param indentation
      * @return
      */
-    def processComment(List<FlexiDBQueryColumn> originalIndexLookup, String prAuthor, String userName, String action, String commentAction, Object comment, int indentation) {
+    def processComment(List<CommentBlocker> commentBlockers, List<FlexiDBQueryColumn> originalIndexLookup, String prAuthor,
+                       String userName, String action, String commentAction, Object comment, int indentation) {
 
         // recreate the indexLookup with the actual user
         List<FlexiDBQueryColumn> currentUserIndexLookup = new ArrayList<>(originalIndexLookup.stream().filter { it.getName() != DBIndexData.USER.name() }.toList())
@@ -493,7 +519,21 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
         // TODO: distinguish comments on own PR versus others
         String commentText = comment.text
+
+        // Skip comments from the same time (=/- 1 second) as the comment created that's blocked (with same author)
+        for (CommentBlocker commentBlocker : commentBlockers) {
+            if ((commentBlocker.name == comment.author.name)
+                && (Math.abs(commentBlocker.date - comment.createdDate)) <= 1000)  {
+                return
+            }
+        }
+
+        // Skip this if not desired
         if (IGNORE_COMMENTS.contains(commentText)) {
+            def commentBlocker = new CommentBlocker()
+            commentBlocker.name = comment.author.name
+            commentBlocker.date = comment.createdDate
+            commentBlockers.add(commentBlocker)
             return
         }
 
@@ -515,7 +555,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         if (comment.comments != null) {
             comment.comments.forEach(replyComment -> {
                 // Use the original index lookup so we can determine if self
-                processComment(originalIndexLookup, prAuthor, replyComment.author.name, UserActivity.COMMENTED.name(), "REPLY", replyComment, indentation + 3)
+                processComment(commentBlockers, originalIndexLookup, prAuthor, replyComment.author.name,
+                        UserActivity.COMMENTED.name(), "REPLY", replyComment, indentation + 3)
             })
         }
     }
@@ -572,5 +613,10 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
     protected List<String> getSprintIds() {
         return sprintIds
+    }
+
+    class CommentBlocker {
+        def name
+        def date
     }
 }
