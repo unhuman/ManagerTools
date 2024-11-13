@@ -1,12 +1,12 @@
 package com.unhuman.managertools
 
-import com.unhuman.managertools.rest.NullREST
-import com.unhuman.managertools.rest.SourceControlREST
-import com.unhuman.managertools.rest.exceptions.RESTException
 @Grapes([
         @Grab(group='commons-cli', module='commons-cli', version='1.5.0')
 ])
 
+import com.unhuman.managertools.rest.NullREST
+import com.unhuman.managertools.rest.SourceControlREST
+import com.unhuman.managertools.rest.exceptions.RESTException
 import com.unhuman.managertools.util.CommandLineHelper
 import com.unhuman.managertools.rest.BitbucketREST
 import com.unhuman.managertools.rest.GithubREST
