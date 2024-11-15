@@ -10,6 +10,8 @@ import com.unhuman.flexidb.data.FlexiDBRow
 import com.unhuman.flexidb.init.AbstractFlexiDBInitColumn
 import com.unhuman.flexidb.init.FlexiDBInitDataColumn
 import com.unhuman.flexidb.init.FlexiDBInitIndexColumn
+import com.unhuman.flexidb.output.ConvertEmptyToZeroOutputFilter
+import com.unhuman.flexidb.output.ConvertZerosToEmptyOutputFilter
 import com.unhuman.flexidb.output.OutputFilter
 import com.unhuman.managertools.data.DBData
 import com.unhuman.managertools.data.DBIndexData
@@ -35,8 +37,10 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     static final String PR_PREFIX = "PR_"
     static final String COMMIT_PREFIX = "COMMIT_"
 
+    static final List<OutputFilter> STANDARD_OUTPUT_RULES =
+            Collections.singletonList(new ConvertZerosToEmptyOutputFilter())
     static final List<OutputFilter> SAME_USER_OUTPUT_RULES =
-            Collections.singletonList(new ConvertSelfMetricsEmptyToZeroOutputFilter())
+            Arrays.asList(new ConvertSelfMetricsEmptyToZeroOutputFilter())
 
     static final SimpleDateFormat DATE_PARSER = new SimpleDateFormat("dd/MMM/yy", Locale.US)
     static final SimpleDateFormat DATE_TIME_PARSER = new SimpleDateFormat("dd/MMM/yy h:mm a", Locale.US)
@@ -164,9 +168,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             {
                 // We have some special output rules for SELF_COMMENTS and OTHERS_COMMENTS
                 // when the user is the author
-                List<OutputFilter> outputRules = (row.get(DBIndexData.USER.toString()) == row.get(DBData.AUTHOR.toString()))
-                        ? SAME_USER_OUTPUT_RULES : Collections.emptyList()
-                sb.append(row.toCSV(columnOrder, outputRules))
+                sb.append(row.toCSV(columnOrder, STANDARD_OUTPUT_RULES))
                 sb.append('\n')
 
                 // Build up totals
