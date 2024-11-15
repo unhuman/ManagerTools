@@ -1,5 +1,7 @@
 package com.unhuman.managertools.data
 
+import com.unhuman.flexidb.FlexiDB
+
 enum UserActivity {
     // Code Changes
     PR_ADDED(0),
@@ -16,7 +18,9 @@ enum UserActivity {
     OPENED(0),
     RESCOPED(0),
     UNAPPROVED(0),
-    UPDATED(0)
+    UPDATED(0),
+    SELF_COMMENTED(FlexiDB.EMPTY_INCREMENTOR),
+    OTHERS_COMMENTED(FlexiDB.EMPTY_INCREMENTOR)
 
     private Object defaultValue
 

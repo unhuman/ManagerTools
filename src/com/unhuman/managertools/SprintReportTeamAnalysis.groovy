@@ -10,9 +10,11 @@ import com.unhuman.flexidb.data.FlexiDBRow
 import com.unhuman.flexidb.init.AbstractFlexiDBInitColumn
 import com.unhuman.flexidb.init.FlexiDBInitDataColumn
 import com.unhuman.flexidb.init.FlexiDBInitIndexColumn
+import com.unhuman.flexidb.output.OutputFilter
 import com.unhuman.managertools.data.DBData
 import com.unhuman.managertools.data.DBIndexData
 import com.unhuman.managertools.data.UserActivity
+import com.unhuman.managertools.output.ConvertSelfMetricsEmptyToZeroOutputFilter
 import com.unhuman.managertools.rest.SourceControlREST
 import com.unhuman.managertools.rest.exceptions.RESTException
 import groovy.cli.commons.CliBuilder
@@ -22,7 +24,9 @@ import org.apache.hc.core5.http.HttpStatus
 import java.text.SimpleDateFormat
 
 class SprintReportTeamAnalysis extends AbstractSprintReport {
-    static final List<String> IGNORE_USERS = ["codeowners".toLowerCase(), "DeployMan".toLowerCase()]
+    static final List<String> IGNORE_USERS = ["codeowners".toLowerCase(),
+                                              "DeployMan".toLowerCase(),
+                                              "sa-sre-jencim".toLowerCase()]
     static final List<String> IGNORE_COMMENTS = ["Tasks to Complete Before Merging Pull Request"]
 
     static final String SELF_PREFIX = "SELF_"
@@ -31,9 +35,13 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     static final String PR_PREFIX = "PR_"
     static final String COMMIT_PREFIX = "COMMIT_"
 
+    static final List<OutputFilter> SAME_USER_OUTPUT_RULES =
+            Collections.singletonList(new ConvertSelfMetricsEmptyToZeroOutputFilter())
+
     static final SimpleDateFormat DATE_PARSER = new SimpleDateFormat("dd/MMM/yy", Locale.US)
     static final SimpleDateFormat DATE_TIME_PARSER = new SimpleDateFormat("dd/MMM/yy h:mm a", Locale.US)
     static final SimpleDateFormat DATE_OUTPUT = new SimpleDateFormat("yyyy/MM/dd", Locale.US);
+
 
     FlexiDB database
     // We need to track items we have processed to prevent them from appearing twice
@@ -87,6 +95,11 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         columnOrder.add(1, DBData.START_DATE.name())
         columnOrder.remove(DBData.END_DATE.name())
         columnOrder.add(2, DBData.END_DATE.name())
+
+        // Remove SELF_COMMENTED and OTHERS_COMMENTED since they don't apply to Sprint Reports
+        columnOrder.remove(UserActivity.SELF_COMMENTED.name())
+        columnOrder.remove(UserActivity.OTHERS_COMMENTED.name())
+
         // comments & commit messages are currently generated last - if things changed, might need to manage that here
         return columnOrder
     }
@@ -149,7 +162,11 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         FlexiDBRow sprintTotalsRow = new FlexiDBRow(columnOrder.size())
         rows.each { row ->
             {
-                sb.append(row.toCSV(columnOrder))
+                // We have some special output rules for SELF_COMMENTS and OTHERS_COMMENTS
+                // when the user is the author
+                List<OutputFilter> outputRules = (row.get(DBIndexData.USER.toString()) == row.get(DBData.AUTHOR.toString()))
+                        ? SAME_USER_OUTPUT_RULES : Collections.emptyList()
+                sb.append(row.toCSV(columnOrder, outputRules))
                 sb.append('\n')
 
                 // Build up totals
@@ -513,8 +530,11 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     def processComment(List<CommentBlocker> commentBlockers, List<FlexiDBQueryColumn> originalIndexLookup, String prAuthor,
                        String userName, String action, String commentAction, Object comment, int indentation) {
 
-        // recreate the indexLookup with the actual user
-        List<FlexiDBQueryColumn> currentUserIndexLookup = new ArrayList<>(originalIndexLookup.stream().filter { it.getName() != DBIndexData.USER.name() }.toList())
+        // recreate the indexLookup with the actual user (and a version for the prAuthor)
+        List<FlexiDBQueryColumn> sprintTicketPRIndexBase = originalIndexLookup.stream().filter { it.getName() != DBIndexData.USER.name() }.toList()
+        List<FlexiDBQueryColumn> prAuthorUserIndexLookup = new ArrayList<>(sprintTicketPRIndexBase)
+        prAuthorUserIndexLookup.add(new FlexiDBQueryColumn(DBIndexData.USER.name(), prAuthor))
+        List<FlexiDBQueryColumn> currentUserIndexLookup = new ArrayList<>(sprintTicketPRIndexBase)
         currentUserIndexLookup.add(new FlexiDBQueryColumn(DBIndexData.USER.name(), userName))
 
         // TODO: distinguish comments on own PR versus others
@@ -550,6 +570,9 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
         database.append(currentUserIndexLookup, DBData.COMMENTS.name(), commentText, true)
         incrementCounter(currentUserIndexLookup, UserActivity.COMMENTED)
+        // Count pr author's own versus others' comment counts on the PR
+        incrementCounter(prAuthorUserIndexLookup,
+                (prAuthor == userName) ? UserActivity.SELF_COMMENTED : UserActivity.OTHERS_COMMENTED)
 
         // Recursively process responses
         if (comment.comments != null) {

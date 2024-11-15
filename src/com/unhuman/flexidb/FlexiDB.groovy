@@ -19,6 +19,7 @@ import com.unhuman.flexidb.init.AbstractFlexiDBInitColumn
  */
 
 class FlexiDB {
+    public static final String EMPTY_INCREMENTOR = " " // this is a space so that csv output doesn't get overwritten (at least in Numbers)
     private final List<FlexiDBRow> database;
     private final Map<String, AbstractFlexiDBInitColumn> columnFinder = new HashMap<>()
     private final List<String> originalColumnOrder
@@ -107,11 +108,14 @@ class FlexiDB {
 
         FlexiDBRow row = findOrCreateRow(columnFilters)
 
-        Object defaultValue = ((columnFinder.get(incrementField) instanceof FlexiDBInitDataColumn) &&
-                ((FlexiDBInitDataColumn) columnFinder.get(incrementField)).getDefaultValue() != null)
-                ? ((FlexiDBInitDataColumn) columnFinder.get(incrementField)).getDefaultValue() : 0
+        // null value or empty string is a 0-value
+        Object defaultValue = ((columnFinder.get(incrementField) instanceof FlexiDBInitDataColumn)
+                && ((FlexiDBInitDataColumn) columnFinder.get(incrementField)).getDefaultValue() != null
+                && ((FlexiDBInitDataColumn) columnFinder.get(incrementField)).getDefaultValue() != EMPTY_INCREMENTOR)
+                    ? ((FlexiDBInitDataColumn) columnFinder.get(incrementField)).getDefaultValue() : 0
 
-        int newValue = ((row.get(incrementField) != null) ? row.get(incrementField) : defaultValue) + increment
+        int newValue = ((row.get(incrementField) != null && row.get(incrementField) != EMPTY_INCREMENTOR)
+                ? row.get(incrementField) : defaultValue) + increment
         row.put(incrementField, newValue)
         return newValue
     }

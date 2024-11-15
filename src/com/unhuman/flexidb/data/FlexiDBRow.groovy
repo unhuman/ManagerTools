@@ -1,5 +1,6 @@
 package com.unhuman.flexidb.data
 
+import com.unhuman.flexidb.output.OutputFilter
 @Grapes(
         @Grab(group='org.apache.commons', module='commons-text', version='1.11.0')
 )
@@ -46,6 +47,16 @@ class FlexiDBRow extends LinkedHashMap<String, Object> {
     }
 
     String toCSV(List<String> columnOrder) {
+        return toCSV(columnOrder, Collections.emptyList())
+    }
+
+    /**
+     *
+     * @param columnOrder
+     * @param outputRules - applied in onder, stops when first one takes effect
+     * @return
+     */
+    String toCSV(List<String> columnOrder, List<OutputFilter> outputRules) {
         StringBuilder sb = new StringBuilder(512)
         for (int i = 0; i < columnOrder.size(); i++) {
             String columnName = columnOrder.get(i)
@@ -57,6 +68,16 @@ class FlexiDBRow extends LinkedHashMap<String, Object> {
             }
 
             Object value = get(columnName)
+
+            // Check the output rules
+            for (OutputFilter outputRule: outputRules) {
+                Object checkValue = outputRule.apply(columnName, value)
+                if (checkValue != value) {
+                    value = checkValue
+                    break
+                }
+            }
+
             if (value == null) {
                 continue
             }

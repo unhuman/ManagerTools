@@ -4,6 +4,7 @@ import com.unhuman.flexidb.FlexiDBQueryColumn
 import com.unhuman.flexidb.data.FlexiDBRow
 import com.unhuman.managertools.data.DBData
 import com.unhuman.managertools.data.DBIndexData
+import com.unhuman.managertools.data.UserActivity
 import com.unhuman.managertools.util.CommandLineHelper
 
 class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
@@ -19,6 +20,18 @@ class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
         }
 
         teamUsers = commandLineHelper.getTeamBoardUsers(teamName, boardId)
+    }
+
+    @Override
+    protected List<String> generateColumnsOrder() {
+        List<String> columnOrder = super.generateColumnsOrder()
+
+        // add back the SELF_COMMENTED and OTHERS_COMMENTED columns
+        int authorIndex = columnOrder.indexOf(DBData.AUTHOR.name())
+        columnOrder.add(authorIndex, UserActivity.SELF_COMMENTED.name())
+        columnOrder.add(authorIndex, UserActivity.OTHERS_COMMENTED.name())
+
+        return columnOrder
     }
 
     @Override
