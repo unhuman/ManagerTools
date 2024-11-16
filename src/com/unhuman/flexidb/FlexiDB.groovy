@@ -15,7 +15,7 @@ import com.unhuman.flexidb.init.AbstractFlexiDBInitColumn
  * This database will not be high performance, but will make searching for data across fields easy
  *
  * There is no type checking
- * This is not thread safe
+ * This is thread safe
  */
 
 class FlexiDB {
@@ -61,7 +61,7 @@ class FlexiDB {
      * @param desiredField
      * @return
      */
-    Object getValue(Collection<FlexiDBQueryColumn> columnFilters, String desiredField) {
+    synchronized getValue(Collection<FlexiDBQueryColumn> columnFilters, String desiredField) {
         validateColumn(desiredField)
 
         List<FlexiDBRow> rows = findRows(columnFilters, false)
@@ -74,7 +74,7 @@ class FlexiDB {
         return row.get(desiredField)
     }
 
-    List<Object> getValues(Collection<FlexiDBQueryColumn> columnFilters, String desiredField) {
+    synchronized List<Object> getValues(Collection<FlexiDBQueryColumn> columnFilters, String desiredField) {
         validateColumn(desiredField)
 
         List<FlexiDBRow> rows = findRows(columnFilters, true)
@@ -86,7 +86,7 @@ class FlexiDB {
         return data
     }
 
-    List<Object> findUniqueValues(String columnName) {
+    synchronized List<Object> findUniqueValues(String columnName) {
         LinkedHashSet<Object> uniqueValues = new LinkedHashSet<>()
         database.each(row -> {
             if (row.containsKey(columnName) && row.get(columnName) != null && !uniqueValues.contains(row.get(columnName)))  {
@@ -103,7 +103,7 @@ class FlexiDB {
      * @param increment
      * @return
      */
-    int incrementField(Collection<FlexiDBQueryColumn> columnFilters, String incrementField, int increment = 1) {
+    synchronized int incrementField(Collection<FlexiDBQueryColumn> columnFilters, String incrementField, int increment = 1) {
         validateColumn(incrementField)
 
         FlexiDBRow row = findOrCreateRow(columnFilters)
@@ -126,7 +126,7 @@ class FlexiDB {
      * @param columnName
      * @param value
      */
-    void setValue(Collection<FlexiDBQueryColumn> columnFilters, String columnName, Object value) {
+    synchronized void setValue(Collection<FlexiDBQueryColumn> columnFilters, String columnName, Object value) {
         validateColumn(columnName)
 
         FlexiDBRow row = findOrCreateRow(columnFilters);
@@ -140,7 +140,7 @@ class FlexiDB {
      * @param appendData
      * @return
      */
-    List append(Collection<FlexiDBQueryColumn> columnFilters, String appendField, Object appendData) {
+    synchronized List append(Collection<FlexiDBQueryColumn> columnFilters, String appendField, Object appendData) {
         append(columnFilters, appendField, appendData, false)
     }
 
@@ -151,7 +151,7 @@ class FlexiDB {
      * @param appendData
      * @return
      */
-    List append(Collection<FlexiDBQueryColumn> columnFilters, String appendField, Object appendData, boolean addLineNumber) {
+    synchronized List append(Collection<FlexiDBQueryColumn> columnFilters, String appendField, Object appendData, boolean addLineNumber) {
         validateColumn(appendField)
 
         FlexiDBRow row = findOrCreateRow(columnFilters);
@@ -168,7 +168,7 @@ class FlexiDB {
         return data
     }
 
-    List<FlexiDBRow> findRows(Collection<FlexiDBQueryColumn> columnFilters, boolean allowMultipleReturn) {
+    synchronized List<FlexiDBRow> findRows(Collection<FlexiDBQueryColumn> columnFilters, boolean allowMultipleReturn) {
         // check we provided correct details
         int foundCount = 0
 
@@ -226,7 +226,7 @@ class FlexiDB {
         }
     }
 
-    private FlexiDBRow findOrCreateRow(Collection<FlexiDBQueryColumn> columnFilters) {
+    private synchronized FlexiDBRow findOrCreateRow(Collection<FlexiDBQueryColumn> columnFilters) {
         List<FlexiDBRow> foundRows = findRows(columnFilters, false)
         FlexiDBRow row = (foundRows.size() == 1) ? foundRows.get(0) : null
         if (row == null) {
@@ -248,22 +248,22 @@ class FlexiDB {
         return row
     }
 
-    FlexiDBIndexKey createFlexiDBIndexKey(String columnName, Object value) {
+    synchronized FlexiDBIndexKey createFlexiDBIndexKey(String columnName, Object value) {
         if (caseInsensitiveIndex && value instanceof String) {
             value = value.toLowerCase()
         }
         FlexiDBIndexKey indexKey = new FlexiDBIndexKey(columnName, value)
     }
 
-    List<String> getOriginalColumnOrder() {
+    synchronized List<String> getOriginalColumnOrder() {
         return originalColumnOrder
     }
 
-    String toCSV() {
+    synchronized String toCSV() {
         return toCSV(originalColumnOrder)
     }
 
-    String toCSV(List<String> columnOrder) {
+    synchronized String toCSV(List<String> columnOrder) {
         StringBuilder sb = new StringBuilder(4096)
 
         // Render headings
@@ -279,7 +279,7 @@ class FlexiDB {
         return sb.toString()
     }
 
-    private void validateColumn(String columnName) {
+    private synchronized void validateColumn(String columnName) {
         if (!columnFinder.containsKey(columnName)) {
             throw new ColumnNotFoundException("Unknown column: ${columnName}")
         }
