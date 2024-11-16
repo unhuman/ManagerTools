@@ -2,6 +2,7 @@ package com.unhuman.managertools
 
 @Grapes([
         @Grab(group='org.apache.httpcomponents.core5', module='httpcore5', version='5.2.1'),
+        @Grab(group='org.codehaus.gpars', module='gpars', version='1.2.1'),
 ])
 
 import com.unhuman.flexidb.FlexiDB
@@ -10,7 +11,6 @@ import com.unhuman.flexidb.data.FlexiDBRow
 import com.unhuman.flexidb.init.AbstractFlexiDBInitColumn
 import com.unhuman.flexidb.init.FlexiDBInitDataColumn
 import com.unhuman.flexidb.init.FlexiDBInitIndexColumn
-import com.unhuman.flexidb.output.ConvertEmptyToZeroOutputFilter
 import com.unhuman.flexidb.output.ConvertZerosToEmptyOutputFilter
 import com.unhuman.flexidb.output.OutputFilter
 import com.unhuman.managertools.data.DBData
@@ -20,10 +20,13 @@ import com.unhuman.managertools.output.ConvertSelfMetricsEmptyToZeroOutputFilter
 import com.unhuman.managertools.rest.SourceControlREST
 import com.unhuman.managertools.rest.exceptions.RESTException
 import groovy.cli.commons.CliBuilder
+import groovyx.gpars.GParsPool
 import org.apache.hc.core5.http.HttpStatus
 
 
 import java.text.SimpleDateFormat
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 class SprintReportTeamAnalysis extends AbstractSprintReport {
     static final List<String> IGNORE_USERS = ["codeowners".toLowerCase(),
@@ -69,7 +72,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     def process(String teamName, String boardId, List<String> sprintIds) {
         long time = System.currentTimeMillis()
         database = new FlexiDB(generateDBSignature(), true)
-        processedItems = new HashSet<>()
+        processedItems = new ConcurrentHashMap<>().newKeySet()
 
         // populate the database
         System.out.println("Processing ${sprintIds.size()} sprints...")
@@ -224,186 +227,189 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         Date sprintStartTime = DATE_TIME_PARSER.parse(sprint.startDate)
         Date sprintEndTime = DATE_TIME_PARSER.parse(sprint.endDate)
 
-        int counter = 0
-        issueList.each(issue -> {
-            def ticket = issue.key
-            def issueId = issue.id
+        AtomicInteger counter = new AtomicInteger()
+        issueList = Collections.synchronizedList(issueList)
+        GParsPool.withPool() {
+            issueList.eachParallel(issue -> {
+                def ticket = issue.key
+                def issueId = issue.id
 
-            def pullRequests = []
-            try {
-                pullRequests = jiraREST.getTicketPullRequestInfo(issueId.toString())
-            } catch (RESTException re) {
-                if (re.statusCode != HttpStatus.SC_FORBIDDEN && re.statusCode != HttpStatus.SC_NOT_FOUND) {
-                    return
+                def pullRequests = []
+                try {
+                    pullRequests = jiraREST.getTicketPullRequestInfo(issueId.toString())
+                } catch (RESTException re) {
+                    if (re.statusCode != HttpStatus.SC_FORBIDDEN && re.statusCode != HttpStatus.SC_NOT_FOUND) {
+                        return
+                    }
                 }
-            }
-            System.out.println("   ${++counter}/${issueList.size()}: ${ticket} / Issue ${issueId} has ${pullRequests.size()} PRs")
-            pullRequests.each(pullRequest -> {
-                // based on the PR - determine where the source is - choosing github or (default) bitbucket
-                String prUrl = pullRequest.url
-                boolean isGithub = prUrl.toLowerCase().contains("github.com/")
-                SourceControlREST sourceControlREST = (isGithub) ? githubREST : bitbucketREST
+                System.out.println("   ${counter.incrementAndGet()}/${issueList.size()}: ${ticket} / Issue ${issueId} has ${pullRequests.size()} PRs")
+                pullRequests.each(pullRequest -> {
+                    // based on the PR - determine where the source is - choosing github or (default) bitbucket
+                    String prUrl = pullRequest.url
+                    boolean isGithub = prUrl.toLowerCase().contains("github.com/")
+                    SourceControlREST sourceControlREST = (isGithub) ? githubREST : bitbucketREST
 
-                // can get approvers out of ^^^
-                // check comment count before polling for comments
-                def prId = (pullRequest.id.startsWith("#") ? pullRequest.id.substring(1) : pullRequest.id)
-                def prAuthor = sourceControlREST.mapNameToJiraName(pullRequest.author.name) // Below, we try to update this to match the username
+                    // can get approvers out of ^^^
+                    // check comment count before polling for comments
+                    def prId = (pullRequest.id.startsWith("#") ? pullRequest.id.substring(1) : pullRequest.id)
+                    def prAuthor = sourceControlREST.mapNameToJiraName(pullRequest.author.name) // Below, we try to update this to match the username
 
-                prUrl = sourceControlREST.apiConvert(prUrl)
+                    prUrl = sourceControlREST.apiConvert(prUrl)
 
-                // Get and process activities (comments, etc)
-                def prActivities = sourceControlREST.getActivities(prUrl)
+                    // Get and process activities (comments, etc)
+                    def prActivities = sourceControlREST.getActivities(prUrl)
 
-                def commentBlockers = new ArrayList<CommentBlocker>()
+                    def commentBlockers = new ArrayList<CommentBlocker>()
 
-                System.out.println("      PR ${ticket} / ${prId} has ${prActivities.values.size()} activities")
-                // process from oldest to newest (reverse)
-                for (int i = prActivities.values.size() - 1; i >= 0; i--) {
-                    def prActivity = (prActivities instanceof List) ? prActivities[0] : prActivities.values.get(i)
-                    // map the user name from source control
-                    String userName = prActivity.user.name // already mapped from getActivities()
-                    // try to match up the names better
-                    prAuthor = (prAuthor.equals(prActivity.user.displayName)) ? userName : prAuthor
+                    System.out.println("      PR ${ticket} / ${prId} has ${prActivities.values.size()} activities")
+                    // process from oldest to newest (reverse)
+                    for (int i = prActivities.values.size() - 1; i >= 0; i--) {
+                        def prActivity = (prActivities instanceof List) ? prActivities[0] : prActivities.values.get(i)
+                        // map the user name from source control
+                        String userName = prActivity.user.name // already mapped from getActivities()
+                        // try to match up the names better
+                        prAuthor = (prAuthor.equals(prActivity.user.displayName)) ? userName : prAuthor
 
-                    // Skip this if not desired
-                    if (IGNORE_USERS.contains(userName.toLowerCase())) {
-                        continue
-                    }
-
-                    // Get / ensure we have a known action
-                    UserActivity prActivityAction = UserActivity.getResolvedValue((String) prActivity.action)
-                    if (prActivityAction == null) {
-                        // this was logged
-                        continue
-                    }
-
-                    // If we have already processed this activity or the activity didn't occur in this sprint, don't include it
-                    if (processedItems.contains(prActivity.id)
-                            || sprintStartTime.getTime() > prActivity.createdDate
-                            || prActivity.createdDate >= sprintEndTime.getTime()) {
-                        continue
-                    }
-
-                    // Generate index to look for data
-                    List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, userName)
-                    populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
-
-                    // Track we have processed this item
-                    processedItems.add(prActivity.id)
-
-                    // TODO: Github actions
-
-                    switch (prActivityAction) {
-                        case UserActivity.APPROVED.name():
-                            break
-                        case UserActivity.COMMENTED.name():
-                            processComment(commentBlockers, indexLookup, prAuthor, prActivity)
-                            // processComment updates counters due to nested data
+                        // Skip this if not desired
+                        if (IGNORE_USERS.contains(userName.toLowerCase())) {
                             continue
-                        case UserActivity.DECLINED.name():
-                            break
-                        case UserActivity.MERGED.name():
-                            break
-                        case UserActivity.OPENED.name():
-                            break
-                        case UserActivity.RESCOPED.name():
-                            break
-                        case UserActivity.UNAPPROVED.name():
-                            break
-                        case UserActivity.UPDATED.name():
-                            break
-                    }
+                        }
 
-                    // increment counter
-                    incrementCounter(indexLookup, prActivityAction)
-                }
+                        // Get / ensure we have a known action
+                        UserActivity prActivityAction = UserActivity.getResolvedValue((String) prActivity.action)
+                        if (prActivityAction == null) {
+                            // this was logged
+                            continue
+                        }
 
-                // Get and process commits
-                def prCommits = sourceControlREST.getCommits(prUrl)
-                if (prCommits == null) {
-                    return
-                }
-                for (int i = prCommits.values.size() - 1; i >= 0; i--) {
-                    def commit = (prCommits instanceof List) ? prCommits.get(i) : prCommits.values.get(i)
-                    String commitSHA = commit.id
-                    Long commitTimestamp = commit.committerTimestamp
+                        // If we have already processed this activity or the activity didn't occur in this sprint, don't include it
+                        if (processedItems.contains(prActivity.id)
+                                || sprintStartTime.getTime() > prActivity.createdDate
+                                || prActivity.createdDate >= sprintEndTime.getTime()) {
+                            continue
+                        }
 
-                    // If we have already processed this activity or the activity didn't occur in this sprint, don't include it
-                    // TODO: Duplicate of operations for activities
-                    if (processedItems.contains(commitSHA)
-                            || sprintStartTime.getTime() > commitTimestamp
-                            || commitTimestamp >= sprintEndTime.getTime()) {
-                        continue
-                    }
-                    // Track we have processed this item
-                    processedItems.add(commitSHA)
-
-                    // Github can put the name in multiple places, which is painful
-                    String userName = commit.committer.name
-
-                    // Skip this if not desired (unlikely in this case)
-                    // TODO: Duplicate of operations for activities
-                    if (IGNORE_USERS.contains(userName.toLowerCase())) {
-                        continue
-                    }
-
-                    // Generate index to look for data
-                    // TODO: this could cause issues with a data disconnect between username + prAuthor
-                    List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, userName)
-                    populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
-
-                    // use the commit url if there is one, else use that from the PR
-                    String commitUrl = (commit.url != null) ? commit.url : prUrl
-
-                    def diffsResponse = sourceControlREST.getCommitDiffs(commitUrl, commitSHA)
-                    if (diffsResponse != null) {
-                        processDiffs(COMMIT_PREFIX, diffsResponse, indexLookup)
-                    }
-
-                    // Add pr commit messages to database
-                    def commitMessage = commit.message.replaceAll("(\\r|\\n)?\\n", "  ").trim()
-                    database.append(indexLookup, DBData.COMMIT_MESSAGES.name(), commitMessage, true)
-                    // TODO: Add counter for commits
-                    // incrementCounter(currentUserIndexLookup, JiraDBActions.COMMIT)
-                }
-
-                // only populate pull request data if there was commit activity
-                // NOTICE: In this mode, all attributions go to the PR author
-                List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, prAuthor)
-                if (database.findRows(indexLookup, false)
-                    && (database.getValue(indexLookup, UserActivity.COMMIT_ADDED.toString()) > 0
-                        || database.getValue(indexLookup, UserActivity.COMMIT_REMOVED.toString()) > 0)) {
-                     // Process Pull Request data
-                     def diffsResponse = sourceControlREST.getDiffs(prUrl)
-                     if (diffsResponse != null) {
                         // Generate index to look for data
+                        List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, userName)
                         populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
-                        processDiffs(PR_PREFIX, diffsResponse, indexLookup)
-                    }
-                }
-            })
 
-            // Find comments in Jira - we do this after we process PR's so we can allocate to an appropriate
-            // PR.
-            // TODO: This is currently broken
-//            try {
-//                // TODO: Cache this request since we may need to refer back to the same data
-//                def jiraComments = jiraREST.getTicket(ticket).fields.comment.comments
-//                jiraComments.each(comment -> {
-//                    def commentText = comment.body
-//                    def commentDate = (comment.updated != null) ? comment.updated : comment.created
-//                    def commentAuthor = (comment.updated != null) ? comment.updateAuthor.name : comment.author.name
+                        // Track we have processed this item
+                        processedItems.add(prActivity.id)
+
+                        // TODO: Github actions
+
+                        switch (prActivityAction) {
+                            case UserActivity.APPROVED.name():
+                                break
+                            case UserActivity.COMMENTED.name():
+                                processComment(commentBlockers, indexLookup, prAuthor, prActivity)
+                                // processComment updates counters due to nested data
+                                continue
+                            case UserActivity.DECLINED.name():
+                                break
+                            case UserActivity.MERGED.name():
+                                break
+                            case UserActivity.OPENED.name():
+                                break
+                            case UserActivity.RESCOPED.name():
+                                break
+                            case UserActivity.UNAPPROVED.name():
+                                break
+                            case UserActivity.UPDATED.name():
+                                break
+                        }
+
+                        // increment counter
+                        incrementCounter(indexLookup, prActivityAction)
+                    }
+
+                    // Get and process commits
+                    def prCommits = sourceControlREST.getCommits(prUrl)
+                    if (prCommits == null) {
+                        return
+                    }
+                    for (int i = prCommits.values.size() - 1; i >= 0; i--) {
+                        def commit = (prCommits instanceof List) ? prCommits.get(i) : prCommits.values.get(i)
+                        String commitSHA = commit.id
+                        Long commitTimestamp = commit.committerTimestamp
+
+                        // If we have already processed this activity or the activity didn't occur in this sprint, don't include it
+                        // TODO: Duplicate of operations for activities
+                        if (processedItems.contains(commitSHA)
+                                || sprintStartTime.getTime() > commitTimestamp
+                                || commitTimestamp >= sprintEndTime.getTime()) {
+                            continue
+                        }
+                        // Track we have processed this item
+                        processedItems.add(commitSHA)
+
+                        // Github can put the name in multiple places, which is painful
+                        String userName = commit.committer.name
+
+                        // Skip this if not desired (unlikely in this case)
+                        // TODO: Duplicate of operations for activities
+                        if (IGNORE_USERS.contains(userName.toLowerCase())) {
+                            continue
+                        }
+
+                        // Generate index to look for data
+                        // TODO: this could cause issues with a data disconnect between username + prAuthor
+                        List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, userName)
+                        populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
+
+                        // use the commit url if there is one, else use that from the PR
+                        String commitUrl = (commit.url != null) ? commit.url : prUrl
+
+                        def diffsResponse = sourceControlREST.getCommitDiffs(commitUrl, commitSHA)
+                        if (diffsResponse != null) {
+                            processDiffs(COMMIT_PREFIX, diffsResponse, indexLookup)
+                        }
+
+                        // Add pr commit messages to database
+                        def commitMessage = commit.message.replaceAll("(\\r|\\n)?\\n", "  ").trim()
+                        database.append(indexLookup, DBData.COMMIT_MESSAGES.name(), commitMessage, true)
+                        // TODO: Add counter for commits
+                        // incrementCounter(currentUserIndexLookup, JiraDBActions.COMMIT)
+                    }
+
+                    // only populate pull request data if there was commit activity
+                    // NOTICE: In this mode, all attributions go to the PR author
+                    List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, prAuthor)
+                    if (database.findRows(indexLookup, false)
+                            && (database.getValue(indexLookup, UserActivity.COMMIT_ADDED.toString()) > 0
+                            || database.getValue(indexLookup, UserActivity.COMMIT_REMOVED.toString()) > 0)) {
+                        // Process Pull Request data
+                        def diffsResponse = sourceControlREST.getDiffs(prUrl)
+                        if (diffsResponse != null) {
+                            // Generate index to look for data
+                            populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
+                            processDiffs(PR_PREFIX, diffsResponse, indexLookup)
+                        }
+                    }
+                })
+
+                // Find comments in Jira - we do this after we process PR's so we can allocate to an appropriate
+                // PR.
+                // TODO: This is currently broken
+//        try {
+//            // TODO: Cache this request since we may need to refer back to the same data
+//            def jiraComments = jiraREST.getTicket(ticket).fields.comment.comments
+//            jiraComments.each(comment -> {
+//                def commentText = comment.body
+//                def commentDate = (comment.updated != null) ? comment.updated : comment.created
+//                def commentAuthor = (comment.updated != null) ? comment.updateAuthor.name : comment.author.name
 //
-//                    processComment(indexLookup, prAuthor, prActivity)
-//                })
-//            } catch (NullPointerException npe) {
-//                System.err.println("Ticket: ${ticket} could not find comments")
-//            } catch (RESTException re) {
-//                if (re.statusCode != HttpStatus.SC_FORBIDDEN && re.statusCode != HttpStatus.SC_NOT_FOUND) {
-//                    return
-//                }
+//                processComment(indexLookup, prAuthor, prActivity)
+//            })
+//        } catch (NullPointerException npe) {
+//            System.err.println("Ticket: ${ticket} could not find comments")
+//        } catch (RESTException re) {
+//            if (re.statusCode != HttpStatus.SC_FORBIDDEN && re.statusCode != HttpStatus.SC_NOT_FOUND) {
+//                return
 //            }
-        })
+//        }
+            })
+        }
     }
 
     protected List<FlexiDBQueryColumn> createIndexLookup(String sprintName, ticket, prId, String userName) {
