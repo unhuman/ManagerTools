@@ -67,6 +67,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
     @Override
     def process(String teamName, String boardId, List<String> sprintIds) {
+        long time = System.currentTimeMillis()
         database = new FlexiDB(generateDBSignature(), true)
         processedItems = new HashSet<>()
 
@@ -90,6 +91,13 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
         // Generate the CSV file - we'll do some column adjustments
         generateOutput()
+
+        time = (long) ((System.currentTimeMillis() - time) / 1000)
+        Calendar.instance.with {
+            clear()
+            set(SECOND, (Integer) time)
+            System.out.println("Time to process: ${format('HH:mm:ss')}")
+        }
     }
 
     protected List<String> generateColumnsOrder() {
@@ -624,8 +632,15 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         }
 
         for (int i = 1; i < columnOrder.size(); i++) {
-            if (totalsRow.containsKey(columnOrder.get(i))) {
-                totalsRow.put(columnOrder.get(i), columnOrder.get(i) + ": " + totalsRow.get(columnOrder.get(i)))
+            String columnName = columnOrder.get(i)
+            try {
+                if (totalsRow.containsKey(columnName) || UserActivity.valueOf(columnName) != null) { // always report
+                    Object value = (totalsRow.get(columnOrder.get(i)) == UserActivity.valueOf(columnName).getDefaultValue())
+                            ? 0 : totalsRow.get(columnOrder.get(i))
+                    totalsRow.put(columnOrder.get(i), columnOrder.get(i) + ": " + value)
+                }
+            } catch (IllegalArgumentException e) {
+                // ignore
             }
         }
         sb.append(totalsRow.toCSV(columnOrder))
