@@ -91,8 +91,16 @@ class JiraREST extends RestService {
             LazyMap stashData = (LazyMap) getRequest(uri, issueIdPair, dataTypePair, timeIdPair, applicationTypePair)
 
             // Temporary
+            if (stashData.detail.pullRequests == null) {
+                System.err.print("No pull requests 3 found for ${issueId}")
+            }
             if (stashData.detail.pullRequests[0] == null) {
-                System.err.print("No pull requests found for ${issueId}")
+                System.err.print("No pull requests 4 found for ${issueId}")
+            }
+            System.err.flush()
+
+            if (stashData.errors.size() > 0) {
+                System.err.println("Error in response: ${stashData.errors}")
             }
 
             pullRequests.addAll(stashData.detail.pullRequests[0])

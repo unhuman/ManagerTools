@@ -35,6 +35,7 @@ class FlexiDB {
         this.caseInsensitiveIndex = caseInsensitiveIndex
         indexedColumnCount = 0
         originalColumnOrder = new ArrayList<>()
+
         // to optimize lookups, store a mapping of String to column
         for (int i = 0; i < columnSignature.size(); i++) {
             AbstractFlexiDBInitColumn columnDefinition = columnSignature.get(i)
@@ -230,7 +231,7 @@ class FlexiDB {
         List<FlexiDBRow> foundRows = findRows(columnFilters, false)
         FlexiDBRow row = (foundRows.size() == 1) ? foundRows.get(0) : null
         if (row == null) {
-            // create a row, set it to whatever is asked for and update indexesa
+            // create a row, set it to whatever is asked for and update indexes
             row = new FlexiDBRow(columnFinder.size())
             columnFilters.forEach { columnFilter ->
                 // put the data into the row
@@ -238,10 +239,14 @@ class FlexiDB {
 
                 // index the data
                 FlexiDBIndexKey indexKey = createFlexiDBIndexKey(columnFilter.getName(), columnFilter.getMatchValue())
-                LinkedHashSet<FlexiDBRow> indexedRows = (indexes.containsKey(indexKey)) ? indexes.get(indexKey) : new LinkedHashSet<>()
+
+                LinkedHashSet<FlexiDBRow> indexedRows = (indexes.containsKey(indexKey))
+                        ? indexes.get(indexKey) : new LinkedHashSet<>()
                 indexedRows.add(row)
                 indexes.put(indexKey, indexedRows)
             }
+
+            // Insert the row into the main database list
             database.add(row)
         }
 
@@ -252,7 +257,7 @@ class FlexiDB {
         if (caseInsensitiveIndex && value instanceof String) {
             value = value.toLowerCase()
         }
-        FlexiDBIndexKey indexKey = new FlexiDBIndexKey(columnName, value)
+        return new FlexiDBIndexKey(columnName, value.toString())
     }
 
     synchronized List<String> getOriginalColumnOrder() {

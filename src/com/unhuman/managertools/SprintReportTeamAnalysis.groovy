@@ -71,6 +71,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     @Override
     def process(String teamName, String boardId, List<String> sprintIds) {
         long time = System.currentTimeMillis()
+
         database = new FlexiDB(generateDBSignature(), true)
         processedItems = new ConcurrentHashMap<>().newKeySet()
 
@@ -166,9 +167,30 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
      */
     StringBuilder findRowsAndAppendCSVData(ArrayList<FlexiDBQueryColumn> rowsFilter, StringBuilder sb, overallTotalsRow) {
         List<FlexiDBRow> rows = database.findRows(rowsFilter, true)
+
         if (rows.size() == 0) {
             return sb
         }
+
+        Comparator<FlexiDBRow> rowComparator = { FlexiDBRow r1, FlexiDBRow r2 ->
+            // compare ticket, then PR
+            int ticketCompare = r1.get(DBIndexData.TICKET.name()).compareTo(r2.get(DBIndexData.TICKET.name()))
+            if (ticketCompare != 0) {
+                return ticketCompare
+            }
+
+            // Compare PR_ID (first forcing long, then trying objects
+            try {
+                return Long.parseLong(r1.get(DBIndexData.PR_ID.name()).toString())
+                        .compareTo(Long.parseLong(r2.get(DBIndexData.PR_ID.name()).toString()))
+            } catch (Exception) {
+                return r1.get(DBIndexData.PR_ID.name())
+                        .compareTo(r2.get(DBIndexData.PR_ID.name()))
+
+            }
+        }
+
+        rows.sort(rowComparator);
 
         // Determine the list of columns to report
         List<String> columnOrder = generateColumnsOrder()
