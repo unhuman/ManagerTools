@@ -1,5 +1,6 @@
 package com.unhuman.managertools.rest
 
+import com.jcraft.jsch.Logger
 import com.unhuman.managertools.rest.exceptions.RESTException
 @Grapes([
         @Grab(group='org.apache.httpcomponents.core5', module='httpcore5', version='5.2.1'),
@@ -23,7 +24,7 @@ import java.util.concurrent.TimeUnit
 abstract class RestService {
     private final AuthInfo authInfo
 
-    static Map<String, CloseableHttpClient> clients = new ConcurrentHashMap<>()
+    static Map<String, List<CloseableHttpClient>> clients = new ConcurrentHashMap<>()
 
     RestService(AuthInfo authInfo) {
         this.authInfo = authInfo
@@ -34,23 +35,30 @@ abstract class RestService {
      * @param authority
      * @return
      */
-    private static CloseableHttpClient getClient(String authority) {
-        synchronized (clients) {
-            if (!clients.containsKey(authority)) {
-                RequestConfig requestConfig = RequestConfig.custom()
-                        .setConnectTimeout((long) 2L, TimeUnit.SECONDS)
-                        .setResponseTimeout((long) 60L, TimeUnit.SECONDS)
-                        .build()
+    private static synchronized CloseableHttpClient getClient(String authority) {
+        // this doesn't seem to work well in multi-threaded usages
+        if (!clients.containsKey(authority) || clients.get(authority).isEmpty()) {
+            RequestConfig requestConfig = RequestConfig.custom()
+                    .setConnectTimeout((long) 2L, TimeUnit.SECONDS)
+                    .setResponseTimeout((long) 60L, TimeUnit.SECONDS)
+                    .build()
 
-                CloseableHttpClient client = HttpClients.custom()
-                        .setDefaultRequestConfig(requestConfig)
-                        .build()
+            CloseableHttpClient client = HttpClients.custom()
+                    .setDefaultRequestConfig(requestConfig)
+                    .build()
 
-                clients.put(authority, client)
-            }
-
-            return clients.get(authority)
+            return client
         }
+
+        // return the first client we find
+        return clients.get(authority).remove(0)
+    }
+
+    private static synchronized void returnClient(String authority, CloseableHttpClient client) {
+        if (clients.get(authority) == null) {
+            clients.put(authority, new ArrayList<>())
+        }
+        clients.get(authority).add(client)
     }
 
     Object getRequest(String uri, NameValuePair... parameters) {
@@ -84,20 +92,33 @@ abstract class RestService {
 
     private Object executeRequest(BasicClassicHttpRequest request) {
         AuthInfo useAuthInfo = authInfo
-        String responseData = getClient(request.getAuthority().getHostName())
-                .with { httpClient ->
-                    httpClient.execute(request).withCloseable { response ->
-                        if (response.getCode() < 200 || response.getCode() > 299) {
-                            throw new RESTException(response.getCode(), "Unable to retrieve requested url", request.getUri().toString())
-                        }
-                        useAuthInfo.updateCookies(response.getHeaders("Set-Cookie").toList())
-                        InputStream inputStream = response.getEntity().getContent()
-                        String text = new String(inputStream.readAllBytes(), Charset.defaultCharset())
-                        return text
-                    }
-        }
-        return new JsonSlurper().parseText(responseData)
 
+        CloseableHttpClient client = null
+        try {
+            client = getClient(request.getAuthority().getHostName())
+
+            String responseData = client.with { httpClient ->
+                httpClient.execute(request).withCloseable { response ->
+                    if (response.getCode() < 200 || response.getCode() > 299) {
+                        throw new RESTException(response.getCode(), "Unable to retrieve requested url", request.getUri().toString())
+                    }
+                    useAuthInfo.updateCookies(response.getHeaders("Set-Cookie").toList())
+                    InputStream inputStream = response.getEntity().getContent()
+                    String text = new String(inputStream.readAllBytes(), Charset.defaultCharset())
+                    return text
+                }
+            }
+            return new JsonSlurper().parseText(responseData)
+        } catch (Exception e) {
+            System.err.println("Request Error: ${e.getMessage()}")
+            client.close()
+            client = null
+            throw e
+        } finally {
+            if (client != null) {
+                returnClient(request.getAuthority().getHostName(), client)
+            }
+        }
     }
 
     private static RequestConfig getRequestConfig() {
