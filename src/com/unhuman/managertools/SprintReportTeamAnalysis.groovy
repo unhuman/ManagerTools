@@ -10,7 +10,6 @@ import com.unhuman.flexidb.data.FlexiDBRow
 import com.unhuman.flexidb.init.AbstractFlexiDBInitColumn
 import com.unhuman.flexidb.init.FlexiDBInitDataColumn
 import com.unhuman.flexidb.init.FlexiDBInitIndexColumn
-import com.unhuman.flexidb.output.ConvertEmptyToZeroOutputFilter
 import com.unhuman.flexidb.output.ConvertZerosToEmptyOutputFilter
 import com.unhuman.flexidb.output.OutputFilter
 import com.unhuman.managertools.data.DBData
@@ -46,7 +45,6 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     static final SimpleDateFormat DATE_TIME_PARSER = new SimpleDateFormat("dd/MMM/yy h:mm a", Locale.US)
     static final SimpleDateFormat DATE_OUTPUT = new SimpleDateFormat("yyyy/MM/dd", Locale.US);
 
-
     FlexiDB database
     // We need to track items we have processed to prevent them from appearing twice
     // This can occur when a PR winds up linked to multiple tickets
@@ -54,6 +52,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
     @Override
     def addCustomCommandLineOptions(CliBuilder cli) {
+        cli.i(longOpt: 'isolateTicket', required: true, args:1, argName: 'isolateTicket',  'Isolate ticket for processing (for debugging)')
         cli.o(longOpt: 'outputCSV', required: true, args: 1, argName: 'outputCSV', 'Output filename (.csv)')
     }
 
@@ -224,9 +223,18 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         Date sprintStartTime = DATE_TIME_PARSER.parse(sprint.startDate)
         Date sprintEndTime = DATE_TIME_PARSER.parse(sprint.endDate)
 
+        // Isolated ticket
+        String isolatedTicket = getCommandLineOptions().i
+
         int counter = 0
         issueList.each(issue -> {
             def ticket = issue.key
+
+            // Skip tickets
+            if (isolatedTicket != null && !ticket.equals(isolatedTicket)) {
+                return
+            }
+
             def issueId = issue.id
 
             def pullRequests = []
