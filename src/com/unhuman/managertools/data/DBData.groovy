@@ -5,6 +5,7 @@ enum DBData {
     END_DATE("endDate", null),
     AUTHOR("author", null),
     COMMENTS("comments", Collections.emptyList()),
+    OTHERS_COMMENTS(null, Collections.emptyList()),
     COMMIT_MESSAGES(null, Collections.emptyList())
 
     private String jiraField

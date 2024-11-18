@@ -78,8 +78,9 @@ class FlexiDBRow extends LinkedHashMap<String, Object> {
                 }
             }
 
+            // null values format as a space for output formatting
             if (value == null) {
-                continue
+                value = " "
             }
 
             // We have to fixup lists
@@ -90,6 +91,12 @@ class FlexiDBRow extends LinkedHashMap<String, Object> {
                     newValueBuilder.append(((List) value).get(j))
                 }
                 value = newValueBuilder.toString()
+
+            }
+
+            // Ensure we output something here for formatting
+            if (value == "") {
+                value = " "
             }
 
             // escape the value to include in a CSV

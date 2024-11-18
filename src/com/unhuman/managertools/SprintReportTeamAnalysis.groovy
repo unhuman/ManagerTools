@@ -52,7 +52,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
     @Override
     def addCustomCommandLineOptions(CliBuilder cli) {
-        cli.i(longOpt: 'isolateTicket', required: true, args:1, argName: 'isolateTicket',  'Isolate ticket for processing (for debugging)')
+        cli.i(longOpt: 'isolateTicket', required: false, args:1, argName: 'isolateTicket',  'Isolate ticket for processing (for debugging)')
         cli.o(longOpt: 'outputCSV', required: true, args: 1, argName: 'outputCSV', 'Output filename (.csv)')
     }
 
@@ -224,7 +224,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         Date sprintEndTime = DATE_TIME_PARSER.parse(sprint.endDate)
 
         // Isolated ticket
-        String isolatedTicket = getCommandLineOptions().i
+        String isolatedTicket = getCommandLineOptions().i ? getCommandLineOptions().i : null
 
         int counter = 0
         issueList.each(issue -> {
@@ -591,6 +591,9 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         // Count pr author's own versus others' comment counts on the PR
         incrementCounter(prAuthorUserIndexLookup,
                 (prAuthor == userName) ? UserActivity.SELF_COMMENTED : UserActivity.OTHERS_COMMENTED)
+        if (prAuthor != userName) {
+            database.append(prAuthorUserIndexLookup, DBData.OTHERS_COMMENTS.name(), "(${userName}) ${commentText}", true)
+        }
 
         // Recursively process responses
         if (comment.comments != null) {
