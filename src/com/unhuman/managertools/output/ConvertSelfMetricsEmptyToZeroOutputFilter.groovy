@@ -6,7 +6,7 @@ import com.unhuman.managertools.data.UserActivity
 class ConvertSelfMetricsEmptyToZeroOutputFilter extends ConvertEmptyToZeroOutputFilter {
     @Override
     Object apply(String columnName, Object value) {
-        return (columnName == UserActivity.SELF_COMMENTED.name() || columnName == UserActivity.OTHERS_COMMENTED.name())
+        return (columnName == UserActivity.OTHERS_COMMENTED.name())
             ? super.apply(columnName, value) : value;
     }
 }
