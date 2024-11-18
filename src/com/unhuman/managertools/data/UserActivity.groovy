@@ -13,14 +13,13 @@ enum UserActivity {
     // Activities on PRs
     APPROVED(0),
     COMMENTED(0),
+    OTHERS_COMMENTED(FlexiDB.EMPTY_INCREMENTOR),
     DECLINED(0),
     MERGED(0),
     OPENED(0),
     RESCOPED(0),
     UNAPPROVED(0),
     UPDATED(0),
-    SELF_COMMENTED(FlexiDB.EMPTY_INCREMENTOR),
-    OTHERS_COMMENTED(FlexiDB.EMPTY_INCREMENTOR)
 
     private Object defaultValue
 

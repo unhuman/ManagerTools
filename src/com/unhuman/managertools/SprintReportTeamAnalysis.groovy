@@ -107,8 +107,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         columnOrder.remove(DBData.END_DATE.name())
         columnOrder.add(2, DBData.END_DATE.name())
 
-        // Remove SELF_COMMENTED and OTHERS_COMMENTED since they don't apply to Sprint Reports
-        columnOrder.remove(UserActivity.SELF_COMMENTED.name())
+        // Remove OTHERS_COMMENTED since they don't apply to Sprint Reports
         columnOrder.remove(UserActivity.OTHERS_COMMENTED.name())
 
         // comments & commit messages are currently generated last - if things changed, might need to manage that here
@@ -588,10 +587,10 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
         database.append(currentUserIndexLookup, DBData.COMMENTS.name(), commentText, true)
         incrementCounter(currentUserIndexLookup, UserActivity.COMMENTED)
+
         // Count pr author's own versus others' comment counts on the PR
-        incrementCounter(prAuthorUserIndexLookup,
-                (prAuthor == userName) ? UserActivity.SELF_COMMENTED : UserActivity.OTHERS_COMMENTED)
         if (prAuthor != userName) {
+            incrementCounter(prAuthorUserIndexLookup, UserActivity.OTHERS_COMMENTED)
             database.append(prAuthorUserIndexLookup, DBData.OTHERS_COMMENTS.name(), "(${userName}) ${commentText}", true)
         }
 
