@@ -3,7 +3,8 @@ package com.unhuman.managertools.rest;
 class NullREST extends SourceControlREST{
     NullREST(String sourceControlType) {
         super(null)
-        System.err.println("No " + sourceControlType + " unavailable - using empty responses.")
+        System.err.println("No " + sourceControlType + " available - using empty responses.")
+        System.err.flush()
     }
 
     @Override
