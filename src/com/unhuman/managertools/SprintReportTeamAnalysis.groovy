@@ -25,7 +25,6 @@ import org.apache.hc.core5.http.HttpStatus
 
 
 import java.text.SimpleDateFormat
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 class SprintReportTeamAnalysis extends AbstractSprintReport {
@@ -73,7 +72,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         long time = System.currentTimeMillis()
 
         database = new FlexiDB(generateDBSignature(), true)
-        processedItems = new ConcurrentHashMap<>().newKeySet()
+        processedItems = Collections.synchronizedSet(new HashSet<>())
 
         // populate the database
         System.out.println("Processing ${sprintIds.size()} sprints...")
@@ -313,18 +312,20 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         }
 
                         // If we have already processed this activity or the activity didn't occur in this sprint, don't include it
-                        if (processedItems.contains(prActivity.id)
-                                || sprintStartTime.getTime() > prActivity.createdDate
-                                || prActivity.createdDate >= sprintEndTime.getTime()) {
-                            continue
+                        synchronized (processedItems) {
+                            if (processedItems.contains(prActivity.id)
+                                    || sprintStartTime.getTime() > prActivity.createdDate
+                                    || prActivity.createdDate >= sprintEndTime.getTime()) {
+                                continue
+                            }
+
+                            // Track we have processed this item
+                            processedItems.add(prActivity.id)
                         }
 
                         // Generate index to look for data
                         List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, userName)
                         populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
-
-                        // Track we have processed this item
-                        processedItems.add(prActivity.id)
 
                         // TODO: Github actions
 
@@ -365,13 +366,15 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
                         // If we have already processed this activity or the activity didn't occur in this sprint, don't include it
                         // TODO: Duplicate of operations for activities
-                        if (processedItems.contains(commitSHA)
-                                || sprintStartTime.getTime() > commitTimestamp
-                                || commitTimestamp >= sprintEndTime.getTime()) {
-                            continue
+                        synchronized (processedItems) {
+                            if (processedItems.contains(commitSHA)
+                                    || sprintStartTime.getTime() > commitTimestamp
+                                    || commitTimestamp >= sprintEndTime.getTime()) {
+                                continue
+                            }
+                            // Track we have processed this item
+                            processedItems.add(commitSHA)
                         }
-                        // Track we have processed this item
-                        processedItems.add(commitSHA)
 
                         // Github can put the name in multiple places, which is painful
                         String userName = commit.committer.name
