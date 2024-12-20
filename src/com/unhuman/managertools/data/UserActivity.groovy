@@ -12,7 +12,9 @@ enum UserActivity {
 
     // Activities on PRs
     APPROVED(0),
-    COMMENTED(0),
+    COMMENTED(0), // this gets removed b/c data winds up in COMMENTS_OWN & COMMENTS_ON_OTHERS
+    COMMENTED_ON_SELF(0),
+    COMMENTED_ON_OTHERS(0),
     OTHERS_COMMENTED(FlexiDB.EMPTY_INCREMENTOR),
     DECLINED(0),
     MERGED(0),

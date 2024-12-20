@@ -26,9 +26,12 @@ class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
     protected List<String> generateColumnsOrder() {
         List<String> columnOrder = super.generateColumnsOrder()
 
-        // add back the OTHERS_COMMENTED columns
-        int commentedIndex = columnOrder.indexOf(UserActivity.COMMENTED.name())
-        columnOrder.add(commentedIndex + 1, UserActivity.OTHERS_COMMENTED.name())
+        // add back the COMMENT specifics columns
+        int indexAddBack = columnOrder.indexOf(UserActivity.COMMENTED.name())
+        columnOrder.remove(indexAddBack)
+        columnOrder.add(indexAddBack++, UserActivity.COMMENTED_ON_SELF.name())
+        columnOrder.add(indexAddBack++, UserActivity.COMMENTED_ON_OTHERS.name())
+        columnOrder.add(indexAddBack++, UserActivity.OTHERS_COMMENTED.name())
 
         return columnOrder
     }
