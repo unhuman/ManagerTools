@@ -77,12 +77,12 @@ class CommandLineHelper {
         return promptAndStore("Bitbucket Server (bitbucket.x.com)", TextSecurity.NONE, FQDN_PATTERN, "bitbucketServer", false)
     }
 
-    String getJiraCookies() {
-        return promptAndStore("Jira Cookies (DevTools/Request/Cookie)", TextSecurity.MASK, ANY_MATCH_PATTERN, "jiraCookies", true)
+    String getJiraAuth() {
+        return promptAndStore("Jira Access Token or Cookies (DevTools/Request/Cookie)", TextSecurity.MASK, ANY_MATCH_PATTERN, "jiraAuth", true)
     }
 
-    String getBitbucketCookies() {
-        return promptAndStore("Bitbucket Cookies (DevTools/Request/Cookie)", TextSecurity.MASK, ANY_MATCH_PATTERN, "bitbucketCookies", true)
+    String getBitbucketAuth() {
+        return promptAndStore("Bitbucket Access Token or Cookies (DevTools/Request/Cookie)", TextSecurity.MASK, ANY_MATCH_PATTERN, "bitbucketAuth", true)
     }
 
     String getGithubToken() {

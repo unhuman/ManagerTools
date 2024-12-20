@@ -4,9 +4,6 @@ import com.unhuman.managertools.rest.JiraREST
 import com.unhuman.managertools.util.CommandLineHelper
 import groovy.cli.commons.CliBuilder
 
-import java.util.regex.Matcher
-import java.util.regex.Pattern
-
 class JiraRunJQL extends Script {
     @Override
     Object run() {
@@ -32,9 +29,9 @@ class JiraRunJQL extends Script {
             commandLineHelper.setQuietModeNoPrompts()
         }
         String jiraServer = commandLineHelper.getJiraServer()
-        String jiraCookies = commandLineHelper.getJiraCookies()
+        String jiraAuth = commandLineHelper.getJiraAuth()
 
-        JiraREST jiraREST = new JiraREST(jiraServer, jiraCookies)
+        JiraREST jiraREST = new JiraREST(jiraServer, jiraAuth)
 
         System.out.println("Requesting source data...")
         Object sourceResults = jiraREST.jqlSummaryQuery(options.j)

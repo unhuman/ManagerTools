@@ -13,7 +13,7 @@ class JiraCopyTicketEstimates extends Script {
     Object run() {
         CommandLineHelper commandLineHelper = new CommandLineHelper(".managerTools.cfg")
         String jiraServer = commandLineHelper.getJiraServer()
-        String jiraCookies = commandLineHelper.getJiraCookies()
+        String jiraCookies = commandLineHelper.getJiraAuth()
 
         JiraREST jiraREST = new JiraREST(jiraServer, jiraCookies)
 

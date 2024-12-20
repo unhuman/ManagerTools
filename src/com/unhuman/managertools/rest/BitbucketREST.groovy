@@ -31,8 +31,8 @@ class BitbucketREST extends SourceControlREST {
 //        // -d grant_type=authorization_code
     }
 
-    BitbucketREST(String bitbucketServer, String cookies) {
-        super(new AuthInfo(AuthInfo.AuthType.Cookies, cookies))
+    BitbucketREST(String bitbucketServer, String auth) {
+        super(new AuthInfo((auth.contains('=')) ? AuthInfo.AuthType.Cookies : AuthInfo.AuthType.Bearer, auth))
         this.bitbucketServer = bitbucketServer
     }
 

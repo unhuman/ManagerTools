@@ -45,7 +45,7 @@ class GetTeamSprints extends Script {
         }
 
         String jiraServer = commandLineHelper.getJiraServer()
-        String jiraCookies = commandLineHelper.getJiraCookies()
+        String jiraCookies = commandLineHelper.getJiraAuth()
 
         jiraREST = new JiraREST(jiraServer, jiraCookies)
 

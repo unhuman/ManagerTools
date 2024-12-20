@@ -21,8 +21,8 @@ class JiraREST extends RestService {
         this.jiraServer = jiraServer
     }
 
-    JiraREST(String jiraServer, String cookies) {
-        super(new AuthInfo(AuthInfo.AuthType.Cookies, cookies))
+    JiraREST(String jiraServer, String auth) {
+        super(new AuthInfo((auth.contains('=')) ? AuthInfo.AuthType.Cookies : AuthInfo.AuthType.Bearer, auth))
         this.jiraServer = jiraServer
     }
 

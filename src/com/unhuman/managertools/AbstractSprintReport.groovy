@@ -154,8 +154,8 @@ abstract class AbstractSprintReport extends Script {
                 break
             case "c":
                 // Get authentication information
-                String jiraCookies = commandLineHelper.getJiraCookies()
-                String bitbucketCookies = commandLineHelper.getBitbucketCookies()
+                String jiraCookies = commandLineHelper.getJiraAuth()
+                String bitbucketCookies = commandLineHelper.getBitbucketAuth()
 
                 jiraREST = new JiraREST(jiraServer, jiraCookies)
                 bitbucketREST = (bitbucketCookies != null && bitbucketCookies.length() > 0)
