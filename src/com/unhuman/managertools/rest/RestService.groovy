@@ -1,6 +1,5 @@
 package com.unhuman.managertools.rest
 
-import com.jcraft.jsch.Logger
 import com.unhuman.managertools.rest.exceptions.RESTException
 @Grapes([
         @Grab(group='org.apache.httpcomponents.core5', module='httpcore5', version='5.2.1'),
