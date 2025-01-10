@@ -107,8 +107,8 @@ class BitbucketREST extends SourceControlREST {
     }
 
     @Override
-    String mapNameToJiraName(String name) {
+    String mapUserToJiraName(Object userData) {
         // Bitbucket is the same as Jira, so do nothing
-        return name
+        return userData.name
     }
 }

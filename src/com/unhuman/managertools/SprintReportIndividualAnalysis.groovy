@@ -20,6 +20,7 @@ class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
         }
 
         teamUsers = commandLineHelper.getTeamBoardUsers(teamName, boardId)
+        System.out.println() // helps with output formatting
     }
 
     @Override

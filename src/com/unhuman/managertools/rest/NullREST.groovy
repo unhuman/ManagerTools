@@ -28,7 +28,7 @@ class NullREST extends SourceControlREST{
     }
 
     @Override
-    String mapNameToJiraName(String name) {
+    String mapUserToJiraName(Object userData) {
         return null
     }
 }

@@ -27,6 +27,7 @@ class GetTeamSprints extends Script {
         cli.b(longOpt: 'boardId', required: true, args: 1, argName: 'boardId', 'Sprint Board Id Number')
         cli.l(longOpt: 'limit', required: false, args: 1, argName: 'limitCount', 'Limit of count to get')
         cli.q(longOpt: 'quietMode', 'Quiet mode (use default/stored values without prompt)')
+        cli.ia(longOpt: 'includeActive', 'Include current active sprint in results')
 
         def options = cli.parse(this.args)
 
@@ -49,13 +50,13 @@ class GetTeamSprints extends Script {
 
         jiraREST = new JiraREST(jiraServer, jiraCookies)
 
-        Object data = getClosedRecentSprints(options.'boardId', (options.'limit') ? Integer.parseInt(options.'limit') : null)
+        Object data = getRecentSprints(options.'includeActive', options.'boardId', (options.'limit') ? Integer.parseInt(options.'limit') : null)
         data.each { sprint ->
             System.out.println("${sprint.id}: ${sprint.name}")
         }
     }
 
-    List<Object> getClosedRecentSprints(String boardId, Integer limitCount) {
+    List<Object> getRecentSprints(Boolean includeActiveSprint, String boardId, Integer limitCount) {
         List<Object> data = jiraREST.getSprints(boardId)
 
         // filter out boards that show up here incorrectly
@@ -66,7 +67,7 @@ class GetTeamSprints extends Script {
 
         for (int i = data.size() - 1; i >= 0; --i) {
             def sprint = data.get(i);
-            if (!sprint.state.toUpperCase().equals("CLOSED")) {
+            if (!includeActiveSprint && !sprint.state.toUpperCase().equals("CLOSED")) {
                 data.removeAt(i)
             }
         }

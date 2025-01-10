@@ -22,5 +22,5 @@ abstract class SourceControlREST extends RestService {
         return prUrl
     }
 
-    abstract String mapNameToJiraName(String name)
+    abstract String mapUserToJiraName(Object userData)
 }

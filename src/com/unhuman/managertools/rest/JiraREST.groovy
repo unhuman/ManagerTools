@@ -112,7 +112,7 @@ class JiraREST extends RestService {
         }
 
         // Make request for GitHub data
-        applicationTypePair = new BasicNameValuePair("applicationType", "github")
+        applicationTypePair = new BasicNameValuePair("applicationType", "githube")
         try {
             LazyMap githubData = (LazyMap) getRequest(uri, issueIdPair, dataTypePair, timeIdPair, applicationTypePair)
             pullRequests.addAll(githubData.detail.pullRequests[0])

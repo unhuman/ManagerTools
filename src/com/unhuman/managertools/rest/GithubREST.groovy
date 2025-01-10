@@ -45,7 +45,7 @@ class GithubREST extends SourceControlREST {
         // make this data look the same as bitbucket
         for (int i = activities.values.size() - 1; i >= 0; i--) {
             def activity = (activities instanceof List) ? activities[0] : activities.values.get(i)
-            activity.user.name = mapNameToJiraName(activity.user.login)
+            activity.user.name = mapUserToJiraName(activity.user)
 
             activity.createdDate = java.time.Instant.parse(activity.created_at).getEpochSecond() * 1000 // ms
 
@@ -96,7 +96,7 @@ class GithubREST extends SourceControlREST {
                     if (commit.committer == null) {
                         commit.committer = new HashMap<>()
                     }
-                    commit.committer.name = mapNameToJiraName(userName)
+                    commit.committer.name = mapUserToJiraName(userName)
                 } catch (Exception e) {
                     System.err.println(e)
                 }
@@ -145,24 +145,24 @@ class GithubREST extends SourceControlREST {
     }
 
     @Override
-    String mapNameToJiraName(String name) {
+    String mapUserToJiraName(Object userData) {
+        // If this entity is already a String, just use it.
+        if (userData instanceof String) {
+            return userData
+        }
+
         // all references to name will be lowercase
-        name = name.toLowerCase()
-        TreeMap<String, String> bitBucketJiraNameMappings = commandLineHelper.getValue("bitbucketJiraMappings")
+        String jiraName = (userData.login != null)
+                ? userData.login
+                : userData.url.toLowerCase().substring(userData.url.lastIndexOf("/") + 1)
 
-        if (bitBucketJiraNameMappings == null) {
-            bitBucketJiraNameMappings = new TreeMap<>()
+        if (!jiraName.contains("_")) {
+            System.err.println("Could not identify user - expected '_' separator missing from ${jiraName}")
+            return null
         }
 
-        if (bitBucketJiraNameMappings.containsKey(name)) {
-            return bitBucketJiraNameMappings.get(name)
-        }
+        jiraName = jiraName.substring(0, jiraName.lastIndexOf("_")) // cuts after last _ which should include enterprise name
 
-        // prompt for name (simple validation)
-        String jiraName = commandLineHelper.performPrompt("Enter Jira username for Github user ${name}", CommandLineHelper.TextSecurity.NONE, JIRA_NAME_PATTERN)
-
-        bitBucketJiraNameMappings.put(name, jiraName)
-        commandLineHelper.storeValue("bitbucketJiraMappings", bitBucketJiraNameMappings)
         return jiraName
     }
 }

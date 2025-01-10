@@ -21,6 +21,7 @@ import com.unhuman.managertools.rest.SourceControlREST
 import com.unhuman.managertools.rest.exceptions.RESTException
 import groovy.cli.commons.CliBuilder
 import groovyx.gpars.GParsPool
+import groovyx.gpars.util.PoolUtils
 import org.apache.hc.core5.http.HttpStatus
 
 
@@ -49,14 +50,12 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     static final SimpleDateFormat DATE_OUTPUT = new SimpleDateFormat("yyyy/MM/dd", Locale.US);
 
     FlexiDB database
-    // We need to track items we have processed to prevent them from appearing twice
-    // This can occur when a PR winds up linked to multiple tickets
-    Set<Object> processedItems
 
     @Override
     def addCustomCommandLineOptions(CliBuilder cli) {
         cli.i(longOpt: 'isolateTicket', required: false, args:1, argName: 'isolateTicket',  'Isolate ticket for processing (for debugging)')
         cli.o(longOpt: 'outputCSV', required: true, args: 1, argName: 'outputCSV', 'Output filename (.csv)')
+        cli.mt(longOpt: 'multithread', required: false, args: 1, argName: 'number', 'Number of threads, default to 1, *=cores')
     }
 
     @Override
@@ -72,7 +71,13 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         long time = System.currentTimeMillis()
 
         database = new FlexiDB(generateDBSignature(), true)
-        processedItems = Collections.synchronizedSet(new HashSet<>())
+
+        // Specify threads
+        Integer threadCount = getCommandLineOptions().mt
+                ? (getCommandLineOptions().mt.equals("*")
+                ? PoolUtils.retrieveDefaultPoolSize() : Integer.parseInt(getCommandLineOptions().mt))
+                : 1
+        System.out.println("Using ${threadCount} threads")
 
         // populate the database
         System.out.println("Processing ${sprintIds.size()} sprints...")
@@ -89,7 +94,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     ", issues: ${allIssues.size()})")
 
             // Gather ticket data for all issues (completed and incomplete work)
-            getIssueCategoryInformation(data.sprint, allIssues)
+            getIssueCategoryInformation(threadCount, data.sprint, allIssues)
         }
 
         // Generate the CSV file - we'll do some column adjustments
@@ -240,7 +245,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         }
     }
 
-    def getIssueCategoryInformation(final Object sprint, List<Object> issueList) {
+    def getIssueCategoryInformation(final int threadCount, final Object sprint, List<Object> issueList) {
         String sprintName = sprint.name
         String startDate = cleanDate(sprint.startDate)
         String endDate = cleanDate(sprint.endDate)
@@ -254,7 +259,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
         AtomicInteger counter = new AtomicInteger()
         issueList = Collections.synchronizedList(issueList)
-        GParsPool.withPool(1) { // TODO: Hardcoded to single thread now
+
+        GParsPool.withPool(threadCount) {
             issueList.eachParallel(issue -> {
                 def ticket = issue.key
 
@@ -283,7 +289,11 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     // can get approvers out of ^^^
                     // check comment count before polling for comments
                     def prId = (pullRequest.id.startsWith("#") ? pullRequest.id.substring(1) : pullRequest.id)
-                    def prAuthor = sourceControlREST.mapNameToJiraName(pullRequest.author.name) // Below, we try to update this to match the username
+                    def prAuthor = sourceControlREST.mapUserToJiraName(pullRequest.author) // Below, we try to update this to match the username
+                    if (prAuthor == null) {
+                        System.err.println("Skipping processing of PR ${ticket} / ${prId} due to unknown author: ${pullRequest.author}")
+                        return
+                    }
 
                     prUrl = sourceControlREST.apiConvert(prUrl)
 
@@ -298,7 +308,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         def prActivity = (prActivities instanceof List) ? prActivities[0] : prActivities.values.get(i)
                         // map the user name from source control
                         String userName = prActivity.user.name // already mapped from getActivities()
-                        // try to match up the names better
+
+                        // try to match up the names better // TODO: lowercase all this
                         prAuthor = (prAuthor.equals(prActivity.user.displayName)) ? userName : prAuthor
 
                         // Skip this if not desired
@@ -313,16 +324,9 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                             continue
                         }
 
-                        // If we have already processed this activity or the activity didn't occur in this sprint, don't include it
-                        synchronized (processedItems) {
-                            if (processedItems.contains(prActivity.id)
-                                    || sprintStartTime.getTime() > prActivity.createdDate
-                                    || prActivity.createdDate >= sprintEndTime.getTime()) {
-                                continue
-                            }
-
-                            // Track we have processed this item
-                            processedItems.add(prActivity.id)
+                        if (sprintStartTime.getTime() > prActivity.createdDate
+                                || prActivity.createdDate >= sprintEndTime.getTime()) {
+                            continue
                         }
 
                         // Generate index to look for data
@@ -361,21 +365,22 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     if (prCommits == null) {
                         return
                     }
+
+                    // TODO : if we invert the order, find a commit with multiple (> 1) parents
+                    //        2 or more indicates a merge
+                    //        look into text that says Pull Request #xxxx: ..... (merge)
+                    //               see if linked up items are merged up
+                    //        ignore all comments that are linked up next parent next parent etc.
+
                     for (int i = prCommits.values.size() - 1; i >= 0; i--) {
                         def commit = (prCommits instanceof List) ? prCommits.get(i) : prCommits.values.get(i)
                         String commitSHA = commit.id
                         Long commitTimestamp = commit.committerTimestamp
 
-                        // If we have already processed this activity or the activity didn't occur in this sprint, don't include it
                         // TODO: Duplicate of operations for activities
-                        synchronized (processedItems) {
-                            if (processedItems.contains(commitSHA)
-                                    || sprintStartTime.getTime() > commitTimestamp
-                                    || commitTimestamp >= sprintEndTime.getTime()) {
-                                continue
-                            }
-                            // Track we have processed this item
-                            processedItems.add(commitSHA)
+                        if (sprintStartTime.getTime() > commitTimestamp
+                                || commitTimestamp >= sprintEndTime.getTime()) {
+                            continue
                         }
 
                         // Github can put the name in multiple places, which is painful

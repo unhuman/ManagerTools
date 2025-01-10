@@ -78,8 +78,9 @@ abstract class AbstractSprintReport extends Script {
             addOption(cli.option('l', [longOpt: 'limit', args: 1, argName: 'limitSprints'], 'Number of recent sprints to process'))
             addOption(cli.option('s', [longOpt: 'sprintIds', args: 1, argName: 'sprintIds'], 'Sprint Id Numbers (comma separated)'))
         }
-
         cli.options.addOptionGroup(optionGroup)
+
+        cli.ia(longOpt: 'includeActive', 'Include current active sprint in results')
 
         // Any custom options need to be added
         addCustomCommandLineOptions(cli)
@@ -108,7 +109,8 @@ abstract class AbstractSprintReport extends Script {
         if (commandLineOptions.'limit') {
             try {
                 GetTeamSprints getTeamSprints = new GetTeamSprints(jiraREST)
-                def sprintData = getTeamSprints.getClosedRecentSprints(boardId, Integer.parseInt(commandLineOptions.'limit'))
+                def sprintData = getTeamSprints.getRecentSprints(commandLineOptions.'includeActive',
+                        boardId, Integer.parseInt(commandLineOptions.'limit'))
                 sprintIds = sprintData.stream().map(sprint -> sprint.id.toString()).collect(Collectors.toUnmodifiableList())
             } catch (RESTException re) {
                 if (re.statusCode == HttpStatus.SC_BAD_REQUEST) {
