@@ -254,7 +254,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
         AtomicInteger counter = new AtomicInteger()
         issueList = Collections.synchronizedList(issueList)
-        GParsPool.withPool() {
+        GParsPool.withPool(1) { // TODO: Hardcoded to single thread now
             issueList.eachParallel(issue -> {
                 def ticket = issue.key
 

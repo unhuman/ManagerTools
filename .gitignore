@@ -8,3 +8,4 @@ ManagerTools.iml
 **/*.zip
 .DS_Store
 **/*.orig
+**/*.log
