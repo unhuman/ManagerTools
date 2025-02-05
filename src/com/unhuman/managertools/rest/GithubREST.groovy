@@ -43,23 +43,26 @@ class GithubREST extends SourceControlREST {
         Object activities = getRequest(uri, startPair, limitPair, markupPair)
 
         // make this data look the same as bitbucket
+        List<Object> activitiesList = new ArrayList<>()
         for (int i = activities.values.size() - 1; i >= 0; i--) {
-            def activity = (activities instanceof List) ? activities[0] : activities.values.get(i)
+            def activity = (activities instanceof List) ? activities[i] : activities.values.get(i)
             activity.user.name = mapUserToJiraName(activity.user)
 
             activity.createdDate = java.time.Instant.parse(activity.created_at).getEpochSecond() * 1000 // ms
 
             // Determine the activity type
-            if (activity.author_association in ["CONTRIBUTOR", "COLLABORATOR"] && activity.body != null) {
+            // see: https://docs.github.com/en/graphql/reference/enums#commentauthorassociation
+            if (activity.author_association in ["CONTRIBUTOR", "COLLABORATOR",
+                                                "FIRST_TIMER", "FIRST_TIME_CONTRIBUTOR",
+                                                "MEMBER", "OWNER"] && activity.body != null) {
                 activity.action = UserActivity.COMMENTED.name()
                 activity.comment = new HashMap<>()
                 activity.comment.text = activity.body
-            } else {
-                activity.action = null
+                activitiesList.add(activity)
             }
         }
 
-        return activities
+        return activitiesList
     }
 
     // Get Commits

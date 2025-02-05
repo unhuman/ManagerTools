@@ -305,7 +305,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     System.out.println("      PR ${ticket} / ${prId} has ${prActivities.values.size()} activities")
                     // process from oldest to newest (reverse)
                     for (int i = prActivities.values.size() - 1; i >= 0; i--) {
-                        def prActivity = (prActivities instanceof List) ? prActivities[0] : prActivities.values.get(i)
+                        def prActivity = (prActivities instanceof List) ? prActivities[i] : prActivities.values.get(i)
                         // map the user name from source control
                         String userName = prActivity.user.name // already mapped from getActivities()
 

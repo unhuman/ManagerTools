@@ -11,6 +11,7 @@ class FlexiDBRow extends LinkedHashMap<String, Object> {
     static final Map<String, Object> defaults = new HashMap<>()
 
     static final char CSV_SEPARATOR = ','
+    static final String SPACE_STRING = " ";
 
     FlexiDBRow(int initialCapacity) {
         super(initialCapacity)
@@ -80,7 +81,7 @@ class FlexiDBRow extends LinkedHashMap<String, Object> {
 
             // null values format as a space for output formatting
             if (value == null) {
-                value = " "
+                value = SPACE_STRING
             }
 
             // We have to fixup lists
@@ -96,7 +97,7 @@ class FlexiDBRow extends LinkedHashMap<String, Object> {
 
             // Ensure we output something here for formatting
             if (value == "") {
-                value = " "
+                value = SPACE_STRING
             }
 
             // escape the value to include in a CSV

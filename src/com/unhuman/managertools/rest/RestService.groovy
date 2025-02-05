@@ -10,11 +10,13 @@ import groovy.json.JsonSlurper
 import org.apache.hc.client5.http.config.RequestConfig
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient
 import org.apache.hc.client5.http.impl.classic.HttpClients
+import org.apache.hc.core5.http.ClassicHttpRequest
+import org.apache.hc.core5.http.Header
 import org.apache.hc.core5.http.HttpHeaders
 import org.apache.hc.core5.http.NameValuePair
 import org.apache.hc.core5.http.io.entity.StringEntity
 import org.apache.hc.core5.http.io.support.ClassicRequestBuilder
-import org.apache.hc.core5.http.message.BasicClassicHttpRequest
+import org.apache.hc.core5.http.message.BasicHeader
 
 import java.nio.charset.Charset
 import java.util.concurrent.ConcurrentHashMap
@@ -61,35 +63,35 @@ abstract class RestService {
     }
 
     Object getRequest(String uri, NameValuePair... parameters) {
-        BasicClassicHttpRequest request = ClassicRequestBuilder
-                .create("GET")
-                .setUri(uri)
-                .setHeader(HttpHeaders.ACCEPT, "application/json;charset=UTF-8")
-                .setHeader(authInfo.getAuthHeader())
-                .setHeader(HttpHeaders.CONTENT_ENCODING, "application/json;charset=UTF-8")
-                .addParameters(parameters)
-                .build();
-
+        ClassicRequestBuilder requestBuilder = createGithubRequestBuilder("GET", uri, parameters)
+        ClassicHttpRequest request = requestBuilder.build()
         return executeRequest(request)
     }
 
 
     Object putRequest(String uri, String content, NameValuePair... parameters) {
-        BasicClassicHttpRequest request = ClassicRequestBuilder
-                .create("PUT")
-                .setUri(uri)
-                .setHeader(HttpHeaders.ACCEPT, "application/json;charset=UTF-8")
-                .setHeader(authInfo.getAuthHeader())
-                .setHeader(HttpHeaders.CONTENT_TYPE, "application/json;charset=UTF-8")
-                .addParameters(parameters)
-                .setEntity(new StringEntity(content))
-                .build()
+        ClassicRequestBuilder requestBuilder = createGithubRequestBuilder("PUT", uri, parameters)
+
+        requestBuilder.setEntity(new StringEntity(content))
+
+        ClassicHttpRequest request = requestBuilder.build()
 
         return executeRequest(request)
     }
 
 
-    private Object executeRequest(BasicClassicHttpRequest request) {
+    private ClassicRequestBuilder createGithubRequestBuilder(String method, String uri,
+                                                        NameValuePair... parameters) {
+        return ClassicRequestBuilder
+                .create(method)
+                .setUri(uri)
+                .setHeader(HttpHeaders.ACCEPT, "application/json;charset=UTF-8")
+                .setHeader(authInfo.getAuthHeader())
+                .setHeader(HttpHeaders.CONTENT_TYPE, "application/json;charset=UTF-8")
+                .addParameters(parameters)
+    }
+
+    private Object executeRequest(ClassicHttpRequest request) {
         AuthInfo useAuthInfo = authInfo
 
         CloseableHttpClient client = null
@@ -101,7 +103,10 @@ abstract class RestService {
                     if (response.getCode() < 200 || response.getCode() > 299) {
                         throw new RESTException(response.getCode(), "Unable to retrieve requested url", request.getUri().toString())
                     }
-                    useAuthInfo.updateCookies(response.getHeaders("Set-Cookie").toList())
+                    List<BasicHeader> cookies = response.getHeaders("Set-Cookie").toList().collect { Header header ->
+                        new BasicHeader("Cookie", header.getValue().split(";")[0])
+                    }
+                    useAuthInfo.updateCookies(cookies)
                     InputStream inputStream = response.getEntity().getContent()
                     String text = new String(inputStream.readAllBytes(), Charset.defaultCharset())
                     return text
