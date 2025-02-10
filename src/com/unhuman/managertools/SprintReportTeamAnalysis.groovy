@@ -626,10 +626,11 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
         database.append(currentUserIndexLookup, DBData.COMMENTS.name(), commentText, true)
         incrementCounter(currentUserIndexLookup, UserActivity.COMMENTED)
-        incrementCounter(currentUserIndexLookup, (prAuthor == userName ? UserActivity.COMMENTED_ON_SELF : UserActivity.COMMENTED_ON_OTHERS))
+        incrementCounter(currentUserIndexLookup, (prAuthor.toLowerCase() == userName.toLowerCase()
+                ? UserActivity.COMMENTED_ON_SELF : UserActivity.COMMENTED_ON_OTHERS))
 
         // Count pr author's own versus others' comment counts on the PR
-        if (prAuthor != userName) {
+        if (prAuthor.toLowerCase() != userName.toLowerCase()) {
             incrementCounter(prAuthorUserIndexLookup, UserActivity.OTHERS_COMMENTED)
             database.append(prAuthorUserIndexLookup, DBData.OTHERS_COMMENTS.name(), "(${userName}) ${commentText}", true)
         }
