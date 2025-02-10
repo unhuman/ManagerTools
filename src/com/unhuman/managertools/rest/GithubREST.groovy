@@ -12,6 +12,7 @@ import org.apache.hc.core5.http.HttpStatus
 import org.apache.hc.core5.http.NameValuePair
 import org.apache.hc.core5.http.message.BasicNameValuePair
 
+import java.time.Instant
 import java.util.regex.Pattern
 
 class GithubREST extends SourceControlREST {
@@ -35,6 +36,13 @@ class GithubREST extends SourceControlREST {
 
     // Get activities (approvals, comments, etc)
     Object getActivities(String prUrl) {
+        List<Object> activitiesList = new ArrayList<>()
+        activitiesList.addAll(getComments(prUrl))
+        activitiesList.addAll(getReviews(prUrl))
+        return activitiesList
+    }
+
+    protected ArrayList<Object> getComments(String prUrl) {
         String uri = "${prUrl}/comments"
         NameValuePair startPair = new BasicNameValuePair("start", STARTING_PAGE)
         NameValuePair limitPair = new BasicNameValuePair("limit", PAGE_SIZE_LIMIT)
@@ -43,12 +51,12 @@ class GithubREST extends SourceControlREST {
         Object activities = getRequest(uri, startPair, limitPair, markupPair)
 
         // make this data look the same as bitbucket
-        List<Object> activitiesList = new ArrayList<>()
+        List<Object> comments = new ArrayList<>()
         for (int i = activities.values.size() - 1; i >= 0; i--) {
             def activity = (activities instanceof List) ? activities[i] : activities.values.get(i)
             activity.user.name = mapUserToJiraName(activity.user)
 
-            activity.createdDate = java.time.Instant.parse(activity.created_at).getEpochSecond() * 1000 // ms
+            activity.createdDate = Instant.parse(activity.created_at).getEpochSecond() * 1000 // ms
 
             // Determine the activity type
             // see: https://docs.github.com/en/graphql/reference/enums#commentauthorassociation
@@ -58,11 +66,42 @@ class GithubREST extends SourceControlREST {
                 activity.action = UserActivity.COMMENTED.name()
                 activity.comment = new HashMap<>()
                 activity.comment.text = activity.body
-                activitiesList.add(activity)
+                comments.add(activity)
             }
         }
 
-        return activitiesList
+        return comments
+    }
+
+    protected ArrayList<Object> getReviews(String prUrl) {
+        String uri = "${prUrl}/reviews"
+        NameValuePair startPair = new BasicNameValuePair("start", STARTING_PAGE)
+        NameValuePair limitPair = new BasicNameValuePair("limit", PAGE_SIZE_LIMIT)
+        NameValuePair markupPair = new BasicNameValuePair("markup", "true")
+
+        Object activities = getRequest(uri, startPair, limitPair, markupPair)
+
+        // make this data look the same as bitbucket
+        List<Object> reviews = new ArrayList<>()
+        for (int i = activities.values.size() - 1; i >= 0; i--) {
+            def activity = (activities instanceof List) ? activities[i] : activities.values.get(i)
+            activity.user.name = mapUserToJiraName(activity.user)
+
+            activity.createdDate = Instant.parse(activity.submitted_at).getEpochSecond() * 1000 // ms
+
+            // Determine the activity type
+            // see: https://docs.github.com/en/graphql/reference/enums#commentauthorassociation
+            if (activity.author_association in ["CONTRIBUTOR", "COLLABORATOR",
+                                                "FIRST_TIMER", "FIRST_TIME_CONTRIBUTOR",
+                                                "MEMBER", "OWNER"] && activity.body != null) {
+                if (activity.state in ["APPROVED", "DECLINED"]) {
+                    activity.action = activity.state
+                    reviews.add(activity)
+                }
+            }
+        }
+
+        return reviews
     }
 
     // Get Commits
@@ -82,16 +121,14 @@ class GithubREST extends SourceControlREST {
 
                 // Github does funny things - so we have to determine userName
                 // TODO - this thing might not exist
-                String userName = (commit.committer != null) ? commit.committer.name : null
+                String userName = mapUserToJiraName(commit?.author)
+                if (userName == null) {
+                    userName = (commit.committer != null) ? commit.committer.name : null
+                }
                 if (userName == null) {
                     // nested commit.commit - madness
                     if (commit.commit != null) {
                         userName = commit.commit.author.name
-                    }
-                }
-                if (userName == null) {
-                    if (commit.author != null) {
-                        userName = commit.author.login
                     }
                 }
 
@@ -149,6 +186,11 @@ class GithubREST extends SourceControlREST {
 
     @Override
     String mapUserToJiraName(Object userData) {
+        // Preserve null
+        if (userData == null) {
+            return null
+        }
+
         // If this entity is already a String, just use it.
         if (userData instanceof String) {
             return userData
