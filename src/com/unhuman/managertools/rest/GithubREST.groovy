@@ -85,6 +85,7 @@ class GithubREST extends SourceControlREST {
         List<Object> reviews = new ArrayList<>()
         for (int i = activities.values.size() - 1; i >= 0; i--) {
             def activity = (activities instanceof List) ? activities[i] : activities.values.get(i)
+
             activity.user.name = mapUserToJiraName(activity.user)
 
             activity.createdDate = Instant.parse(activity.submitted_at).getEpochSecond() * 1000 // ms
@@ -202,7 +203,7 @@ class GithubREST extends SourceControlREST {
                 : userData.url.toLowerCase().substring(userData.url.lastIndexOf("/") + 1)
 
         if (!jiraName.contains("_")) {
-            System.err.println("Could not identify user - expected '_' separator missing from ${jiraName}")
+            System.err.println("Could not identify user - expected '_' separator missing from ${jiraName} (type: ${userData.type})")
             return null
         }
 
