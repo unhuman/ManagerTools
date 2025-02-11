@@ -24,9 +24,9 @@ import groovyx.gpars.GParsPool
 import groovyx.gpars.util.PoolUtils
 import org.apache.hc.core5.http.HttpStatus
 
-
 import java.text.SimpleDateFormat
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.stream.Collectors
 
 class SprintReportTeamAnalysis extends AbstractSprintReport {
     static final List<String> IGNORE_USERS = ["codeowners".toLowerCase(),
@@ -290,12 +290,29 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     // check comment count before polling for comments
                     def prId = (pullRequest.id.startsWith("#") ? pullRequest.id.substring(1) : pullRequest.id)
                     def prAuthor = sourceControlREST.mapUserToJiraName(pullRequest.author) // Below, we try to update this to match the username
-                    if (prAuthor == null) {
-                        System.err.println("Skipping processing of PR ${ticket} / ${prId} due to unknown author: ${pullRequest.author}")
-                        return
-                    }
 
+                    // fixup the url for the api
                     prUrl = sourceControlREST.apiConvert(prUrl)
+
+                    // Get the commits
+                    def prCommits = sourceControlREST.getCommits(prUrl)
+
+                    if (prAuthor == null) {
+                        // validate all the commits have the same author, and if they do, we can use that as the unknown author
+                        if (prCommits != null) {
+                            // stream all the prCommits and get all the author names
+                            Set<String> authorNames = prCommits.stream().map(commit -> commit.committer.name).collect(Collectors.toSet())
+
+                            if (authorNames.size() == 1) {
+                                prAuthor = sourceControlREST.mapUserToJiraName(authorNames.iterator().next())
+                            }
+                        }
+
+                        if (prAuthor == null) {
+                            System.err.println("Skipping processing of PR ${ticket} / ${prId} due to unknown author: ${pullRequest.author}")
+                            return
+                        }
+                    }
 
                     // Get and process activities (comments, etc)
                     def prActivities = sourceControlREST.getActivities(prUrl)
@@ -360,8 +377,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         incrementCounter(indexLookup, prActivityAction)
                     }
 
-                    // Get and process commits
-                    def prCommits = sourceControlREST.getCommits(prUrl)
+                    // Process commits
                     if (prCommits == null) {
                         return
                     }
