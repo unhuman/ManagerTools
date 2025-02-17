@@ -37,15 +37,21 @@ abstract class AbstractSprintReport extends Script {
      * @param sprintIds
      * @return
      */
-    abstract def process(String teamName, String boardId, List<String> sprintIds)
+    protected abstract def aggregateData(String teamName, String boardId, List<String> sprintIds)
 
     // this is an example of a very simple thing done
-    //    def process(String teamName, String boardId, List<String> sprintIds) {
+    //    protected def aggregateData(String teamName, String boardId, List<String> sprintIds) {
     //        sprintIds.each { sprintId -> {
     //            Object data = jiraREST.getSprintReport(boardId, sprintId)
     //            System.out.println(data.sprint.name)
     //        }}
     //    }
+
+    /**
+     * Implementations should override this functionality
+     * @return
+     */
+    protected abstract void generateOutput()
 
     /**
      * Implementations can override this to support custom options
@@ -57,7 +63,18 @@ abstract class AbstractSprintReport extends Script {
 
     def run() {
         setupRun()
-        process(teamName, boardId, sprintIds)
+
+        long time = System.currentTimeMillis()
+
+        aggregateData(teamName, boardId, sprintIds)
+        generateOutput()
+
+        time = (long) ((System.currentTimeMillis() - time) / 1000)
+        Calendar.instance.with {
+            clear()
+            set(SECOND, (Integer) time)
+            System.out.println("Time to process: ${format('HH:mm:ss')}")
+        }
     }
 
     protected void setupRun() {

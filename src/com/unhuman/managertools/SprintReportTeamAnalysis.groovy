@@ -67,9 +67,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     }
 
     @Override
-    def process(String teamName, String boardId, List<String> sprintIds) {
-        long time = System.currentTimeMillis()
-
+    protected def aggregateData(String teamName, String boardId, List<String> sprintIds) {
         database = new FlexiDB(generateDBSignature(), true)
 
         // Specify threads
@@ -99,13 +97,6 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
         // Generate the CSV file - we'll do some column adjustments
         generateOutput()
-
-        time = (long) ((System.currentTimeMillis() - time) / 1000)
-        Calendar.instance.with {
-            clear()
-            set(SECOND, (Integer) time)
-            System.out.println("Time to process: ${format('HH:mm:ss')}")
-        }
     }
 
     protected List<String> generateColumnsOrder() {
@@ -125,6 +116,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         return columnOrder
     }
 
+    @Override
     protected void generateOutput() {
         // Determine the list of columns to report
         List<String> columnOrder = generateColumnsOrder()

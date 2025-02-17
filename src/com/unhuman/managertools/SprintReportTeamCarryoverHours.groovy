@@ -2,7 +2,7 @@ package com.unhuman.managertools
 
 class SprintReportTeamCarryoverHours extends AbstractSprintReport {
     @Override
-    def process(String teamName, String boardId, List<String> sprintIds) {
+    protected def aggregateData(String teamName, String boardId, List<String> sprintIds) {
         double totalCarryOverHoursAcrossSprints = 0
         sprintIds.each(sprintId -> {
             Object data = jiraREST.getSprintReport(boardId, sprintId)
@@ -26,5 +26,11 @@ class SprintReportTeamCarryoverHours extends AbstractSprintReport {
             totalCarryOverHoursAcrossSprints += sprintCarryOverTime
         })
         System.out.println("total carryover days: ${totalCarryOverHoursAcrossSprints}")
+    }
+
+    @Override
+    protected void generateOutput() {
+        // TODO: Implement this
+        // No output to generate as that's still in aggregateData
     }
 }
