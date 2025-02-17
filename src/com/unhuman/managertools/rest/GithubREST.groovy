@@ -203,11 +203,14 @@ class GithubREST extends SourceControlREST {
                 : userData.url.toLowerCase().substring(userData.url.lastIndexOf("/") + 1)
 
         if (!jiraName.contains("_")) {
-            System.err.println("Could not identify user - expected '_' separator missing from ${jiraName} (type: ${userData.type})")
-            return null
+            // seeing some randomized IDs... so we need to strip them out
+            if (jiraName.length() >= 39) {
+                System.err.println("Could not identify user - expected '_' separator missing from ${jiraName} (type: ${userData.type})")
+                return null
+            }
+        } else {
+            jiraName = jiraName.substring(0, jiraName.lastIndexOf("_")) // cuts after last _ which should include enterprise name
         }
-
-        jiraName = jiraName.substring(0, jiraName.lastIndexOf("_")) // cuts after last _ which should include enterprise name
 
         return jiraName
     }
