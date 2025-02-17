@@ -95,7 +95,7 @@ class GithubREST extends SourceControlREST {
             if (activity.author_association in ["CONTRIBUTOR", "COLLABORATOR",
                                                 "FIRST_TIMER", "FIRST_TIME_CONTRIBUTOR",
                                                 "MEMBER", "OWNER"] && activity.body != null) {
-                if (activity.state in ["APPROVED", "DECLINED"]) {
+                if (activity.state in ["APPROVED", "DISMISSED"]) {
                     activity.action = activity.state
                     reviews.add(activity)
                 }

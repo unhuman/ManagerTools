@@ -350,7 +350,12 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, userName)
                         populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
 
-                        // TODO: Github actions
+                        // Github action conversions
+                        switch (prActivityAction) {
+                            case "DISMISSED":
+                                prActivityAction = UserActivity.DECLINED.name()
+                                break
+                        }
 
                         switch (prActivityAction) {
                             case UserActivity.APPROVED.name():
