@@ -26,8 +26,11 @@ abstract class AbstractSprintReport extends Script {
     protected SourceControlREST githubREST
     private OptionAccessor commandLineOptions
     private List<String> sprintIds
-    protected String boardId
-    protected String teamName
+
+    // TODO: These need to map to eachother better - the code assumes they're in the same order
+    protected List<String> boardIds
+    protected List<String> teamNames
+
 
     /**
      * Implementations should override this functionality.
@@ -51,7 +54,7 @@ abstract class AbstractSprintReport extends Script {
      * Implementations should override this functionality
      * @return
      */
-    protected abstract void generateOutput()
+    protected abstract void generateOutput(String teamName, String boardId)
 
     /**
      * Implementations can override this to support custom options
@@ -66,8 +69,19 @@ abstract class AbstractSprintReport extends Script {
 
         long time = System.currentTimeMillis()
 
-        aggregateData(teamName, boardId, sprintIds)
-        generateOutput()
+        // Read in all the data
+        for (int i = 0; i < teamNames.size(); i++) {
+            String teamName = teamNames.get(i)
+            String boardId = boardIds.get(i)
+            aggregateData(teamName, boardId, sprintIds)
+        }
+
+        // generate all the reports
+        for (int i = 0; i < teamNames.size(); i++) {
+            String teamName = teamNames.get(i)
+            String boardId = boardIds.get(i)
+            generateOutput(teamName, boardId)
+        }
 
         time = (long) ((System.currentTimeMillis() - time) / 1000)
         Calendar.instance.with {
@@ -83,8 +97,8 @@ abstract class AbstractSprintReport extends Script {
         cli.h(longOpt: 'help', 'Shows useful information')
         def boardOrTeamGroup = new OptionGroup(required: true)
         boardOrTeamGroup.with {
-            addOption(cli.option('b', [longOpt: 'boardId', args: 1, argName: 'boardId'], 'Sprint Board Id Number'))
-            addOption(cli.option('t', [longOpt: 'teamName', args: 1, argName: 'team'], 'Sprint Team Name'))
+            addOption(cli.option('b', [longOpt: 'boardId', args: 1, argName: 'boardId'], 'Sprint Board Id Number(s)'))
+            addOption(cli.option('t', [longOpt: 'teamName', args: 1, argName: 'team'], 'Sprint Team Name(s)'))
         }
         cli.options.addOptionGroup(boardOrTeamGroup)
 
@@ -125,10 +139,15 @@ abstract class AbstractSprintReport extends Script {
 
         if (commandLineOptions.'limit') {
             try {
-                GetTeamSprints getTeamSprints = new GetTeamSprints(jiraREST)
-                def sprintData = getTeamSprints.getRecentSprints(commandLineOptions.'includeActive',
-                        boardId, Integer.parseInt(commandLineOptions.'limit'))
-                sprintIds = sprintData.stream().map(sprint -> sprint.id.toString()).collect(Collectors.toUnmodifiableList())
+                List<String> sprintIdsBuilder = []
+                boardIds.forEach() { boardId -> {
+                    GetTeamSprints getTeamSprints = new GetTeamSprints(jiraREST)
+                    def sprintData = getTeamSprints.getRecentSprints(commandLineOptions.'includeActive',
+                            boardId, Integer.parseInt(commandLineOptions.'limit'))
+                    sprintIdsBuilder.addAll(sprintData.stream().map(
+                            sprint -> sprint.id.toString()).collect(Collectors.toUnmodifiableList()))
+                }}
+                sprintIds = sprintIdsBuilder
             } catch (RESTException re) {
                 if (re.statusCode == HttpStatus.SC_BAD_REQUEST) {
                     // No sprintIds = this could be Kanban board
@@ -193,18 +212,17 @@ abstract class AbstractSprintReport extends Script {
 
 
         // TODO: Extract team name and boardId
-        teamName = (commandLineOptions.'teamName') ? commandLineOptions.'teamName' : null
-        boardId = (commandLineOptions.'boardId') ? commandLineOptions.'boardId' : null
-        if (boardId == null) {
-            // look up boardId from team name
-            String lookupValue = "teamMappings.${teamName}"
-            boardId = commandLineHelper.getConfigFileManager().getValue(lookupValue)
+        teamNames = (commandLineOptions.'teamName') ? commandLineOptions.getOptionValues('teamName') : null
+        boardIds = (commandLineOptions.'boardId') ? commandLineOptions.getOptionValues('boardId') : null
+        if (boardIds == null) {
+            // look up boardIds from team names
+            boardIds = teamNames.stream().map { teamName -> commandLineHelper.getConfigFileManager().getValue("teamMappings.${teamName}") }.collect(Collectors.toList())
         }
 
         // TODO: find team name if only boardId is provided
 
         // if Board Id is null, then we have a problem
-        if (boardId == null) {
+        if (boardIds == null) {
             throw new RuntimeException("boardId is required")
         }
     }

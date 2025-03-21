@@ -19,7 +19,11 @@ class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
             commandLineHelper.setQuietModeNoPrompts()
         }
 
-        teamUsers = commandLineHelper.getTeamBoardUsers(teamName, boardId)
+        teamUsers = new ArrayList<>()
+        for (int i = 0; i < teamNames.size(); i++) {
+            teamUsers.addAll(commandLineHelper.getTeamBoardUsers(teamNames.get(i), boardIds.get(i)))
+        }
+
         System.out.println() // helps with output formatting
     }
 
@@ -38,7 +42,7 @@ class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
     }
 
     @Override
-    protected void generateOutput() {
+    protected void generateOutput(String teamName, String boardId) {
         // Determine the list of columns to report
         List<String> columnOrder = generateColumnsOrder()
 

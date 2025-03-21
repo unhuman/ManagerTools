@@ -37,7 +37,7 @@ class ConfigFileManager {
     Object getValue(String key) {
         // split the string key by periods and then walk the map
         // to see if the key exists
-        def keys = key.split("\\.")
+        def keys = key.split("\\.", 2)
         def current = state
         for (String k : keys) {
             def matchedKey = current.keySet().find { it.toLowerCase().equals(k.toLowerCase()) }

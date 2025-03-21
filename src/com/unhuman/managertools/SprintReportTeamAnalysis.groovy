@@ -96,7 +96,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         }
 
         // Generate the CSV file - we'll do some column adjustments
-        generateOutput()
+        generateOutput(teamName, boardId)
     }
 
     protected List<String> generateColumnsOrder() {
@@ -117,7 +117,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     }
 
     @Override
-    protected void generateOutput() {
+    protected void generateOutput(String teamName, String boardId) {
         // Determine the list of columns to report
         List<String> columnOrder = generateColumnsOrder()
 
@@ -713,10 +713,6 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
     def cleanDate(String date) {
         return DATE_OUTPUT.format(DATE_PARSER.parse(date))
-    }
-
-    protected List<String> getSprintIds() {
-        return sprintIds
     }
 
     class CommentBlocker {

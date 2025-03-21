@@ -29,7 +29,7 @@ class SprintReportTeamCarryoverHours extends AbstractSprintReport {
     }
 
     @Override
-    protected void generateOutput() {
+    protected void generateOutput(String teamName, String boardId) {
         // TODO: Implement this
         // No output to generate as that's still in aggregateData
     }
