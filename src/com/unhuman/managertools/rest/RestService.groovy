@@ -1,5 +1,6 @@
 package com.unhuman.managertools.rest
 
+import com.unhuman.managertools.rest.exceptions.NeedsRetryException
 import com.unhuman.managertools.rest.exceptions.RESTException
 @Grapes([
         @Grab(group='org.apache.httpcomponents.core5', module='httpcore5', version='5.2.1'),
@@ -95,34 +96,50 @@ abstract class RestService {
         AuthInfo useAuthInfo = authInfo
 
         CloseableHttpClient client = null
-        try {
-            client = getClient(request.getAuthority().getHostName())
 
-            String responseData = client.with { httpClient ->
-                httpClient.execute(request).withCloseable { response ->
-                    if (response.getCode() < 200 || response.getCode() > 299) {
-                        throw new RESTException(response.getCode(), "Unable to retrieve requested url", request.getUri().toString())
+        do {
+            try {
+                client = getClient(request.getAuthority().getHostName())
+
+                String responseData = client.with { httpClient ->
+                    httpClient.execute(request).withCloseable { response ->
+                        if (response.getCode() == 429) {
+                            Integer retryAfter = response.getFirstHeader("Retry-After")?.getValue()?.toInteger()
+                            if (retryAfter != null) {
+                                InputStream inputStream = response.getEntity().getContent()
+                                String responseContent = new String(inputStream.readAllBytes(), Charset.defaultCharset())
+                                throw new NeedsRetryException(response.getCode(), responseContent, request.getUri().toString(), retryAfter)
+                            } else {
+                                throw new RuntimeException("Rate limit exceeded. No Retry-After header found - here are the headers: ${response.getHeaders()}")
+                            }
+                        } else if (response.getCode() < 200 || response.getCode() > 299) {
+                            throw new RESTException(response.getCode(), "Unable to retrieve requested url", request.getUri().toString())
+                        } else {
+                            List<BasicHeader> cookies = response.getHeaders("Set-Cookie").toList().collect { Header header ->
+                                new BasicHeader("Cookie", header.getValue().split(";")[0])
+                            }
+                            useAuthInfo.updateCookies(cookies)
+                            InputStream inputStream = response.getEntity().getContent()
+                            String text = new String(inputStream.readAllBytes(), Charset.defaultCharset())
+                            return text
+                        }
                     }
-                    List<BasicHeader> cookies = response.getHeaders("Set-Cookie").toList().collect { Header header ->
-                        new BasicHeader("Cookie", header.getValue().split(";")[0])
-                    }
-                    useAuthInfo.updateCookies(cookies)
-                    InputStream inputStream = response.getEntity().getContent()
-                    String text = new String(inputStream.readAllBytes(), Charset.defaultCharset())
-                    return text
+                }
+                return new JsonSlurper().parseText(responseData)
+            } catch (NeedsRetryException nre) {
+                System.err.println("Retry / Rate limit exceeded. Details: ${nre.toString()}")
+                Thread.sleep(nre.getRetryAfter() * 1000)
+            } catch (Exception e) {
+                System.err.println("Request Error: ${e.getMessage()}")
+                client.close()
+                client = null
+                throw e
+            } finally {
+                if (client != null) {
+                    returnClient(request.getAuthority().getHostName(), client)
                 }
             }
-            return new JsonSlurper().parseText(responseData)
-        } catch (Exception e) {
-            System.err.println("Request Error: ${e.getMessage()}")
-            client.close()
-            client = null
-            throw e
-        } finally {
-            if (client != null) {
-                returnClient(request.getAuthority().getHostName(), client)
-            }
-        }
+        } while (true)
     }
 
     private static RequestConfig getRequestConfig() {
