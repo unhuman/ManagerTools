@@ -94,9 +94,6 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             // Gather ticket data for all issues (completed and incomplete work)
             getIssueCategoryInformation(threadCount, data.sprint, allIssues)
         }
-
-        // Generate the CSV file - we'll do some column adjustments
-        generateOutput()
     }
 
     protected List<String> generateColumnsOrder() {
