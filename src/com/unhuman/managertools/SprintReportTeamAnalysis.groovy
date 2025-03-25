@@ -494,6 +494,11 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             return
         }
 
+        // Ensure we have changes to look at
+        if (diffsResponse.diffs == null) {
+            return
+        }
+
         // copilot suggested this as a way to find all the content
         int addedCalculated = 0
         int removedCalculated = 0

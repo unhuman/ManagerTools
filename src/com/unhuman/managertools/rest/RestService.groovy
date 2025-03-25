@@ -127,8 +127,10 @@ abstract class RestService {
                 }
                 return new JsonSlurper().parseText(responseData)
             } catch (NeedsRetryException nre) {
-                System.err.println("Retry / Rate limit exceeded. Details: ${nre.toString()}")
+                System.err.println("Rate limit exceeded. Details: ${nre.toString()}")
                 Thread.sleep(nre.getRetryAfter() * 1000)
+            } catch (SocketTimeoutException ste) {
+                System.err.println("Timeout exceeded. Details: ${ste.toString()}")
             } catch (Exception e) {
                 System.err.println("Request Error: ${e.getMessage()}")
                 client.close()

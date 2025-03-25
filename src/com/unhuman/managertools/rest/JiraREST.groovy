@@ -115,7 +115,9 @@ class JiraREST extends RestService {
         applicationTypePair = new BasicNameValuePair("applicationType", "githube")
         try {
             LazyMap githubData = (LazyMap) getRequest(uri, issueIdPair, dataTypePair, timeIdPair, applicationTypePair)
-            pullRequests.addAll(githubData.detail.pullRequests[0])
+            if (githubData.detail.pullRequests != null && githubData.detail.pullRequests[0] != null) {
+                pullRequests.addAll(githubData.detail.pullRequests[0])
+            }
         } catch(RESTException re) {
             if (re.statusCode != HttpStatus.SC_FORBIDDEN && re.statusCode != HttpStatus.SC_NOT_FOUND) {
                 throw re
