@@ -63,6 +63,11 @@ class JiraREST extends RestService {
         return getRequest(uri, rapidViewIdPair, sprintIdPair, timeIdPair)
     }
 
+    Object getKanbanWeek(String boardId, int week) {
+        // TODO: Find tickets that are closed in the week specified
+        throw new RuntimeException("Bailing out of getKanbanWeek as it is not implemented")
+    }
+
     // get ticket info
     // https://jira.x.com/rest/api/latest/issue/ISSUE-ID
     Object getTicket(String ticketId) {

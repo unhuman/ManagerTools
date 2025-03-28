@@ -67,7 +67,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     }
 
     @Override
-    protected def aggregateData(String teamName, String boardId, List<String> sprintIds) {
+    protected def aggregateData(String teamName, String boardId, Mode mode, List<String> sprintIds, Long weeks) {
         database = new FlexiDB(generateDBSignature(), true)
 
         // Specify threads
@@ -78,21 +78,41 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         System.out.println("Using ${threadCount} threads")
 
         // populate the database
-        System.out.println("Processing ${sprintIds.size()} sprints...")
-        for (int i = 0; i < sprintIds.size(); i++) {
-            String sprintId = sprintIds.get(i)
+        switch (mode) {
+            case Mode.SCRUM:
+                System.out.println("Processing Scrum: ${sprintIds.size()} sprints...")
+                for (int i = 0; i < sprintIds.size(); i++) {
+                    String sprintId = sprintIds.get(i)
 
-            Object data = jiraREST.getSprintReport(boardId, sprintId)
+                    Object data = jiraREST.getSprintReport(boardId, sprintId)
 
-            def allIssues = new ArrayList()
-            allIssues.addAll(data.contents.completedIssues)
-            allIssues.addAll(data.contents.issuesNotCompletedInCurrentSprint)
+                    def allIssues = new ArrayList()
+                    allIssues.addAll(data.contents.completedIssues)
+                    allIssues.addAll(data.contents.issuesNotCompletedInCurrentSprint)
 
-            System.out.println("${i+1} / ${sprintIds.size()}: ${data.sprint.name} (id: ${sprintId}" +
-                    ", issues: ${allIssues.size()})")
+                    System.out.println("${i + 1} / ${sprintIds.size()}: ${data.sprint.name} (id: ${sprintId}" +
+                            ", issues: ${allIssues.size()})")
 
-            // Gather ticket data for all issues (completed and incomplete work)
-            getIssueCategoryInformation(threadCount, data.sprint, allIssues)
+                    // Gather ticket data for all issues (completed and incomplete work)
+                    getIssueCategoryInformation(threadCount, data.sprint, allIssues)
+                }
+                break
+            case Mode.KANBAN:
+                // TODO: Gather information about all the time periods (weeks)
+                System.out.println("Processing Kanban ${weeks} weeks...")
+                for (int week = 0; week < weeks; weeks++) {
+                    Object data = jiraREST.getKanbanWeek(boardId, week)
+
+                    def allIssues = new ArrayList()
+                    allIssues.addAll(data.contents.completedIssues)
+                    allIssues.addAll(data.contents.issuesNotCompletedInCurrentSprint)
+
+                    System.out.println("${i + 1} / ${sprintIds.size()}: ${data.sprint.name} (id: ${week}" +
+                            ", issues: ${allIssues.size()})")
+                }
+                break
+            default:
+                throw new RuntimeException("Unknown mode: ${mode}")
         }
     }
 

@@ -20,14 +20,17 @@ import org.apache.hc.core5.http.HttpStatus
 import java.util.stream.Collectors
 
 abstract class AbstractSprintReport extends Script {
+    enum Mode { SCRUM, KANBAN }
     private static final CONFIG_FILENAME = ".managerTools.cfg"
     protected JiraREST jiraREST
     protected SourceControlREST bitbucketREST
     protected SourceControlREST githubREST
     private OptionAccessor commandLineOptions
-    private List<String> sprintIds
+    private Mode mode = Mode.SCRUM
     protected String boardId
     protected String teamName
+    private List<String> sprintIds
+    private Long weeks
 
     /**
      * Implementations should override this functionality.
@@ -37,10 +40,10 @@ abstract class AbstractSprintReport extends Script {
      * @param sprintIds
      * @return
      */
-    protected abstract def aggregateData(String teamName, String boardId, List<String> sprintIds)
+    protected abstract def aggregateData(String teamName, String boardId, Mode mode, List<String> sprintIds, Long weeks)
 
     // this is an example of a very simple thing done
-    //    protected def aggregateData(String teamName, String boardId, List<String> sprintIds) {
+    //    protected def aggregateData(String teamName, String boardId, Mode mode, List<String> sprintIds) {
     //        sprintIds.each { sprintId -> {
     //            Object data = jiraREST.getSprintReport(boardId, sprintId)
     //            System.out.println(data.sprint.name)
@@ -66,7 +69,7 @@ abstract class AbstractSprintReport extends Script {
 
         long time = System.currentTimeMillis()
 
-        aggregateData(teamName, boardId, sprintIds)
+        aggregateData(teamName, boardId, mode, sprintIds, weeks)
         generateOutput()
 
         time = (long) ((System.currentTimeMillis() - time) / 1000)
@@ -90,12 +93,13 @@ abstract class AbstractSprintReport extends Script {
 
         cli.q(longOpt: 'quietMode', 'Quiet mode (use default/stored values without prompt)')
 
-        def optionGroup = new OptionGroup(required: true)
-        optionGroup.with {
+        def scrumOrKanbanOptions = new OptionGroup(required: true)
+        scrumOrKanbanOptions.with {
             addOption(cli.option('l', [longOpt: 'limit', args: 1, argName: 'limitSprints'], 'Number of recent sprints to process'))
             addOption(cli.option('s', [longOpt: 'sprintIds', args: 1, argName: 'sprintIds'], 'Sprint Id Numbers (comma separated)'))
+            addOption(cli.option('w', [longOpt: 'weeks', args: 1, argName: 'weeks'], 'Kanban weeks to process'))
         }
-        cli.options.addOptionGroup(optionGroup)
+        cli.options.addOptionGroup(scrumOrKanbanOptions)
 
         cli.ia(longOpt: 'includeActive', 'Include current active sprint in results')
 
@@ -132,15 +136,17 @@ abstract class AbstractSprintReport extends Script {
             } catch (RESTException re) {
                 if (re.statusCode == HttpStatus.SC_BAD_REQUEST) {
                     // No sprintIds = this could be Kanban board
-                    System.err.println("Notice: This is a Kanban board - no sprints found - expect errors")
-                    sprintIds = null
+                    throw new RuntimeException("Notice: This is a Kanban board - no sprints found")
                 } else {
                     throw re
                 }
             }
-        } else {
+        } else if (commandLineOptions.'sprintIds') {
             // limit and sprintIds are required / mutually exclusive, so just use what we get
             sprintIds = commandLineOptions.'sprintIds'.split(',')
+        } else if (commandLineOptions.'weeks') {
+            mode = Mode.KANBAN
+            weeks = Long.parseLong(commandLineOptions.'weeks')
         }
     }
 
