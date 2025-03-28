@@ -132,7 +132,7 @@ abstract class AbstractSprintReport extends Script {
             } catch (RESTException re) {
                 if (re.statusCode == HttpStatus.SC_BAD_REQUEST) {
                     // No sprintIds = this could be Kanban board
-                    System.out.println("Notice: This is a Kanban board - no sprints found")
+                    System.err.println("Notice: This is a Kanban board - no sprints found - expect errors")
                     sprintIds = null
                 } else {
                     throw re
