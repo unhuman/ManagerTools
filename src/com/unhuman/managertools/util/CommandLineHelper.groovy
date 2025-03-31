@@ -14,7 +14,7 @@ class CommandLineHelper {
 
     private static final Pattern AUTH_PATTERN = Pattern.compile("(p|password|pw|c|cookie)")
     // Users Match * (authors), ** (users), or comma separated list
-    private static final Pattern USERS_MATCH_PATTERN = Pattern.compile("^\\*{1,2}\$|^[a-zA-Z0-9\\.]+([,\\s]+[a-zA-Z0-9\\.]*)*\$")
+    private static final Pattern USERS_MATCH_PATTERN = Pattern.compile("^\\*{1,2}\$|^[a-zA-Z0-9.]+([,\\s]+[a-zA-Z0-9.-]*)*\$")
     private static final Pattern DATE_PATTERN = Pattern.compile("\\d{4}-\\d{2}-\\d{2}")
     private static final Pattern NUMBERS_REQUIRED_PATTERN = Pattern.compile("\\d+")
     private static final Pattern FQDN_PATTERN = Pattern.compile("(\\w+\\.){2,}\\w+")
