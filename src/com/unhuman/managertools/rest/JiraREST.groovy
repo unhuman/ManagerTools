@@ -79,7 +79,7 @@ class JiraREST extends RestService {
 
         // Construct the JQL query to find issues closed within the specified week
         String jql = "\"Sprint Team\" = \"${team}\"" +
-                " AND issueType NOT IN subTaskIssueTypes()"
+                " AND issueType NOT IN subTaskIssueTypes()" +
                 // " AND status in [Closed, Done, \"Ready for Releaase\", Released, Resolved] " +
                 " AND ((resolutiondate >= ${startDateJQLStr} AND resolutiondate <= ${endDateJQLStr})" +
                 "   OR (resolved >= ${startDateJQLStr} AND resolved <= ${endDateJQLStr})" +
