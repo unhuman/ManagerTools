@@ -11,6 +11,10 @@ import org.apache.hc.core5.http.HttpStatus
 import org.apache.hc.core5.http.NameValuePair
 import org.apache.hc.core5.http.message.BasicNameValuePair
 
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+
 class JiraREST extends RestService {
     String jiraServer
 
@@ -63,9 +67,34 @@ class JiraREST extends RestService {
         return getRequest(uri, rapidViewIdPair, sprintIdPair, timeIdPair)
     }
 
-    Object getKanbanWeek(String boardId, int week) {
-        // TODO: Find tickets that are closed in the week specified
-        throw new RuntimeException("Bailing out of getKanbanWeek as it is not implemented")
+    Object getKanbanWeek(String team, int week) {
+        // Calculate the start and end dates for the specified week
+        LocalDate startDate = LocalDate.now().minusWeeks(week).with(DayOfWeek.MONDAY)
+        LocalDate endDate = startDate.plusDays(6)
+
+        // Format the dates to match Jira's date format
+        DateTimeFormatter jqlFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+        String startDateJQLStr = startDate.format(jqlFormatter)
+        String endDateJQLStr = endDate.format(jqlFormatter)
+
+        // Construct the JQL query to find issues closed within the specified week
+        String jql = "\"Sprint Team\" = \"${team}\" " +
+                // "AND status in [Closed, Done, \"Ready for Releaase\", Released, Resolved] " +
+                "AND ((resolutiondate >= ${startDateJQLStr} AND resolutiondate <= ${endDateJQLStr})" +
+                " OR (resolved >= ${startDateJQLStr} AND resolved <= ${endDateJQLStr})" +
+                " OR (\"Resolved Date\" >= ${startDateJQLStr} AND \"Resolved Date\" <= ${endDateJQLStr}))"
+
+        // Execute the JQL query
+        Object response = jqlSummaryQuery(jql)
+
+        // Update the response with our date range
+        response.name = "${team} Week ${week}"
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MMM/yy")
+        String startDateStr = startDate.format(formatter)
+        String endDateStr = endDate.format(formatter)
+        response.startDate = startDateStr + " 00:00 AM"
+        response.endDate = endDateStr + " 11:59 PM"
+        return response
     }
 
     // get ticket info

@@ -24,6 +24,7 @@ import groovyx.gpars.GParsPool
 import groovyx.gpars.util.PoolUtils
 import org.apache.hc.core5.http.HttpStatus
 
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
@@ -46,6 +47,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             Arrays.asList(new ConvertSelfMetricsEmptyToZeroOutputFilter())
 
     static final SimpleDateFormat DATE_PARSER = new SimpleDateFormat("dd/MMM/yy", Locale.US)
+    static final SimpleDateFormat DATE_PARSER_2 = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
     static final SimpleDateFormat DATE_TIME_PARSER = new SimpleDateFormat("dd/MMM/yy h:mm a", Locale.US)
     static final SimpleDateFormat DATE_OUTPUT = new SimpleDateFormat("yyyy/MM/dd", Locale.US);
 
@@ -98,17 +100,26 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                 }
                 break
             case Mode.KANBAN:
+                if (teamName == null) {
+                    throw new RuntimeException("Team name is required for Kanban mode")
+                }
                 // TODO: Gather information about all the time periods (weeks)
                 System.out.println("Processing Kanban ${weeks} weeks...")
-                for (int week = 0; week < weeks; weeks++) {
-                    Object data = jiraREST.getKanbanWeek(boardId, week)
+                for (int week = 0; week < weeks; week++) {
+                    Object data = jiraREST.getKanbanWeek(teamName, week)
 
                     def allIssues = new ArrayList()
-                    allIssues.addAll(data.contents.completedIssues)
-                    allIssues.addAll(data.contents.issuesNotCompletedInCurrentSprint)
+                    allIssues.addAll(data.issues)
 
-                    System.out.println("${i + 1} / ${sprintIds.size()}: ${data.sprint.name} (id: ${week}" +
-                            ", issues: ${allIssues.size()})")
+                    System.out.println("Kanban Cycle: ${week} / ${weeks}, issues: ${allIssues.size()}")
+
+                    Object sprintSimulation = new HashMap()
+                    sprintSimulation.name = "${teamName} Week ${week}"
+                    sprintSimulation.startDate = data.startDate
+                    sprintSimulation.endDate = data.endDate
+
+                    // Gather ticket data for all issues (completed and incomplete work)
+                    getIssueCategoryInformation(threadCount, sprintSimulation, allIssues)
                 }
                 break
             default:
@@ -734,7 +745,11 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     }
 
     def cleanDate(String date) {
-        return DATE_OUTPUT.format(DATE_PARSER.parse(date))
+        try {
+            return DATE_OUTPUT.format(DATE_PARSER.parse(date))
+        } catch (ParseException) {
+            return DATE_OUTPUT.format(DATE_PARSER_2.parse(date))
+        }
     }
 
     protected List<String> getSprintIds() {
