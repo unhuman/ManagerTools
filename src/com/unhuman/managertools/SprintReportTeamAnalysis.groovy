@@ -96,7 +96,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                             ", issues: ${allIssues.size()})")
 
                     // Gather ticket data for all issues (completed and incomplete work)
-                    getIssueCategoryInformation(threadCount, data.sprint, allIssues)
+                    getIssueCategoryInformation(threadCount, data.sprint, mode, allIssues)
                 }
                 break
             case Mode.KANBAN:
@@ -119,7 +119,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     sprintSimulation.endDate = data.endDate
 
                     // Gather ticket data for all issues (completed and incomplete work)
-                    getIssueCategoryInformation(threadCount, sprintSimulation, allIssues)
+                    getIssueCategoryInformation(threadCount, sprintSimulation, mode, allIssues)
                 }
                 break
             default:
@@ -265,7 +265,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         }
     }
 
-    def getIssueCategoryInformation(final int threadCount, final Object sprint, List<Object> issueList) {
+    def getIssueCategoryInformation(final int threadCount, final Object sprint, Mode mode, List<Object> issueList) {
         String sprintName = sprint.name
         String startDate = cleanDate(sprint.startDate)
         String endDate = cleanDate(sprint.endDate)
@@ -361,8 +361,10 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                             continue
                         }
 
-                        if (sprintStartTime.getTime() > prActivity.createdDate
-                                || prActivity.createdDate >= sprintEndTime.getTime()) {
+                        // If we're not in kanban, ensure that the activity is within the sprint
+                        if (!Mode.KANBAN.equals(mode) &&
+                                (sprintStartTime.getTime() > prActivity.createdDate
+                                        || prActivity.createdDate >= sprintEndTime.getTime())) {
                             continue
                         }
 

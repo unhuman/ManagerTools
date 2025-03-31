@@ -20,6 +20,7 @@
 - PR_ADDED, PR_REMOVED, and PR_MODIFIED values are always attributed to the author, regardless of the committer.
 - PR_ADDED, PR_REMOVED, and PR_MODIFIED values are not time-checked against the sprints, so those values will duplicate for carryover tickets.
 - Nested comments could be mis-attributed to the wrong sprint.  Nested comments are attributed to the same sprint as the initial comment. 
+- Supports Kanban.  All activity on a ticket (regardless of time) is contained within the time period that the ticket is resolved.
 
 ## Execution
 - From the `src/` directory:
