@@ -23,8 +23,6 @@ import groovy.cli.commons.CliBuilder
 import groovyx.gpars.GParsPool
 import groovyx.gpars.util.PoolUtils
 import org.apache.hc.core5.http.HttpStatus
-
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
@@ -61,6 +59,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         cli.i(longOpt: 'isolateTicket', required: false, args:1, argName: 'isolateTicket',  'Isolate ticket for processing (for debugging)')
         cli.o(longOpt: 'outputCSV', required: true, args: 1, argName: 'outputCSV', 'Output filename (.csv)')
         cli.mt(longOpt: 'multithread', required: false, args: 1, argName: 'number', 'Number of threads, default to 1, *=cores')
+        cli.includeMergeCommits(required: false, 'Include merge commit data in code metrics')
+        cli.maxCommitSize(required: false, args: 1, argName: 'number', 'Limit the amount of size (adds+removes) of a commit to be counted in code metrics')
     }
 
     @Override
@@ -430,7 +430,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         }
 
                         // Skip merge commits
-                        if (commit.message.matches(MERGE_COMMIT_REGEX)) {
+                        if (!getCommandLineOptions().includeMergeCommits && commit.message.matches(MERGE_COMMIT_REGEX)) {
                             continue
                         }
 
@@ -527,14 +527,13 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             deletions = diffsResponse.stats.deletions
         }
         if (additions != null || deletions != null) {
+            // ignore counting data that is larger than acceptable
+            if (getCommandLineOptions().maxCommitSize
+                    && (additions + deletions >= Integer.parseInt(getCommandLineOptions().maxCommitSize))) {
+                return
+            }
             incrementCounter(indexLookup, UserActivity.valueOf(prefix + "ADDED"), additions)
             incrementCounter(indexLookup, UserActivity.valueOf(prefix + "REMOVED"), deletions)
-            return
-        }
-
-        // Ensure we have changes to look at
-        if (diffsResponse.diffs == null) {
-            return
         }
     }
 
