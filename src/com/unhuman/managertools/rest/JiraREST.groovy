@@ -67,10 +67,10 @@ class JiraREST extends RestService {
         return getRequest(uri, rapidViewIdPair, sprintIdPair, timeIdPair)
     }
 
-    Object getKanbanWeek(String team, int week) {
+    Object getKanbanCycle(String team, int cycle, int cycleLength) {
         // Calculate the start and end dates for the specified week
-        LocalDate startDate = LocalDate.now().minusWeeks(week).with(DayOfWeek.MONDAY)
-        LocalDate endDate = startDate.plusDays(6)
+        LocalDate startDate = LocalDate.now().minusWeeks((cycle + 1) * cycleLength).with(DayOfWeek.MONDAY)
+        LocalDate endDate = startDate.plusDays(7 * cycleLength - 1)
 
         // Format the dates to match Jira's date format
         DateTimeFormatter jqlFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -80,7 +80,7 @@ class JiraREST extends RestService {
         // Construct the JQL query to find issues closed within the specified week
         String jql = "\"Sprint Team\" = \"${team}\"" +
                 " AND issueType NOT IN subTaskIssueTypes()" +
-                // " AND status in [Closed, Done, \"Ready for Releaase\", Released, Resolved] " +
+                // " AND status in [Closed, Done, \"Ready for Release\", Released, Resolved] " +
                 " AND ((resolutiondate >= ${startDateJQLStr} AND resolutiondate <= ${endDateJQLStr})" +
                 "   OR (resolved >= ${startDateJQLStr} AND resolved <= ${endDateJQLStr})" +
                 "   OR (\"Resolved Date\" >= ${startDateJQLStr} AND \"Resolved Date\" <= ${endDateJQLStr}))"
@@ -89,7 +89,7 @@ class JiraREST extends RestService {
         Object response = jqlSummaryQuery(jql)
 
         // Update the response with our date range
-        response.name = "${team} Week ${week}"
+        response.name = "${team} Week ${cycle}"
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MMM/yy")
         String startDateStr = startDate.format(formatter)
         String endDateStr = endDate.format(formatter)

@@ -61,6 +61,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         cli.mt(longOpt: 'multithread', required: false, args: 1, argName: 'number', 'Number of threads, default to 1, *=cores')
         cli.includeMergeCommits(required: false, 'Include merge commit data in code metrics')
         cli.maxCommitSize(required: false, args: 1, argName: 'number', 'Limit the amount of size (adds+removes) of a commit to be counted in code metrics')
+        cli.kanbanCycleLength(required: false, args: 1, argName: 'number', defaultValue: "2", 'The length of a kanban cycle, in weeks')
     }
 
     @Override
@@ -72,7 +73,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     }
 
     @Override
-    protected def aggregateData(String teamName, String boardId, Mode mode, List<String> sprintIds, Long weeks) {
+    protected def aggregateData(String teamName, String boardId, Mode mode, List<String> sprintIds, Long cycles) {
         database = new FlexiDB(generateDBSignature(), true)
 
         // Specify threads
@@ -106,18 +107,18 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                 if (teamName == null) {
                     throw new RuntimeException("Team name is required for Kanban mode")
                 }
-                // TODO: Gather information about all the time periods (weeks)
-                System.out.println("Processing Kanban ${weeks} weeks...")
-                for (int week = 0; week < weeks; week++) {
-                    Object data = jiraREST.getKanbanWeek(teamName, week)
+                // TODO: Gather information about all the time periods (cycles)
+                System.out.println("Processing Kanban ${cycles} cycles...")
+                for (int cycle = 0; cycle < cycles; cycle++) {
+                    Object data = jiraREST.getKanbanCycle(teamName, cycle, Integer.parseInt(getCommandLineOptions().kanbanCycleLength))
 
                     def allIssues = new ArrayList()
                     allIssues.addAll(data.issues)
 
-                    System.out.println("Kanban Cycle: ${week} / ${weeks}, issues: ${allIssues.size()}")
+                    System.out.println("Kanban Cycle: ${cycle} / ${cycles} (${data.startDate.split(' ')[0]} - ${data.endDate.split(' ')[0]}), issues: ${allIssues.size()}")
 
                     Object sprintSimulation = new HashMap()
-                    sprintSimulation.name = "${teamName} Week ${week}"
+                    sprintSimulation.name = "${teamName} Cycle ${cycle}"
                     sprintSimulation.startDate = data.startDate
                     sprintSimulation.endDate = data.endDate
 
