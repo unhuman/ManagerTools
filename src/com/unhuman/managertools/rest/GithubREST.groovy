@@ -88,6 +88,11 @@ class GithubREST extends SourceControlREST {
 
             activity.user.name = mapUserToJiraName(activity.user)
 
+            // skip activities that do not have a time
+            if (activity.submitted_at == null) {
+                continue
+            }
+
             activity.createdDate = Instant.parse(activity.submitted_at).getEpochSecond() * 1000 // ms
 
             // Determine the activity type
