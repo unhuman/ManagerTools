@@ -548,6 +548,75 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             }
             incrementCounter(indexLookup, UserActivity.valueOf(prefix + "ADDED"), additions)
             incrementCounter(indexLookup, UserActivity.valueOf(prefix + "REMOVED"), deletions)
+            return
+        }
+
+        // Ensure we have changes to look at
+        if (diffsResponse.diffs == null) {
+            return
+        }
+
+        // copilot suggested this as a way to find all the content
+        int addedCalculated = 0
+        int removedCalculated = 0
+        diffsResponse.diffs.each { diff ->
+            diff.hunks.each { hunk ->
+                hunk.segments.each { segment ->
+                    addedCalculated += (segment.type == "ADDED") ? segment.lines.size() : 0
+                    removedCalculated += (segment.type == "REMOVED") ? segment.lines.size() : 0
+
+//                    segment.lines.each { line ->
+//                        println("${segment.type}: ${line}")
+//                    }
+                }
+            }
+        }
+
+        int addedCalculated2 = 0
+        int removedCalculated2 = 0
+        // aggregate the total responses to get all the diffs
+        diffsResponse.diffs.forEach { diff ->
+            {
+                // sometimes these can be null - file comments is an example
+                if (diff.hunks == null) {
+                    return
+                }
+                diff.hunks.forEach(hunk -> {
+                    int added = 0
+                    int removed = 0
+
+                    hunk.segments.forEach(segment -> {
+                        // TODO: within a hunk, multiple segments (likely) indicates a MODIFIED
+                        //       these segments seem to have REMOVED and ADDED both
+                        switch (segment.type) {
+
+                        // TODO:
+                        // for every line, track source + destination to see if a value is added, deleted, or modified
+
+                            case "ADDED":
+                                added += segment.lines.size()
+                                break
+                            case "REMOVED":
+                                // Note this is silly for now, since it's the same as ADDED, for now
+                                removed += segment.lines.size()
+                                break
+                        }
+                    })
+
+                    // ignore counting data that is larger than acceptable
+                    if (getCommandLineOptions().maxCommitSize
+                            && (additions + deletions >= Integer.parseInt(getCommandLineOptions().maxCommitSize))) {
+                        return
+                    }
+
+                    addedCalculated2 = incrementCounter(indexLookup, UserActivity.valueOf(prefix + "ADDED"), added)
+                    removedCalculated2 = incrementCounter(indexLookup, UserActivity.valueOf(prefix + "REMOVED"), removed)
+                })
+            }
+        }
+
+        if (prefix.startsWith(getPR_PREFIX()) && ((addedCalculated != addedCalculated2) || (removedCalculated != removedCalculated2))) {
+            System.out.println("Add1: ${addedCalculated} Add2: ${addedCalculated2} Remove1: ${removedCalculated} Remove2: ${removedCalculated2}")
         }
     }
 
