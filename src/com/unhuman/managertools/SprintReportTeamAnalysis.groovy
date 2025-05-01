@@ -511,19 +511,25 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         }
     }
 
+    protected static String sanitizeNameForIndex(String name) {
+        return name.replaceAll('-', '.')
+    }
+
     protected List<FlexiDBQueryColumn> createIndexLookup(String sprintName, ticket, prId, String userName) {
         List<FlexiDBQueryColumn> indexLookup = new ArrayList<>()
         indexLookup.add(new FlexiDBQueryColumn(DBIndexData.SPRINT.name(), sprintName))
         indexLookup.add(new FlexiDBQueryColumn(DBIndexData.TICKET.name(), ticket))
         indexLookup.add(new FlexiDBQueryColumn(DBIndexData.PR_ID.name(), prId))
-        indexLookup.add(new FlexiDBQueryColumn(DBIndexData.USER.name(), userName))
+        // we need to fix userNames to not have - / . differences
+        indexLookup.add(new FlexiDBQueryColumn(DBIndexData.USER.name(), sanitizeNameForIndex(userName)))
         return indexLookup
     }
 
     protected void populateBaselineDBInfo(List<FlexiDBQueryColumn> indexLookup, String startDate, String endDate, String prAuthor) {
         database.setValue(indexLookup, DBData.START_DATE.name(), startDate)
         database.setValue(indexLookup, DBData.END_DATE.name(), endDate)
-        database.setValue(indexLookup, DBData.AUTHOR.name(), prAuthor)
+        // we need to fix userNames to not have - / . differences
+        database.setValue(indexLookup, DBData.AUTHOR.name(), sanitizeNameForIndex(prAuthor))
     }
 
     protected void processDiffs(String prefix, def diffsResponse, List<FlexiDBQueryColumn> indexLookup) {
@@ -595,9 +601,11 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         // recreate the indexLookup with the actual user (and a version for the prAuthor)
         List<FlexiDBQueryColumn> sprintTicketPRIndexBase = originalIndexLookup.stream().filter { it.getName() != DBIndexData.USER.name() }.toList()
         List<FlexiDBQueryColumn> prAuthorUserIndexLookup = new ArrayList<>(sprintTicketPRIndexBase)
-        prAuthorUserIndexLookup.add(new FlexiDBQueryColumn(DBIndexData.USER.name(), prAuthor))
+        // we need to fix userNames to not have - / . differences
+        prAuthorUserIndexLookup.add(new FlexiDBQueryColumn(DBIndexData.USER.name(), sanitizeNameForIndex(prAuthor)))
         List<FlexiDBQueryColumn> currentUserIndexLookup = new ArrayList<>(sprintTicketPRIndexBase)
-        currentUserIndexLookup.add(new FlexiDBQueryColumn(DBIndexData.USER.name(), userName))
+        // we need to fix userNames to not have - / . differences
+        currentUserIndexLookup.add(new FlexiDBQueryColumn(DBIndexData.USER.name(), sanitizeNameForIndex(userName)))
 
         // TODO: distinguish comments on own PR versus others
         String commentText = comment.text

@@ -84,7 +84,7 @@ class SprintReportIndividualAnalysis extends SprintReportTeamAnalysis {
             sprints.each { sprint -> {
                 List<FlexiDBQueryColumn> userSprintFinder = new ArrayList<>()
                 userSprintFinder.add(new FlexiDBQueryColumn(DBIndexData.SPRINT.name(), sprint))
-                userSprintFinder.add(new FlexiDBQueryColumn(DBIndexData.USER.name(), user))
+                userSprintFinder.add(new FlexiDBQueryColumn(DBIndexData.USER.name(), sanitizeNameForIndex(user)))
 
                 findRowsAndAppendCSVData(userSprintFinder, sb, overallTotalsRow)
             }}

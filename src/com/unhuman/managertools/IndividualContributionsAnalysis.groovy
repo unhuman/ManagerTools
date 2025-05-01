@@ -1112,7 +1112,8 @@ class IndividualContributionsAnalysis extends SprintReportTeamAnalysis {
             for (String period : periods) {
                 List<FlexiDBQueryColumn> userPeriodFinder = new ArrayList<>()
                 userPeriodFinder.add(new FlexiDBQueryColumn(DBIndexData.SPRINT.name(), period))
-                userPeriodFinder.add(new FlexiDBQueryColumn(DBIndexData.USER.name(), user))
+                // we need to fix userNames to not have - / . differences
+                userPeriodFinder.add(new FlexiDBQueryColumn(DBIndexData.USER.name(), sanitizeNameForIndex(user)))
                 
                 findRowsAndAppendCSVData(userPeriodFinder, sb, overallTotalsRow)
             }
