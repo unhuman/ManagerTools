@@ -19,6 +19,7 @@ import com.unhuman.managertools.data.UserActivity
 import com.unhuman.managertools.output.ConvertSelfMetricsEmptyToZeroOutputFilter
 import com.unhuman.managertools.rest.SourceControlREST
 import com.unhuman.managertools.rest.exceptions.RESTException
+import com.unhuman.managertools.util.CommandLineHelper
 import groovy.cli.commons.CliBuilder
 import groovyx.gpars.GParsPool
 import groovyx.gpars.util.PoolUtils
@@ -61,7 +62,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         cli.mt(longOpt: 'multithread', required: false, args: 1, argName: 'number', 'Number of threads, default to 1, *=cores')
         cli.includeMergeCommits(required: false, 'Include merge commit data in code metrics')
         cli.maxCommitSize(required: false, args: 1, argName: 'number', 'Limit the amount of size (adds+removes) of a commit to be counted in code metrics')
-        cli.kanbanCycleLength(required: false, args: 1, argName: 'number', defaultValue: "2", 'The length of a kanban cycle, in weeks')
+        cli.kanbanCycleLength(required: false, args: 1, argName: 'number', defaultValue: "2", 'The length of a kanban cycle, in weeks (defaults to 2)')
     }
 
     @Override
@@ -107,10 +108,16 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                 if (teamName == null) {
                     throw new RuntimeException("Team name is required for Kanban mode")
                 }
+
+                def cycleLength = Integer.parseInt(
+                        (getCommandLineOptions().'prompt'
+                                ? CommandLineHelper.promptNumber("Kanban cycle length, in weeks")
+                                : getCommandLineOptions().kanbanCycleLength))
+
                 // TODO: Gather information about all the time periods (cycles)
                 System.out.println("Processing Kanban ${cycles} cycles...")
                 for (int cycle = 0; cycle < cycles; cycle++) {
-                    Object data = jiraREST.getKanbanCycle(teamName, cycle, Integer.parseInt(getCommandLineOptions().kanbanCycleLength))
+                    Object data = jiraREST.getKanbanCycle(teamName, cycle, cycleLength)
 
                     def allIssues = new ArrayList()
                     allIssues.addAll(data.issues)
@@ -346,12 +353,12 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     System.out.println("      PR ${ticket} / ${prId} has ${prActivities.values.size()} activities")
                     // process from oldest to newest (reverse)
                     for (int i = prActivities.values.size() - 1; i >= 0; i--) {
-                        def prActivity = (prActivities instanceof List) ? prActivities[i] : prActivities.values.get(i)
+                        def prInfo = (prActivities instanceof List) ? prActivities[i] : prActivities.values.get(i)
                         // map the user name from source control
-                        String userName = prActivity.user.name // already mapped from getActivities()
+                        String userName = prInfo.user.name // already mapped from getActivities()
 
                         // try to match up the names better // TODO: lowercase all this
-                        prAuthor = (prAuthor.equals(prActivity.user.displayName)) ? userName : prAuthor
+                        prAuthor = (prAuthor.equals(prInfo.user.displayName)) ? userName : prAuthor
 
                         // Skip this if not desired
                         if (IGNORE_USERS.contains(userName.toLowerCase())) {
@@ -359,16 +366,16 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         }
 
                         // Get / ensure we have a known action
-                        UserActivity prActivityAction = UserActivity.getResolvedValue((String) prActivity.action)
-                        if (prActivityAction == null) {
+                        UserActivity prInfoAction = UserActivity.getResolvedValue((String) prInfo.action)
+                        if (prInfoAction == null) {
                             // this was logged
                             continue
                         }
 
                         // If we're not in kanban, ensure that the activity is within the sprint
                         if (!Mode.KANBAN.equals(mode) &&
-                                (sprintStartTime.getTime() > prActivity.createdDate
-                                        || prActivity.createdDate >= sprintEndTime.getTime())) {
+                                (sprintStartTime.getTime() > prInfo.createdDate
+                                        || prInfo.createdDate >= sprintEndTime.getTime())) {
                             continue
                         }
 
@@ -377,17 +384,17 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
 
                         // Github action conversions
-                        switch (prActivityAction) {
+                        switch (prInfoAction) {
                             case "DISMISSED":
-                                prActivityAction = UserActivity.DECLINED.name()
+                                prInfoAction = UserActivity.DECLINED.name()
                                 break
                         }
 
-                        switch (prActivityAction) {
+                        switch (prInfoAction) {
                             case UserActivity.APPROVED.name():
                                 break
                             case UserActivity.COMMENTED.name():
-                                processComment(commentBlockers, indexLookup, prAuthor, prActivity)
+                                processComment(commentBlockers, indexLookup, prAuthor, prInfo)
                                 // processComment updates counters due to nested data
                                 continue
                             case UserActivity.DECLINED.name():
@@ -405,7 +412,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         }
 
                         // increment counter
-                        incrementCounter(indexLookup, prActivityAction)
+                        incrementCounter(indexLookup, prInfoAction)
                     }
 
                     // Process commits
@@ -491,7 +498,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 //                def commentDate = (comment.updated != null) ? comment.updated : comment.created
 //                def commentAuthor = (comment.updated != null) ? comment.updateAuthor.name : comment.author.name
 //
-//                processComment(indexLookup, prAuthor, prActivity)
+//                processComment(indexLookup, prAuthor, prInfo)
 //            })
 //        } catch (NullPointerException npe) {
 //            System.err.println("Ticket: ${ticket} could not find comments")
@@ -541,11 +548,11 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     /**
      * Increment counters for data provided
      * @param indexLookup
-     * @param prActivityAction
+     * @param prInfoAction
      * @param dbActivityAction
      */
-    protected int incrementCounter(ArrayList<FlexiDBQueryColumn> indexLookup, UserActivity prActivityAction) {
-        return incrementCounter(indexLookup, prActivityAction, 1)
+    protected int incrementCounter(ArrayList<FlexiDBQueryColumn> indexLookup, UserActivity prInfoAction) {
+        return incrementCounter(indexLookup, prInfoAction, 1)
     }
 
     /**

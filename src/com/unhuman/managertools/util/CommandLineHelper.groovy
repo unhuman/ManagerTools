@@ -17,10 +17,11 @@ class CommandLineHelper {
     private static final Pattern USERS_MATCH_PATTERN = Pattern.compile("^\\*{1,2}\$|^[a-zA-Z0-9.]+([,\\s]+[a-zA-Z0-9.-]*)*\$")
     private static final Pattern DATE_PATTERN = Pattern.compile("\\d{4}-\\d{2}-\\d{2}")
     private static final Pattern NUMBERS_REQUIRED_PATTERN = Pattern.compile("\\d+")
+    private static final Pattern DATA_REQUIRED_PATTERN = Pattern.compile("\\S+")
     private static final Pattern FQDN_PATTERN = Pattern.compile("(\\w+\\.){2,}\\w+")
 
     ConfigFileManager configFileManager
-    private boolean quietMode = false
+    private static boolean quietMode = false
 
     CommandLineHelper(String configFilename) {
         if (configFilename) {
@@ -32,8 +33,8 @@ class CommandLineHelper {
         return configFileManager
     }
 
-    void setQuietModeNoPrompts() {
-        this.quietMode = true
+    static void setQuietModeNoPrompts() {
+        quietMode = true
     }
 
     /**
@@ -103,19 +104,27 @@ class CommandLineHelper {
         return promptAndStore("Enter date ${promptDescription} (yyyy-mm-dd)", TextSecurity.NONE, DATE_PATTERN, configKey, true)
     }
 
-    String prompt(String text) {
+    static String prompt(String text) {
         return prompt(text, TextSecurity.NONE)
     }
 
-    String prompt(String text, Pattern patternValidation) {
+    static String prompt(String text, Pattern patternValidation) {
         return prompt(text, TextSecurity.NONE, patternValidation)
     }
 
-    String prompt(String text, TextSecurity textSecurity) {
+    static String promptNumber(String text) {
+        return prompt(text, NUMBERS_REQUIRED_PATTERN)
+    }
+
+    static String promptValue(String text) {
+        return prompt(text, DATA_REQUIRED_PATTERN)
+    }
+
+    static String prompt(String text, TextSecurity textSecurity) {
         return prompt(text, textSecurity, ANY_MATCH_PATTERN)
     }
 
-    String prompt(String text, TextSecurity textSecurity, Pattern validationPattern) {
+    static String prompt(String text, TextSecurity textSecurity, Pattern validationPattern) {
         if (quietMode) {
             return ""
         }
@@ -123,7 +132,7 @@ class CommandLineHelper {
         performPrompt(text, textSecurity, validationPattern)
     }
 
-    String performPrompt(String text, TextSecurity textSecurity, Pattern validationPattern) {
+    static String performPrompt(String text, TextSecurity textSecurity, Pattern validationPattern) {
         while (true) {
             String input
             if (System.console() != null) {
@@ -201,7 +210,7 @@ class CommandLineHelper {
         }
     }
 
-    private String getStringValue(promptText) {
+    private static String getStringValue(promptText) {
         // Use console or zsh to get value b/c OSX limits values to 1024 chars
         // We do have to display the promptText differently b/c it doesn't show until newline otherwise
 
