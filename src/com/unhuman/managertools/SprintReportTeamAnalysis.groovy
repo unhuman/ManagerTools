@@ -466,6 +466,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
                         // Add pr commit messages to database
                         def commitMessage = commit.message.replaceAll("(\\r|\\n)?\\n", "  ").trim()
+                        database.incrementField(indexLookup, UserActivity.COMMITS.name())
                         database.append(indexLookup, DBData.COMMIT_MESSAGES.name(), commitMessage, true)
                         // TODO: Add counter for commits
                         // incrementCounter(currentUserIndexLookup, JiraDBActions.COMMIT)

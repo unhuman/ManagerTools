@@ -7,6 +7,7 @@ enum UserActivity {
     PR_ADDED(0),
     PR_REMOVED(0),
 
+    COMMITS(0),
     COMMIT_ADDED(0),
     COMMIT_REMOVED(0),
 
