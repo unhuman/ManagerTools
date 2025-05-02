@@ -97,7 +97,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     allIssues.addAll(data.contents.completedIssues)
                     allIssues.addAll(data.contents.issuesNotCompletedInCurrentSprint)
 
-                    System.out.println("${i + 1} / ${sprintIds.size()}: ${data.sprint.name} (id: ${sprintId}" +
+                    System.out.println("${i + 1} / ${sprintIds.size()}: ${teamName}: ${data.sprint.name} (id: ${sprintId}" +
                             ", issues: ${allIssues.size()})")
 
                     // Gather ticket data for all issues (completed and incomplete work)
@@ -573,61 +573,14 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             }
         }
 
+        // ignore counting data that is larger than acceptable
+        if (getCommandLineOptions().maxCommitSize
+                && (addedCalculated + removedCalculated >= Integer.parseInt(getCommandLineOptions().maxCommitSize))) {
+            return
+        }
+
         incrementCounter(indexLookup, UserActivity.valueOf(prefix + "ADDED"), addedCalculated)
         incrementCounter(indexLookup, UserActivity.valueOf(prefix + "REMOVED"), removedCalculated)
-
-        // Alternative way to calculate diffs.  Something is likely wrong with how this calculation works
-        int addedCalculated2 = 0
-        int removedCalculated2 = 0
-        // aggregate the total responses to get all the diffs
-        diffsResponse.diffs.forEach { diff ->
-            {
-                // sometimes these can be null - file comments is an example
-                if (diff.hunks == null) {
-                    return
-                }
-                diff.hunks.forEach(hunk -> {
-                    int added = 0
-                    int removed = 0
-
-                    hunk.segments.forEach(segment -> {
-                        // TODO: within a hunk, multiple segments (likely) indicates a MODIFIED
-                        //       these segments seem to have REMOVED and ADDED both
-                        switch (segment.type) {
-
-                        // TODO:
-                        // for every line, track source + destination to see if a value is added, deleted, or modified
-
-                            case "ADDED":
-                                added += segment.lines.size()
-                                break
-                            case "REMOVED":
-                                // Note this is silly for now, since it's the same as ADDED, for now
-                                removed += segment.lines.size()
-                                break
-                        }
-                    })
-
-                    // ignore counting data that is larger than acceptable
-                    if (getCommandLineOptions().maxCommitSize
-                            && (additions + deletions >= Integer.parseInt(getCommandLineOptions().maxCommitSize))) {
-                        return
-                    }
-
-                    // Note we are just calculating this since we're not incrementing counters based on these values
-                    addedCalculated2 += added
-                    removedCalculated2 += removed
-                    // BUG? when using increment counter, here, this reports errors below, when using +=, does not seem to fire
-//                    addedCalculated2 = incrementCounter(indexLookup, UserActivity.valueOf(prefix + "ADDED"), added)
-//                    removedCalculated2 = incrementCounter(indexLookup, UserActivity.valueOf(prefix + "REMOVED"), removed)
-                })
-            }
-        }
-
-        // Report inconsistencies when we calculate things differently
-        if (prefix.startsWith(getPR_PREFIX()) && ((addedCalculated != addedCalculated2) || (removedCalculated != removedCalculated2))) {
-            System.out.println("Add1: ${addedCalculated} Add2: ${addedCalculated2} Remove1: ${removedCalculated} Remove2: ${removedCalculated2} for Prefix: ${prefix} and Index Lookup: ${indexLookup}")
-        }
     }
 
     /**
