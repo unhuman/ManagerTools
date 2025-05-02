@@ -49,6 +49,10 @@ class ConfigFileManager {
         return current
     }
 
+    void storeValue(String key, Object value) {
+        updateValue(key, value)
+    }
+
     void updateValue(String key, Object value) {
         // split the string key by periods and then walk the map
         // setting the last value as provided

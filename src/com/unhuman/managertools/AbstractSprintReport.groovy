@@ -248,7 +248,12 @@ abstract class AbstractSprintReport extends Script {
             }
             // look up boardId from team name
             String lookupValue = "teamMappings.${teamName}"
-            boardId = commandLineHelper.getConfigFileManager().getValue(lookupValue)
+            try {
+                boardId = commandLineHelper.getConfigFileManager().getValue(lookupValue)
+            } catch (RuntimeException re) {
+                boardId = commandLineHelper.promptNumber("Jira boardId for ${teamName}")
+                commandLineHelper.getConfigFileManager().storeValue(lookupValue, boardId)
+            }
         }
 
         // TODO: find team name if only boardId is provided

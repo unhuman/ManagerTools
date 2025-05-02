@@ -5,6 +5,7 @@ import java.util.regex.Pattern
 
 class CommandLineHelper {
     private static final Pattern ANY_MATCH_PATTERN = Pattern.compile(".*")
+    private static final Pattern ANY_MATCH_PATTERN_LONG = Pattern.compile(".{32,}")
 
     enum TextSecurity {
         NONE,
@@ -79,15 +80,18 @@ class CommandLineHelper {
     }
 
     String getJiraAuth() {
-        return promptAndStore("Jira Access Token or Cookies (DevTools/Request/Cookie)", TextSecurity.MASK, ANY_MATCH_PATTERN, "jiraAuth", true)
+        // 32 or more characters since these are tokens and we want to prevent accidental inputs from affecting stored config
+        return promptAndStore("Jira Access Token or Cookies (DevTools/Request/Cookie)", TextSecurity.MASK, ANY_MATCH_PATTERN_LONG, "jiraAuth", true)
     }
 
     String getBitbucketAuth() {
-        return promptAndStore("Bitbucket Access Token or Cookies (DevTools/Request/Cookie)", TextSecurity.MASK, ANY_MATCH_PATTERN, "bitbucketAuth", true)
+        // 32 or more characters since these are tokens and we want to prevent accidental inputs from affecting stored config
+        return promptAndStore("Bitbucket Access Token or Cookies (DevTools/Request/Cookie)", TextSecurity.MASK, ANY_MATCH_PATTERN_LONG, "bitbucketAuth", true)
     }
 
     String getGithubToken() {
-        return promptAndStore("Github Token", TextSecurity.MASK, ANY_MATCH_PATTERN, "githubToken", true)
+        // 32 or more characters since these are tokens and we want to prevent accidental inputs from affecting stored config
+        return promptAndStore("Github Token", TextSecurity.MASK, ANY_MATCH_PATTERN_LONG, "githubToken", true)
     }
 
     List<String> getTeamBoardUsers(String teamName, String boardId) {
