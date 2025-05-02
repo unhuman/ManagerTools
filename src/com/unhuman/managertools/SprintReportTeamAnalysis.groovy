@@ -573,6 +573,10 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             }
         }
 
+        incrementCounter(indexLookup, UserActivity.valueOf(prefix + "ADDED"), addedCalculated)
+        incrementCounter(indexLookup, UserActivity.valueOf(prefix + "REMOVED"), removedCalculated)
+
+        // Alternative way to calculate diffs.  Something is likely wrong with how this calculation works
         int addedCalculated2 = 0
         int removedCalculated2 = 0
         // aggregate the total responses to get all the diffs
@@ -610,14 +614,19 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         return
                     }
 
-                    addedCalculated2 = incrementCounter(indexLookup, UserActivity.valueOf(prefix + "ADDED"), added)
-                    removedCalculated2 = incrementCounter(indexLookup, UserActivity.valueOf(prefix + "REMOVED"), removed)
+                    // Note we are just calculating this since we're not incrementing counters based on these values
+                    addedCalculated2 += added
+                    removedCalculated2 += removed
+                    // BUG? when using increment counter, here, this reports errors below, when using +=, does not seem to fire
+//                    addedCalculated2 = incrementCounter(indexLookup, UserActivity.valueOf(prefix + "ADDED"), added)
+//                    removedCalculated2 = incrementCounter(indexLookup, UserActivity.valueOf(prefix + "REMOVED"), removed)
                 })
             }
         }
 
+        // Report inconsistencies when we calculate things differently
         if (prefix.startsWith(getPR_PREFIX()) && ((addedCalculated != addedCalculated2) || (removedCalculated != removedCalculated2))) {
-            System.out.println("Add1: ${addedCalculated} Add2: ${addedCalculated2} Remove1: ${removedCalculated} Remove2: ${removedCalculated2}")
+            System.out.println("Add1: ${addedCalculated} Add2: ${addedCalculated2} Remove1: ${removedCalculated} Remove2: ${removedCalculated2} for Prefix: ${prefix} and Index Lookup: ${indexLookup}")
         }
     }
 
@@ -627,7 +636,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
      * @param prInfoAction
      * @param dbActivityAction
      */
-    protected int incrementCounter(ArrayList<FlexiDBQueryColumn> indexLookup, UserActivity prInfoAction) {
+    protected int incrementCounter(List<FlexiDBQueryColumn> indexLookup, UserActivity prInfoAction) {
         return incrementCounter(indexLookup, prInfoAction, 1)
     }
 
@@ -637,7 +646,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
      * @param prActivityAction
      * @param dbActivityAction
      */
-    protected int incrementCounter(ArrayList<FlexiDBQueryColumn> indexLookup, UserActivity prActivityAction, int increment) {
+    protected int incrementCounter(List<FlexiDBQueryColumn> indexLookup, UserActivity prActivityAction, int increment) {
         UserActivity dbActivityAction = prActivityAction
         return database.incrementField(indexLookup, dbActivityAction.name(), increment)
     }
