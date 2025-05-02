@@ -95,6 +95,8 @@ class CommandLineHelper {
     }
 
     List<String> getTeamBoardUsers(String teamName, String boardId) {
+        // periods screw up the lookups
+        teamName = teamName.replaceAll("\\.", "-")
         String configKey = (teamName != null) ? "teamUsers.${teamName}" : "${boardId}-users"
         String typeIndicator = (teamName != null) ? "team" : "board"
         String item = (teamName != null) ? teamName : boardId
