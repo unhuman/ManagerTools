@@ -326,13 +326,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     // check comment count before polling for comments
                     def prId = (pullRequest.id.startsWith("#") ? pullRequest.id.substring(1) : pullRequest.id)
 
-                    def prAuthor
-                    try {
-                        prAuthor = sourceControlREST.mapUserToJiraName(pullRequest.author)
-                    } catch (Exception e) {
-                        System.err.println("Unable to map user ${pullRequest.author} from pullRequest: ${pullRequest} to Jira name")
-                        throw e
-                    }
+                    def prAuthor = sourceControlREST.mapUserToJiraName(pullRequest.author)
 
                     // Get the commits
                     def prCommits = sourceControlREST.getCommits(prUrl)

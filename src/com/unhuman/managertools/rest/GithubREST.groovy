@@ -223,10 +223,14 @@ class GithubREST extends SourceControlREST {
             return userData
         }
 
-        // all references to name will be lowercase
-        String jiraName = (userData.login != null)
-                ? userData.login
-                : userData.url.toLowerCase().substring(userData.url.lastIndexOf("/") + 1)
+        String jiraName = userData.login
+        if (jiraName == null && userData.url != null) {
+            jiraName = userData.url.toLowerCase().substring(userData.url.lastIndexOf("/") + 1)
+        }
+
+        if (jiraName == null) {
+            return null
+        }
 
         if (!jiraName.contains("_")) {
             // seeing some randomized IDs... so we need to strip them out
