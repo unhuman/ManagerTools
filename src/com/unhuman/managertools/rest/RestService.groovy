@@ -104,6 +104,12 @@ abstract class RestService {
                 String responseData = client.with { httpClient ->
                     httpClient.execute(request).withCloseable { response ->
                         if (response.getCode() == 429) {
+                            // Log Rate Limit Response Headers
+                            def rateLimitHeaders = response.getHeaders().findAll { it.getName().containsIgnoreCase("RateLimit") }
+                            if (rateLimitHeaders.size() > 0) {
+                                System.err.println("Rate Limit Response Headers: ${rateLimitHeaders}")
+                            }
+
                             Integer retryAfter = response.getFirstHeader("Retry-After")?.getValue()?.toInteger()
                             if (retryAfter != null) {
                                 InputStream inputStream = response.getEntity().getContent()
@@ -113,10 +119,6 @@ abstract class RestService {
                                 throw new RuntimeException("Rate limit exceeded. No Retry-After header found - here are the headers: ${response.getHeaders()}")
                             }
                         } else if (response.getCode() < 200 || response.getCode() > 299) {
-                            def rateLimitHeaders = response.getHeaders().findAll {it.getName().containsIgnoreCase("RateLimit")}
-                            if (rateLimitHeaders.size() > 0) {
-                                System.err.println("Rate Limit Response Headers: ${rateLimitHeaders}")
-                            }
                             throw new RESTException(response.getCode(), "Unable to retrieve requested url", request.getUri().toString())
                         } else {
                             List<BasicHeader> cookies = response.getHeaders("Set-Cookie").toList().collect { Header header ->

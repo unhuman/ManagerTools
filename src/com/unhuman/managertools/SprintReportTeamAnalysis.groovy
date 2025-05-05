@@ -314,16 +314,25 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                 pullRequests.each(pullRequest -> {
                     // based on the PR - determine where the source is - choosing github or (default) bitbucket
                     String prUrl = pullRequest.url
+
+                    // Figure out which source control system we're using
                     boolean isGithub = prUrl.toLowerCase().contains("github.com/")
                     SourceControlREST sourceControlREST = (isGithub) ? githubREST : bitbucketREST
+
+                    // fixup the url for the api
+                    prUrl = sourceControlREST.apiConvert(prUrl)
 
                     // can get approvers out of ^^^
                     // check comment count before polling for comments
                     def prId = (pullRequest.id.startsWith("#") ? pullRequest.id.substring(1) : pullRequest.id)
-                    def prAuthor = sourceControlREST.mapUserToJiraName(pullRequest.author) // Below, we try to update this to match the username
 
-                    // fixup the url for the api
-                    prUrl = sourceControlREST.apiConvert(prUrl)
+                    def prAuthor
+                    try {
+                        prAuthor = sourceControlREST.mapUserToJiraName(pullRequest.author)
+                    } catch (Exception e) {
+                        System.err.println("Unable to map user ${pullRequest.author} from pullRequest: ${pullRequest} to Jira name")
+                        throw e
+                    }
 
                     // Get the commits
                     def prCommits = sourceControlREST.getCommits(prUrl)

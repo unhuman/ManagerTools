@@ -36,9 +36,30 @@ class GithubREST extends SourceControlREST {
 
     // Get activities (approvals, comments, etc)
     Object getActivities(String prUrl) {
+        List<String> errors = new ArrayList<>(2)
         List<Object> activitiesList = new ArrayList<>()
-        activitiesList.addAll(getComments(prUrl))
-        activitiesList.addAll(getReviews(prUrl))
+        try {
+            activitiesList.addAll(getComments(prUrl))
+        } catch (RESTException re) {
+            if (re.statusCode != HttpStatus.SC_NOT_FOUND) {
+                throw re
+            }
+            errors.add("Comments")
+        }
+        try {
+            activitiesList.addAll(getReviews(prUrl))
+        } catch (RESTException re) {
+            if (re.statusCode != HttpStatus.SC_NOT_FOUND) {
+                throw re
+            }
+            errors.add("Reviews")
+        }
+
+        if (errors.size() > 0) {
+            String errorMessage = "Unable to retrieve activities: ${errors.join(", ")}"
+            commandLineHelper.printError(errorMessage)
+        }
+
         return activitiesList
     }
 
