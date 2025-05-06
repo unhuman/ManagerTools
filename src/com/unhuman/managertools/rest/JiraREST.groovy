@@ -67,9 +67,9 @@ class JiraREST extends RestService {
         return getRequest(uri, rapidViewIdPair, sprintIdPair, timeIdPair)
     }
 
-    Object getKanbanCycle(String team, int cycle, int cycleLength) {
+    Object getKanbanCycle(String team, int cycle, int cycles, int cycleLength) {
         // Calculate the start and end dates for the specified week
-        LocalDate startDate = LocalDate.now().minusWeeks((cycle + 1) * cycleLength).with(DayOfWeek.MONDAY)
+        LocalDate startDate = LocalDate.now().minusWeeks((cycles - cycle) * cycleLength).with(DayOfWeek.MONDAY)
         LocalDate endDate = startDate.plusDays(7 * cycleLength - 1)
 
         // Format the dates to match Jira's date format

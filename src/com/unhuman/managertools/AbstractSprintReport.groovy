@@ -30,7 +30,7 @@ abstract class AbstractSprintReport extends Script {
     protected String boardId
     protected String teamName
     private List<String> sprintIds
-    private Long weeks
+    private Integer weeks
 
     /**
      * Implementations should override this functionality.
@@ -40,7 +40,7 @@ abstract class AbstractSprintReport extends Script {
      * @param sprintIds
      * @return
      */
-    protected abstract def aggregateData(String teamName, String boardId, Mode mode, List<String> sprintIds, Long weeks)
+    protected abstract def aggregateData(String teamName, String boardId, Mode mode, List<String> sprintIds, Integer weeks)
 
     // this is an example of a very simple thing done
     //    protected def aggregateData(String teamName, String boardId, Mode mode, List<String> sprintIds) {
@@ -182,7 +182,7 @@ abstract class AbstractSprintReport extends Script {
             mode = Mode.KANBAN
             // in prompt mode, we already have the weeks value from processing above
             if (!commandLineOptions.'prompt') {
-                weeks = Long.parseLong(commandLineOptions.'weeks')
+                weeks = Integer.parseInt(commandLineOptions.'weeks')
             }
         }
     }

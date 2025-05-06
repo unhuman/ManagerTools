@@ -2,7 +2,7 @@ package com.unhuman.managertools
 
 class SprintReportTeamCarryoverHours extends AbstractSprintReport {
     @Override
-    protected def aggregateData(String teamName, String boardId, Mode mode, List<String> sprintIds, Long weeks) {
+    protected def aggregateData(String teamName, String boardId, Mode mode, List<String> sprintIds, Integer weeks) {
         if (mode != Mode.SCRUM) {
             throw new RuntimeException("Only SCRUM mode is supported for this report")
         }

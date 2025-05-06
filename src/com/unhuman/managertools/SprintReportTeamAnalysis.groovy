@@ -74,7 +74,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
     }
 
     @Override
-    protected def aggregateData(String teamName, String boardId, Mode mode, List<String> sprintIds, Long cycles) {
+    protected def aggregateData(String teamName, String boardId, Mode mode, List<String> sprintIds, Integer cycles) {
         database = new FlexiDB(generateDBSignature(), true)
 
         // Specify threads
@@ -117,7 +117,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                 // TODO: Gather information about all the time periods (cycles)
                 System.out.println("Processing Kanban ${cycles} cycles...")
                 for (int cycle = 0; cycle < cycles; cycle++) {
-                    Object data = jiraREST.getKanbanCycle(teamName, cycle, cycleLength)
+                    Object data = jiraREST.getKanbanCycle(teamName, cycle, cycles, cycleLength)
 
                     def allIssues = new ArrayList()
                     allIssues.addAll(data.issues)

@@ -251,7 +251,7 @@ class IndividualContributionsAnalysis extends SprintReportTeamAnalysis {
     }
     
     @Override
-    protected def aggregateData(String teamName, String boardId, Mode mode, List<String> sprintIds, Long cycles) {
+    protected def aggregateData(String teamName, String boardId, Mode mode, List<String> sprintIds, Integer cycles) {
         database = new FlexiDB(generateDBSignature(), true)
         
         // Specify threads
