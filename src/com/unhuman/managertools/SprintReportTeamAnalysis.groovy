@@ -335,6 +335,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         // validate all the commits have the same author, and if they do, we can use that as the unknown author
                         if (prCommits != null) {
                             // stream all the prCommits and get all the author names
+                            // TODO: this is a bit of a hack to check all committers, but...  Should we pick the majority count?
                             Set<String> authorNames = prCommits.stream().map(commit -> commit.committer.name).collect(Collectors.toSet())
 
                             if (authorNames.size() == 1) {
