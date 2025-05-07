@@ -8,6 +8,10 @@ import com.unhuman.managertools.util.CommandLineHelper
 import com.unhuman.managertools.rest.JiraREST
 import groovy.cli.commons.CliBuilder
 
+import java.time.LocalDateTime
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+
 class GetTeamSprints extends Script {
     JiraREST jiraREST
 
@@ -67,7 +71,10 @@ class GetTeamSprints extends Script {
 
         for (int i = data.size() - 1; i >= 0; --i) {
             def sprint = data.get(i);
-            if (!includeActiveSprint && !sprint.state.toUpperCase().equals("CLOSED")) {
+
+            def sprintActive = LocalDateTime.parse(sprint.endDate, DateTimeFormatter.ISO_DATE_TIME).toInstant(ZoneOffset.UTC).toEpochMilli() > System.currentTimeMillis()
+
+            if (!includeActiveSprint && !sprint.state.equalsIgnoreCase("CLOSED") && sprintActive) {
                 data.removeAt(i)
             }
         }

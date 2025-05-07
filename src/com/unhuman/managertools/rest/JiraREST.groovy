@@ -13,6 +13,8 @@ import org.apache.hc.core5.http.message.BasicNameValuePair
 
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 class JiraREST extends RestService {
@@ -38,14 +40,19 @@ class JiraREST extends RestService {
         def response
         do {
             String uri = "https://${jiraServer}/rest/agile/1.0/board/${boardId}/sprint"
-            NameValuePair rapidViewIdPair = new BasicNameValuePair("state", "active,closed")
+            NameValuePair rapidViewIdPair = new BasicNameValuePair("state", "active,closed,future")
             NameValuePair sprintIdPair = new BasicNameValuePair("startAt", startAt.toString())
             NameValuePair timeIdPair = new BasicNameValuePair("_", System.currentTimeMillis().toString())
             response = getRequest(uri, rapidViewIdPair, sprintIdPair, timeIdPair)
             values.addAll(response.values)
             startAt += response.maxResults
         } while (!response.isLast)
-        
+
+        // filter out items if no start/end date or in the "future" but haven't started yet
+        values.removeIf { x -> x.startDate == null || x.endDate == null
+                || (x.state == "future"
+                    && LocalDateTime.parse(x.startDate, DateTimeFormatter.ISO_DATE_TIME).toInstant(ZoneOffset.UTC).toEpochMilli() > System.currentTimeMillis()) }
+
         // Sort this list by endDate
         Collections.sort(values, new Comparator<Object>() {
             @Override

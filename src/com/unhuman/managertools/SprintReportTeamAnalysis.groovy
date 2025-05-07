@@ -565,6 +565,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         int addedCalculated = 0
         int removedCalculated = 0
         diffsResponse.diffs.each { diff ->
+            // TODO: diff.(source|destination).name is the filename.  diff.(source|destination).extension is the file type
             diff.hunks.each { hunk ->
                 hunk.segments.each { segment ->
                     addedCalculated += (segment.type == "ADDED") ? segment.lines.size() : 0
