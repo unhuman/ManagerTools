@@ -55,6 +55,11 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
     FlexiDB database
 
+    String maxFileChangeSize
+    String maxCommitSize
+    Set<String> ignoreFilenames
+
+
     @Override
     def addCustomCommandLineOptions(CliBuilder cli) {
         cli.i(longOpt: 'isolateTicket', required: false, args:1, argName: 'isolateTicket',  'Isolate ticket for processing (for debugging)')
@@ -75,6 +80,10 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
     @Override
     protected def aggregateData(String teamName, String boardId, Mode mode, List<String> sprintIds, Integer cycles) {
+        maxFileChangeSize = commandLineHelper.getConfigFileManager().getValue("maxFileChangeSize")
+        maxCommitSize = commandLineHelper.getConfigFileManager().getValue("maxCommitSize")
+        ignoreFilenames = commandLineHelper.getConfigFileManager().getValue("ignoreFilenames") as Set<String>
+
         database = new FlexiDB(generateDBSignature(), true)
 
         // Specify threads
@@ -470,10 +479,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
                         // Add pr commit messages to database
                         def commitMessage = commit.message.replaceAll("(\\r|\\n)?\\n", "  ").trim()
-                        database.incrementField(indexLookup, UserActivity.COMMITS.name())
+                        int value = database.incrementField(indexLookup, UserActivity.COMMITS.name())
                         database.append(indexLookup, DBData.COMMIT_MESSAGES.name(), commitMessage, true)
-                        // TODO: Add counter for commits
-                        // incrementCounter(currentUserIndexLookup, JiraDBActions.COMMIT)
                     }
 
                     // only populate pull request data if there was commit activity

@@ -22,6 +22,7 @@ import java.util.stream.Collectors
 abstract class AbstractSprintReport extends Script {
     enum Mode { SCRUM, KANBAN }
     private static final CONFIG_FILENAME = ".managerTools.cfg"
+    CommandLineHelper commandLineHelper
     protected JiraREST jiraREST
     protected SourceControlREST bitbucketREST
     protected SourceControlREST githubREST
@@ -196,7 +197,7 @@ abstract class AbstractSprintReport extends Script {
     }
 
     protected void setupServices() {
-        CommandLineHelper commandLineHelper = new CommandLineHelper(CONFIG_FILENAME)
+        commandLineHelper = new CommandLineHelper(CONFIG_FILENAME)
         if (commandLineOptions.q) {
             commandLineHelper.setQuietModeNoPrompts()
         }
