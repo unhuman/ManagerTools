@@ -106,8 +106,9 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     allIssues.addAll(data.contents.completedIssues)
                     allIssues.addAll(data.contents.issuesNotCompletedInCurrentSprint)
 
-                    System.out.println("${i + 1} / ${sprintIds.size()}: ${teamName}: ${data.sprint.name} (id: ${sprintId}" +
-                            ", issues: ${allIssues.size()})")
+                    System.out.println("${i + 1} / ${sprintIds.size()}: ${teamName}: ${data.sprint.name}" +
+                            " (id: ${sprintId}, issues: ${allIssues.size()}," +
+                            " dates: ${cleanDate(data.sprint.startDate)} - ${cleanDate(data.sprint.endDate)})")
 
                     // Gather ticket data for all issues (completed and incomplete work)
                     getIssueCategoryInformation(threadCount, data.sprint, mode, allIssues)
