@@ -44,7 +44,7 @@ class GithubREST extends SourceControlREST {
             if (re.statusCode != HttpStatus.SC_NOT_FOUND) {
                 throw re
             }
-            errors.add("Comments")
+            errors.add("Comments (${re.statusCode})")
         }
         try {
             activitiesList.addAll(getReviews(prUrl))
@@ -52,12 +52,12 @@ class GithubREST extends SourceControlREST {
             if (re.statusCode != HttpStatus.SC_NOT_FOUND) {
                 throw re
             }
-            errors.add("Reviews")
+            errors.add("Reviews (${re.statusCode})")
         }
 
         if (errors.size() > 0) {
             String errorMessage = "Unable to retrieve activities: ${errors.join(", ")}"
-            commandLineHelper.printError(errorMessage)
+//            commandLineHelper.printError(errorMessage)
         }
 
         return activitiesList
