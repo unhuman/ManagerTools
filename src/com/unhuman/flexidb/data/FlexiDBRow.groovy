@@ -16,6 +16,14 @@ class FlexiDBRow extends LinkedHashMap<String, Object> {
     FlexiDBRow(int initialCapacity) {
         super(initialCapacity)
     }
+    
+    /**
+     * Copy constructor to create a copy of an existing FlexiDBRow
+     * @param other The FlexiDBRow to copy
+     */
+    FlexiDBRow(FlexiDBRow other) {
+        super(other)
+    }
 
     static void setDefault(String key, Object value) {
         defaults.put(key, value)

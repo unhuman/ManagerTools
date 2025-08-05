@@ -39,6 +39,10 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
     static final String PR_PREFIX = "PR_"
     static final String COMMIT_PREFIX = "COMMIT_"
+    
+    // Constants for tracking PR statistics
+    static final String TOTAL_PRS = "TOTAL_PRS"
+    static final String NON_DECLINED_PRS = "NON_DECLINED_PRS"
 
     static final List<OutputFilter> STANDARD_OUTPUT_RULES =
             Collections.singletonList(new ConvertZerosToEmptyOutputFilter())
@@ -243,12 +247,38 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
         // Render rows
         FlexiDBRow sprintTotalsRow = new FlexiDBRow(columnOrder.size())
+        
+        // Track PR statistics
+        int totalPRs = 0
+        int nonDeclinedPRs = 0
+        
         rows.each { row ->
             {
-                // We have some special output rules for SELF_COMMENTS and OTHERS_COMMENTS
-                // when the user is the author
-                sb.append(row.toCSV(columnOrder, STANDARD_OUTPUT_RULES))
+                // Check if this is a PR authored by the current user
+                String rowUser = row.get(DBIndexData.USER.name())
+                String author = row.get(DBData.AUTHOR.name())
+                String prStatus = row.get(DBIndexData.PR_STATUS.name())
+                
+                // Create a copy of the row to modify for output
+                FlexiDBRow outputRow = new FlexiDBRow(row)
+                
+                // Only show PR status when the user is the author
+                if (!(rowUser && author && rowUser.equalsIgnoreCase(author))) {
+                    // Clear the PR status if the user is not the author
+                    outputRow.put(DBIndexData.PR_STATUS.name(), "")
+                }
+                
+                // Output the row to CSV
+                sb.append(outputRow.toCSV(columnOrder, STANDARD_OUTPUT_RULES))
                 sb.append('\n')
+                
+                // Only count PRs where the user is the author
+                if (rowUser && author && rowUser.equalsIgnoreCase(author)) {
+                    totalPRs++
+                    if (prStatus && !prStatus.equalsIgnoreCase("DECLINED")) {
+                        nonDeclinedPRs++
+                    }
+                }
 
                 // Build up totals
                 columnOrder.each { column ->
@@ -267,6 +297,16 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                 }
             }
         }
+        
+        // Store the PR statistics in the totals row
+        sprintTotalsRow.put(TOTAL_PRS, totalPRs)
+        sprintTotalsRow.put(NON_DECLINED_PRS, nonDeclinedPRs)
+        
+        // Add to overall totals
+        overallTotalsRow.put(TOTAL_PRS, overallTotalsRow.containsKey(TOTAL_PRS) 
+                ? overallTotalsRow.get(TOTAL_PRS) + totalPRs : totalPRs)
+        overallTotalsRow.put(NON_DECLINED_PRS, overallTotalsRow.containsKey(NON_DECLINED_PRS) 
+                ? overallTotalsRow.get(NON_DECLINED_PRS) + nonDeclinedPRs : nonDeclinedPRs)
 
         // Totals for Sprint
         appendTotalsInfo(sb, "Sprint Totals", sprintTotalsRow)
@@ -745,12 +785,55 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
             totalsRow.put(columnOrder.get(0), totalsDescription)
         }
 
+        // Add PR totals to the respective columns
+        int prIdIndex = columnOrder.indexOf(DBIndexData.PR_ID.name())
+        int prStatusIndex = columnOrder.indexOf(DBIndexData.PR_STATUS.name())
+        
+        if (totalsRow.containsKey(TOTAL_PRS) && totalsRow.containsKey(NON_DECLINED_PRS)) {
+            int totalPRs = totalsRow.get(TOTAL_PRS) as Integer
+            int nonDeclinedPRs = totalsRow.get(NON_DECLINED_PRS) as Integer
+            
+            // Put total PRs under PR_ID column
+            if (prIdIndex != -1) {
+                totalsRow.put(columnOrder.get(prIdIndex), totalPRs)
+            }
+            
+            // Put non-declined PRs under PR_STATUS column
+            if (prStatusIndex != -1) {
+                totalsRow.put(columnOrder.get(prStatusIndex), nonDeclinedPRs)
+            }
+        }
+
         for (int i = 1; i < columnOrder.size(); i++) {
             String columnName = columnOrder.get(i)
             try {
-                if (totalsRow.containsKey(columnName) || UserActivity.valueOf(columnName) != null) { // always report
-                    Object value = (totalsRow.get(columnOrder.get(i)) == UserActivity.valueOf(columnName).getDefaultValue())
-                            ? 0 : totalsRow.get(columnOrder.get(i))
+                // Skip PR_ID and PR_STATUS columns as we've already handled them
+                if (columnName == DBIndexData.PR_ID.name() || columnName == DBIndexData.PR_STATUS.name()) {
+                    // Add column labels to the totals for PR_ID and PR_STATUS
+                    if (columnName == DBIndexData.PR_ID.name() && totalsRow.containsKey(columnName)) {
+                        totalsRow.put(columnName, "PRs: " + totalsRow.get(columnName))
+                    }
+                    if (columnName == DBIndexData.PR_STATUS.name() && totalsRow.containsKey(columnName)) {
+                        totalsRow.put(columnName, "Valid PRs: " + totalsRow.get(columnName))
+                    }
+                    continue;
+                }
+                
+                UserActivity userActivity = null
+                try {
+                    userActivity = UserActivity.valueOf(columnName)
+                } catch (IllegalArgumentException ignored) {
+                    // Not a UserActivity enum value
+                }
+                
+                if (totalsRow.containsKey(columnName) || userActivity != null) { // always report
+                    Object value = null
+                    if (userActivity != null && totalsRow.containsKey(columnName) && 
+                        totalsRow.get(columnOrder.get(i)) == userActivity.getDefaultValue()) {
+                        value = 0
+                    } else {
+                        value = totalsRow.get(columnOrder.get(i))
+                    }
                     totalsRow.put(columnOrder.get(i), columnOrder.get(i) + ": " + value)
                 }
             } catch (IllegalArgumentException e) {
