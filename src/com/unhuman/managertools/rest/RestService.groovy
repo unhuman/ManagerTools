@@ -119,7 +119,7 @@ abstract class RestService {
                                 throw new RuntimeException("Rate limit exceeded. No Retry-After header found - here are the headers: ${response.getHeaders()}")
                             }
                         } else if (response.getCode() < 200 || response.getCode() > 299) {
-                            throw new RESTException(response.getCode(), "Unable to retrieve requested url", request.getUri().toString())
+                            throw new RESTException(response.getCode(), "Unable to retrieve requested url " + response.getReasonPhrase(), request.getUri().toString())
                         } else {
                             List<BasicHeader> cookies = response.getHeaders("Set-Cookie").toList().collect { Header header ->
                                 new BasicHeader("Cookie", header.getValue().split(";")[0])

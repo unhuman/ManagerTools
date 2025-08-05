@@ -4,6 +4,7 @@ enum DBIndexData {
     SPRINT("sprint"),
     TICKET("ticket"),
     PR_ID("prId"),
+    PR_STATUS("prStatus"),
     USER("user")
 
     private String jiraField

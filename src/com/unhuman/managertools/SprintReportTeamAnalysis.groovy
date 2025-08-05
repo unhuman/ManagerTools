@@ -335,6 +335,9 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     // can get approvers out of ^^^
                     // check comment count before polling for comments
                     def prId = (pullRequest.id.startsWith("#") ? pullRequest.id.substring(1) : pullRequest.id)
+                    
+                    // Get the PR status
+                    def prStatus = pullRequest.status ? pullRequest.status : ""
 
                     def prAuthor = sourceControlREST.mapUserToJiraName(pullRequest.author)
 
@@ -394,7 +397,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         }
 
                         // Generate index to look for data
-                        List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, userName)
+                        List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, userName, prStatus)
                         populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
 
                         // Github action conversions
@@ -467,7 +470,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
                         // Generate index to look for data
                         // TODO: this could cause issues with a data disconnect between username + prAuthor
-                        List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, userName)
+                        List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, userName, prStatus)
                         populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
 
                         // use the commit url if there is one, else use that from the PR
@@ -486,7 +489,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
                     // only populate pull request data if there was commit activity
                     // NOTICE: In this mode, all attributions go to the PR author
-                    List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, prAuthor)
+                    List<FlexiDBQueryColumn> indexLookup = createIndexLookup(sprintName, ticket, prId, prAuthor, prStatus)
                     if (database.findRows(indexLookup, false)
                             && (database.getValue(indexLookup, UserActivity.COMMIT_ADDED.toString()) > 0
                             || database.getValue(indexLookup, UserActivity.COMMIT_REMOVED.toString()) > 0)) {
@@ -528,11 +531,12 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         return name.replaceAll('-', '.')
     }
 
-    protected List<FlexiDBQueryColumn> createIndexLookup(String sprintName, ticket, prId, String userName) {
+    protected List<FlexiDBQueryColumn> createIndexLookup(String sprintName, ticket, prId, String userName, String prStatus = "") {
         List<FlexiDBQueryColumn> indexLookup = new ArrayList<>()
         indexLookup.add(new FlexiDBQueryColumn(DBIndexData.SPRINT.name(), sprintName))
         indexLookup.add(new FlexiDBQueryColumn(DBIndexData.TICKET.name(), ticket))
         indexLookup.add(new FlexiDBQueryColumn(DBIndexData.PR_ID.name(), prId))
+        indexLookup.add(new FlexiDBQueryColumn(DBIndexData.PR_STATUS.name(), prStatus))
         // we need to fix userNames to not have - / . differences
         indexLookup.add(new FlexiDBQueryColumn(DBIndexData.USER.name(), sanitizeNameForIndex(userName)))
         return indexLookup
