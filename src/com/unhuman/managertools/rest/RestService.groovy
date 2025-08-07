@@ -103,32 +103,48 @@ abstract class RestService {
 
                 String responseData = client.with { httpClient ->
                     httpClient.execute(request).withCloseable { response ->
-                        if (response.getCode() == 429) {
+                        // 429 = rate limit exceeded, 403 = forbidden (but could be rate limit as well)
+                        if ((response.getCode() == 429) || (response.getCode() == 403)) {
                             // Log Rate Limit Response Headers
                             def rateLimitHeaders = response.getHeaders().findAll { it.getName().containsIgnoreCase("RateLimit") }
                             if (rateLimitHeaders.size() > 0) {
                                 System.err.println("Rate Limit Response Headers: ${rateLimitHeaders}")
                             }
 
+                            // Check for Retry-After header
                             Integer retryAfter = response.getFirstHeader("Retry-After")?.getValue()?.toInteger()
                             if (retryAfter != null) {
                                 InputStream inputStream = response.getEntity().getContent()
                                 String responseContent = new String(inputStream.readAllBytes(), Charset.defaultCharset())
                                 throw new NeedsRetryException(response.getCode(), responseContent, request.getUri().toString(), retryAfter)
-                            } else {
-                                throw new RuntimeException("Rate limit exceeded. No Retry-After header found - here are the headers: ${response.getHeaders()}")
                             }
-                        } else if (response.getCode() < 200 || response.getCode() > 299) {
-                            throw new RESTException(response.getCode(), "Unable to retrieve requested url " + response.getReasonPhrase(), request.getUri().toString())
-                        } else {
-                            List<BasicHeader> cookies = response.getHeaders("Set-Cookie").toList().collect { Header header ->
-                                new BasicHeader("Cookie", header.getValue().split(";")[0])
+
+                            // Check for X-RateLimit-Remaining and X-RateLimit-Reset headers
+                            Integer rateLimitRemaining = response.getFirstHeader("X-RateLimit-Remaining")?.getValue()?.toInteger()
+                            Long rateLimitReset = response.getFirstHeader("X-RateLimit-Reset")?.getValue()?.toLong()
+                            if (rateLimitRemaining == 0 && rateLimitReset != null) {
+                                retryAfter = (Integer) (rateLimitReset - (System.currentTimeMillis() / 1000))
+                                if (retryAfter > 0) {
+                                    InputStream inputStream = response.getEntity().getContent()
+                                    String responseContent = new String(inputStream.readAllBytes(), Charset.defaultCharset())
+                                    throw new NeedsRetryException(response.getCode(), responseContent, request.getUri().toString(), retryAfter)
+                                }
                             }
-                            useAuthInfo.updateCookies(cookies)
-                            InputStream inputStream = response.getEntity().getContent()
-                            String text = new String(inputStream.readAllBytes(), Charset.defaultCharset())
-                            return text
+                            throw new RESTException(response.getCode(), "Forbidden - no Rate Limit headers found: ${response.getHeaders()}", request.getUri().toString())
                         }
+
+                        if (response.getCode() < 200 || response.getCode() > 299) {
+                            throw new RESTException(response.getCode(), "Unable to retrieve requested url " + response.getReasonPhrase(), request.getUri().toString())
+                        }
+
+                        // Successful response, update cookies if available
+                        List<BasicHeader> cookies = response.getHeaders("Set-Cookie").toList().collect { Header header ->
+                            new BasicHeader("Cookie", header.getValue().split(";")[0])
+                        }
+                        useAuthInfo.updateCookies(cookies)
+                        InputStream inputStream = response.getEntity().getContent()
+                        String text = new String(inputStream.readAllBytes(), Charset.defaultCharset())
+                        return text
                     }
                 }
                 return new JsonSlurper().parseText(responseData)
