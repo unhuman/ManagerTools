@@ -145,7 +145,9 @@ class JiraREST extends RestService {
                 System.err.println("Error in response: ${stashData.errors}")
             }
 
-            pullRequests.addAll(stashData.detail.pullRequests[0])
+            if (stashData.detail.pullRequests != null && stashData.detail.pullRequests[0] != null) {
+                pullRequests.addAll(stashData.detail.pullRequests[0])
+            }
         } catch(RESTException re) {
             if (re.statusCode != HttpStatus.SC_FORBIDDEN && re.statusCode != HttpStatus.SC_NOT_FOUND) {
                 throw re
