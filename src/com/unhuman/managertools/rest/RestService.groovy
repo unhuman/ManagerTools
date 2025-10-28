@@ -111,25 +111,29 @@ abstract class RestService {
                                 System.err.println("Rate Limit Response Headers: ${rateLimitHeaders}")
                             }
 
-                            // Check for Retry-After header
-                            Integer retryAfter = response.getFirstHeader("Retry-After")?.getValue()?.toInteger()
-                            if (retryAfter != null) {
+                            Integer retryAfter = null
+
+                            // Check for Retry-After header (standard format)
+                            retryAfter = response.getFirstHeader("Retry-After")?.getValue()?.toInteger()
+
+                            // Check for X-RateLimit-Remaining and X-RateLimit-Reset headers (GitHub format)
+                            if (retryAfter == null) {
+                                Integer rateLimitRemaining = response.getFirstHeader("X-RateLimit-Remaining")?.getValue()?.toInteger()
+                                Long rateLimitReset = response.getFirstHeader("X-RateLimit-Reset")?.getValue()?.toLong()
+                                if (rateLimitRemaining != null && rateLimitRemaining == 0 && rateLimitReset != null) {
+                                    retryAfter = (Integer) (rateLimitReset - (System.currentTimeMillis() / 1000))
+                                    if (retryAfter < 0) {
+                                        retryAfter = 0
+                                    }
+                                }
+                            }
+
+                            if (retryAfter != null && retryAfter >= 0) {
                                 InputStream inputStream = response.getEntity().getContent()
                                 String responseContent = new String(inputStream.readAllBytes(), Charset.defaultCharset())
                                 throw new NeedsRetryException(response.getCode(), responseContent, request.getUri().toString(), retryAfter)
                             }
 
-                            // Check for X-RateLimit-Remaining and X-RateLimit-Reset headers
-                            Integer rateLimitRemaining = response.getFirstHeader("X-RateLimit-Remaining")?.getValue()?.toInteger()
-                            Long rateLimitReset = response.getFirstHeader("X-RateLimit-Reset")?.getValue()?.toLong()
-                            if (rateLimitRemaining == 0 && rateLimitReset != null) {
-                                retryAfter = (Integer) (rateLimitReset - (System.currentTimeMillis() / 1000))
-                                if (retryAfter > 0) {
-                                    InputStream inputStream = response.getEntity().getContent()
-                                    String responseContent = new String(inputStream.readAllBytes(), Charset.defaultCharset())
-                                    throw new NeedsRetryException(response.getCode(), responseContent, request.getUri().toString(), retryAfter)
-                                }
-                            }
                             throw new RESTException(response.getCode(), "Forbidden - no Rate Limit headers found: ${response.getHeaders()}", request.getUri().toString())
                         }
 

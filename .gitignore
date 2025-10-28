@@ -10,3 +10,4 @@ ManagerTools.iml
 .DS_Store
 **/*.orig
 **/*.log
+**/*cache*
