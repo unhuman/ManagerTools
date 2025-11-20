@@ -20,6 +20,7 @@ import com.unhuman.managertools.output.ConvertSelfMetricsEmptyToZeroOutputFilter
 import com.unhuman.managertools.rest.SourceControlREST
 import com.unhuman.managertools.rest.exceptions.RESTException
 import com.unhuman.managertools.util.CommandLineHelper
+import com.unhuman.managertools.util.SprintDataCache
 import groovy.cli.commons.CliBuilder
 import groovyx.gpars.GParsPool
 import groovyx.gpars.util.PoolUtils
@@ -115,7 +116,11 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                             " dates: ${cleanDate(data.sprint.startDate)} - ${cleanDate(data.sprint.endDate)})")
 
                     // Gather ticket data for all issues (completed and incomplete work)
-                    getIssueCategoryInformation(threadCount, data.sprint, mode, allIssues)
+                    // Use caching for completed sprints
+                    String sprintState = data.sprint.state?.toLowerCase() ?: ""
+                    boolean isCompleted = sprintState == "closed"
+
+                    processPotentiallyCachedSprintData(threadCount, teamName, data.sprint, mode, allIssues, isCompleted)
                 }
                 break
             case Mode.KANBAN:
@@ -144,11 +149,90 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     sprintSimulation.endDate = data.endDate
 
                     // Gather ticket data for all issues (completed and incomplete work)
-                    getIssueCategoryInformation(threadCount, sprintSimulation, mode, allIssues)
+                    // Kanban cycles are always in the past, so they can be cached
+                    processPotentiallyCachedSprintData(threadCount, teamName, sprintSimulation, mode, allIssues, true)
                 }
                 break
             default:
                 throw new RuntimeException("Unknown mode: ${mode}")
+        }
+    }
+
+    /**
+     * Process sprint data with caching support for completed sprints
+     */
+    private void processPotentiallyCachedSprintData(int threadCount, String teamName, Object sprint, Mode mode, List<Object> allIssues, boolean useCache) {
+        String sprintName = sprint.name
+        String startDate = cleanDate(sprint.startDate)
+        String endDate = cleanDate(sprint.endDate)
+
+        // Only use cache for completed sprints/cycles
+        if (useCache && SprintDataCache.hasCachedData(teamName, sprintName, startDate, endDate)) {
+            // Load from cache
+            Map cachedData = SprintDataCache.loadCachedData(teamName, sprintName, startDate, endDate)
+            loadCachedDataIntoDatabase(cachedData)
+        } else {
+            // Process fresh data
+            getIssueCategoryInformation(threadCount, sprint, mode, allIssues)
+
+            // Save to cache if it's a completed sprint/cycle
+            if (useCache) {
+                Map dataToCache = extractDatabaseDataForCache(sprintName)
+                SprintDataCache.saveToCache(teamName, sprintName, startDate, endDate, dataToCache)
+            }
+        }
+    }
+
+    /**
+     * Extract data from the database for caching
+     */
+    private Map extractDatabaseDataForCache(String sprintName) {
+        List<FlexiDBQueryColumn> sprintFilter = [new FlexiDBQueryColumn(DBIndexData.SPRINT.name(), sprintName)]
+        List<FlexiDBRow> rows = database.findRows(sprintFilter, true)
+
+        // Convert rows to serializable format
+        List<Map> serializedRows = rows.collect { row ->
+            Map serializedRow = [:]
+            row.each { key, value ->
+                serializedRow[key] = value
+            }
+            return serializedRow
+        }
+
+        return [rows: serializedRows]
+    }
+
+    /**
+     * Load cached data into the database
+     */
+    private void loadCachedDataIntoDatabase(Map cachedData) {
+        List<Map> serializedRows = cachedData.rows as List<Map>
+
+        serializedRows.each { serializedRow ->
+            // Extract index columns
+            List<FlexiDBQueryColumn> indexLookup = [
+                new FlexiDBQueryColumn(DBIndexData.SPRINT.name(), serializedRow[DBIndexData.SPRINT.name()]),
+                new FlexiDBQueryColumn(DBIndexData.TICKET.name(), serializedRow[DBIndexData.TICKET.name()]),
+                new FlexiDBQueryColumn(DBIndexData.PR_ID.name(), serializedRow[DBIndexData.PR_ID.name()]),
+                new FlexiDBQueryColumn(DBIndexData.PR_STATUS.name(), serializedRow[DBIndexData.PR_STATUS.name()] ?: ""),
+                new FlexiDBQueryColumn(DBIndexData.USER.name(), serializedRow[DBIndexData.USER.name()])
+            ]
+
+            // Populate all fields
+            serializedRow.each { key, value ->
+                String fieldName = key as String
+                if (value != null) {
+                    if (value instanceof List) {
+                        // Handle list fields (like comments, commit messages)
+                        value.each { item ->
+                            database.append(indexLookup, fieldName, item)
+                        }
+                    } else {
+                        // Handle scalar fields (strings, numbers, etc)
+                        database.setValue(indexLookup, fieldName, value)
+                    }
+                }
+            }
         }
     }
 
