@@ -154,7 +154,32 @@ abstract class RestService {
                 return new JsonSlurper().parseText(responseData)
             } catch (NeedsRetryException nre) {
                 System.err.println("Rate limit exceeded. Details: ${nre.toString()}")
-                Thread.sleep(nre.getRetryAfter() * 1000)
+
+                // Calculate the absolute reset time
+                long resetTimestamp = System.currentTimeMillis() / 1000 + nre.getRetryAfter()
+
+                // Sleep in 1-second increments with countdown display
+                while (true) {
+                    long currentTime = System.currentTimeMillis() / 1000
+                    long remainingSeconds = resetTimestamp - currentTime
+
+                    if (remainingSeconds <= 0) {
+                        // Clear the countdown line
+                        System.err.print("\r" + " " * 100 + "\r")
+                        System.err.println("Rate limit reset. Resuming requests...")
+                        break
+                    }
+
+                    // Display countdown (overwrite same line)
+                    long hours = remainingSeconds / 3600
+                    long minutes = (remainingSeconds % 3600) / 60
+                    long seconds = remainingSeconds % 60
+                    System.err.print("\rWaiting for rate limit reset... Time remaining: ${String.format('%02d:%02d:%02d', hours, minutes, seconds)}")
+                    System.err.flush()
+
+                    // Sleep for 1 second
+                    Thread.sleep(1000)
+                }
             } catch (SocketTimeoutException ste) {
                 System.err.println("Timeout exceeded. Details: ${ste.toString()}")
             } catch (Exception e) {
