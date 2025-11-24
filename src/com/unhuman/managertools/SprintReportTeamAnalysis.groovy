@@ -149,8 +149,10 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     sprintSimulation.endDate = data.endDate
 
                     // Gather ticket data for all issues (completed and incomplete work)
-                    // Kanban cycles are always in the past, so they can be cached
-                    processPotentiallyCachedSprintData(threadCount, teamName, sprintSimulation, mode, allIssues, true)
+                    // Only cache Kanban cycles if they have ended (end date is in the past)
+                    Date cycleEndDate = DATE_TIME_PARSER.parse(data.endDate)
+                    boolean isCycleComplete = cycleEndDate.getTime() < System.currentTimeMillis()
+                    processPotentiallyCachedSprintData(threadCount, teamName, sprintSimulation, mode, allIssues, isCycleComplete)
                 }
                 break
             default:
