@@ -96,8 +96,12 @@ abstract class RestService {
         AuthInfo useAuthInfo = authInfo
 
         CloseableHttpClient client = null
+        int timeoutRetries = 0
+        final int MAX_TIMEOUT_RETRIES = 3
+        int timeoutBackoff = 5000 // Start with 5 seconds
 
         do {
+            long requestStartTime = System.currentTimeMillis()
             try {
                 client = getClient(request.getAuthority().getHostName())
 
@@ -181,7 +185,22 @@ abstract class RestService {
                     Thread.sleep(1000)
                 }
             } catch (SocketTimeoutException ste) {
-                System.err.println("Timeout exceeded. Details: ${ste.toString()}")
+                long requestDuration = System.currentTimeMillis() - requestStartTime
+                timeoutRetries++
+                System.err.println("Timeout exceeded (attempt ${timeoutRetries}/${MAX_TIMEOUT_RETRIES})")
+                System.err.println("  Endpoint: ${request.getUri()}")
+                System.err.println("  Duration: ${requestDuration}ms (${String.format('%.1f', requestDuration / 1000.0)}s)")
+                System.err.println("  Details: ${ste.toString()}")
+
+                if (timeoutRetries >= MAX_TIMEOUT_RETRIES) {
+                    System.err.println("Max timeout retries (${MAX_TIMEOUT_RETRIES}) exceeded. Giving up on request: ${request.getUri()}")
+                    throw new RESTException(408, "Request timeout after ${MAX_TIMEOUT_RETRIES} attempts", request.getUri().toString())
+                }
+
+                // Exponential backoff before retry
+                System.err.println("Retrying in ${timeoutBackoff / 1000} seconds...")
+                Thread.sleep(timeoutBackoff)
+                timeoutBackoff *= 2 // Double the backoff for next retry
             } catch (Exception e) {
                 System.err.println("Request Error: ${e.getMessage()}")
                 client.close()

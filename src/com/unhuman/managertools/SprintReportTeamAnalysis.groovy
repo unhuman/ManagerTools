@@ -26,6 +26,9 @@ import groovyx.gpars.GParsPool
 import groovyx.gpars.util.PoolUtils
 import org.apache.hc.core5.http.HttpStatus
 import java.text.SimpleDateFormat
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
 
@@ -136,27 +139,106 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                 // TODO: Gather information about all the time periods (cycles)
                 System.out.println("Processing Kanban ${cycles} cycles...")
                 for (int cycle = 0; cycle < cycles; cycle++) {
-                    Object data = jiraREST.getKanbanCycle(teamName, cycle, cycles, cycleLength)
+                    System.out.println("Kanban Cycle: ${cycle} / ${cycles}")
 
-                    def allIssues = new ArrayList()
-                    allIssues.addAll(data.issues)
-
-                    System.out.println("Kanban Cycle: ${cycle} / ${cycles} (${data.startDate.split(' ')[0]} - ${data.endDate.split(' ')[0]}), issues: ${allIssues.size()}")
-
-                    Object sprintSimulation = new HashMap()
-                    sprintSimulation.name = "${teamName} Cycle ${cycle}"
-                    sprintSimulation.startDate = data.startDate
-                    sprintSimulation.endDate = data.endDate
-
-                    // Gather ticket data for all issues (completed and incomplete work)
-                    // Only cache Kanban cycles if they have ended (end date is in the past)
-                    Date cycleEndDate = DATE_TIME_PARSER.parse(data.endDate)
-                    boolean isCycleComplete = cycleEndDate.getTime() < System.currentTimeMillis()
-                    processPotentiallyCachedSprintData(threadCount, teamName, sprintSimulation, mode, allIssues, isCycleComplete)
+                    try {
+                        processKanbanCycle(threadCount, teamName, cycle, cycles, cycleLength, mode)
+                    } catch (Exception e) {
+                        System.err.println("Error processing Kanban cycle ${cycle}: ${e.message}")
+                        e.printStackTrace()
+                        // Continue to next cycle instead of failing completely
+                        continue
+                    }
                 }
                 break
             default:
                 throw new RuntimeException("Unknown mode: ${mode}")
+        }
+    }
+
+    /**
+     * Process a single Kanban cycle with smart caching
+     */
+    private void processKanbanCycle(int threadCount, String teamName, int cycle, int cycles, int cycleLength, Mode mode) {
+        // Calculate the expected dates for this cycle
+        LocalDate startDate = LocalDate.now().minusWeeks((cycles - cycle) * cycleLength).with(DayOfWeek.MONDAY)
+        LocalDate endDate = startDate.plusDays(7 * cycleLength - 1)
+
+        // Format dates
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MMM/yy")
+        String startDateStr = startDate.format(formatter) + " 00:00 AM"
+        String endDateStr = endDate.format(formatter) + " 11:59 PM"
+        String cleanStartDate = cleanDate(startDateStr)
+        String cleanEndDate = cleanDate(endDateStr)
+
+        String cycleName = "${teamName} Cycle ${cycle}"
+
+        // Check if this cycle is complete (end date in the past)
+        Date cycleEndDate = DATE_TIME_PARSER.parse(endDateStr)
+        boolean isCycleComplete = cycleEndDate.getTime() < System.currentTimeMillis()
+
+        System.out.println("   Cycle dates: ${cleanStartDate} - ${cleanEndDate}, complete: ${isCycleComplete}")
+
+        // Check cache BEFORE making API calls to Jira
+        if (isCycleComplete && SprintDataCache.hasCachedData(teamName, cycleName, cleanStartDate, cleanEndDate)) {
+            System.out.println("   [DEBUG] Found cached data for cycle ${cycle}, loading from cache...")
+            Map cachedData = SprintDataCache.loadCachedData(teamName, cycleName, cleanStartDate, cleanEndDate)
+            loadCachedDataIntoDatabase(cachedData)
+            System.out.println("   [DEBUG] Successfully loaded cycle ${cycle} from cache")
+            return
+        }
+
+        // No cache or incomplete cycle - fetch from Jira
+        System.out.println("   [DEBUG] No cache for cycle ${cycle}, fetching from Jira...")
+
+        Object data = null
+        int maxRetries = 3
+        int retryDelay = 5000 // 5 seconds
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                data = jiraREST.getKanbanCycle(teamName, cycle, cycles, cycleLength)
+                System.out.println("   [DEBUG] Successfully fetched cycle ${cycle} data from Jira")
+                break
+            } catch (Exception e) {
+                System.err.println("   [ERROR] Attempt ${attempt}/${maxRetries} failed for cycle ${cycle}: ${e.message}")
+
+                if (attempt < maxRetries) {
+                    System.err.println("   [INFO] Retrying in ${retryDelay / 1000} seconds...")
+                    Thread.sleep(retryDelay)
+                    retryDelay *= 2 // Exponential backoff
+                } else {
+                    System.err.println("   [ERROR] All retry attempts exhausted for cycle ${cycle}")
+                    throw new RuntimeException("Failed to fetch Kanban cycle ${cycle} after ${maxRetries} attempts", e)
+                }
+            }
+        }
+
+        if (data == null) {
+            throw new RuntimeException("Failed to fetch Kanban cycle ${cycle} - data is null")
+        }
+
+        def allIssues = new ArrayList()
+        allIssues.addAll(data.issues)
+
+        System.out.println("   Cycle ${cycle} / ${cycles}: ${data.issues.size()} issues")
+
+        Object sprintSimulation = new HashMap()
+        sprintSimulation.name = cycleName
+        sprintSimulation.startDate = data.startDate
+        sprintSimulation.endDate = data.endDate
+
+        // Process the data
+        System.out.println("   [DEBUG] Processing fresh data for cycle ${cycle}...")
+        getIssueCategoryInformation(threadCount, sprintSimulation, mode, allIssues)
+        System.out.println("   [DEBUG] Finished processing cycle ${cycle}")
+
+        // Save to cache if complete
+        if (isCycleComplete) {
+            System.out.println("   [DEBUG] Saving cycle ${cycle} to cache...")
+            Map dataToCache = extractDatabaseDataForCache(cycleName)
+            SprintDataCache.saveToCache(teamName, cycleName, cleanStartDate, cleanEndDate, dataToCache)
+            System.out.println("   [DEBUG] Cycle ${cycle} saved to cache")
         }
     }
 
@@ -168,21 +250,33 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         String startDate = cleanDate(sprint.startDate)
         String endDate = cleanDate(sprint.endDate)
 
+        System.out.println("   [DEBUG] Processing sprint: ${sprintName}, useCache: ${useCache}")
+
         // Only use cache for completed sprints/cycles
         if (useCache && SprintDataCache.hasCachedData(teamName, sprintName, startDate, endDate)) {
             // Load from cache
+            System.out.println("   [DEBUG] Loading from cache...")
             Map cachedData = SprintDataCache.loadCachedData(teamName, sprintName, startDate, endDate)
+            System.out.println("   [DEBUG] Cache loaded, loading into database...")
             loadCachedDataIntoDatabase(cachedData)
+            System.out.println("   [DEBUG] Cache data loaded into database successfully")
         } else {
             // Process fresh data
+            System.out.println("   [DEBUG] Processing fresh data (no cache or cache disabled)...")
+            System.out.println("   [DEBUG] Starting getIssueCategoryInformation with ${allIssues.size()} issues...")
             getIssueCategoryInformation(threadCount, sprint, mode, allIssues)
+            System.out.println("   [DEBUG] Finished getIssueCategoryInformation")
 
             // Save to cache if it's a completed sprint/cycle
             if (useCache) {
+                System.out.println("   [DEBUG] Extracting data for cache...")
                 Map dataToCache = extractDatabaseDataForCache(sprintName)
+                System.out.println("   [DEBUG] Saving to cache...")
                 SprintDataCache.saveToCache(teamName, sprintName, startDate, endDate, dataToCache)
+                System.out.println("   [DEBUG] Cache saved successfully")
             }
         }
+        System.out.println("   [DEBUG] Completed processing sprint: ${sprintName}")
     }
 
     /**
@@ -417,6 +511,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         String startDate = cleanDate(sprint.startDate)
         String endDate = cleanDate(sprint.endDate)
 
+        System.out.println("      [DEBUG] getIssueCategoryInformation started for sprint: ${sprintName}")
+
         // Track exact time for ensuring operations occur within sprint
         Date sprintStartTime = DATE_TIME_PARSER.parse(sprint.startDate)
         Date sprintEndTime = DATE_TIME_PARSER.parse(sprint.endDate)
@@ -426,6 +522,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
         AtomicInteger counter = new AtomicInteger()
         issueList = Collections.synchronizedList(issueList)
+
+        System.out.println("      [DEBUG] Starting thread pool with ${threadCount} threads for ${issueList.size()} issues")
 
         GParsPool.withPool(threadCount) {
             issueList.eachParallel(issue -> {
@@ -448,6 +546,8 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                 }
                 System.out.println("   ${counter.incrementAndGet()}/${issueList.size()}: ${ticket} / Issue ${issueId} has ${pullRequests.size()} PRs")
                 pullRequests.each(pullRequest -> {
+                    System.out.println("      [DEBUG] Processing PR: ${ticket}/${pullRequest.id}")
+
                     // based on the PR - determine where the source is - choosing github or (default) bitbucket
                     String prUrl = pullRequest.url
 
@@ -455,6 +555,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     boolean isGithub = prUrl.toLowerCase().contains("github.com/")
                     SourceControlREST sourceControlREST = (isGithub) ? githubREST : bitbucketREST
 
+                    System.out.println("      [DEBUG] PR ${ticket}/${pullRequest.id}: Converting API URL...")
                     // fixup the url for the api
                     prUrl = sourceControlREST.apiConvert(prUrl)
 
@@ -467,8 +568,10 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
                     def prAuthor = sourceControlREST.mapUserToJiraName(pullRequest.author)
 
+                    System.out.println("      [DEBUG] PR ${ticket}/${prId}: Fetching commits...")
                     // Get the commits
                     def prCommits = sourceControlREST.getCommits(prUrl)
+                    System.out.println("      [DEBUG] PR ${ticket}/${prId}: Got ${prCommits?.values?.size() ?: 0} commits")
 
                     if (prAuthor == null) {
                         // validate all the commits have the same author, and if they do, we can use that as the unknown author
@@ -488,8 +591,10 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         }
                     }
 
+                    System.out.println("      [DEBUG] PR ${ticket}/${prId}: Fetching activities...")
                     // Get and process activities (comments, etc)
                     def prActivities = sourceControlREST.getActivities(prUrl)
+                    System.out.println("      [DEBUG] PR ${ticket}/${prId}: Got ${prActivities.values.size()} activities")
 
                     def commentBlockers = new ArrayList<CommentBlocker>()
 
@@ -602,7 +707,9 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         // use the commit url if there is one, else use that from the PR
                         String commitUrl = (commit.url != null) ? commit.url : prUrl
 
+                        System.out.println("      [DEBUG] PR ${ticket}/${prId}: Fetching commit diffs for ${commitSHA}...")
                         def diffsResponse = sourceControlREST.getCommitDiffs(commitUrl, commitSHA)
+                        System.out.println("      [DEBUG] PR ${ticket}/${prId}: Got diffs for commit ${commitSHA}")
                         if (diffsResponse != null) {
                             processDiffs(COMMIT_PREFIX, diffsResponse, indexLookup)
                         }
@@ -620,13 +727,17 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                             && (database.getValue(indexLookup, UserActivity.COMMIT_ADDED.toString()) > 0
                             || database.getValue(indexLookup, UserActivity.COMMIT_REMOVED.toString()) > 0)) {
                         // Process Pull Request data
+                        System.out.println("      [DEBUG] PR ${ticket}/${prId}: Fetching PR-level diffs...")
                         def diffsResponse = sourceControlREST.getDiffs(prUrl)
+                        System.out.println("      [DEBUG] PR ${ticket}/${prId}: Got PR-level diffs")
                         if (diffsResponse != null) {
                             // Generate index to look for data
                             populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
                             processDiffs(PR_PREFIX, diffsResponse, indexLookup)
                         }
                     }
+
+                    System.out.println("      [DEBUG] PR ${ticket}/${prId}: Completed processing")
                 })
 
                 // Find comments in Jira - we do this after we process PR's so we can allocate to an appropriate
@@ -651,6 +762,9 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 //        }
             })
         }
+
+        System.out.println("      [DEBUG] Parallel processing completed for ${issueList.size()} issues")
+        System.out.println("      [DEBUG] getIssueCategoryInformation finished for sprint: ${sprintName}")
     }
 
     protected static String sanitizeNameForIndex(String name) {
