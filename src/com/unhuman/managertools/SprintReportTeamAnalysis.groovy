@@ -555,7 +555,6 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                     boolean isGithub = prUrl.toLowerCase().contains("github.com/")
                     SourceControlREST sourceControlREST = (isGithub) ? githubREST : bitbucketREST
 
-                    System.out.println("      [DEBUG] PR ${ticket}/${pullRequest.id}: Converting API URL...")
                     // fixup the url for the api
                     prUrl = sourceControlREST.apiConvert(prUrl)
 
@@ -568,7 +567,6 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
                     def prAuthor = sourceControlREST.mapUserToJiraName(pullRequest.author)
 
-                    System.out.println("      [DEBUG] PR ${ticket}/${prId}: Fetching commits...")
                     // Get the commits
                     def prCommits = sourceControlREST.getCommits(prUrl)
                     System.out.println("      [DEBUG] PR ${ticket}/${prId}: Got ${prCommits?.values?.size() ?: 0} commits")
@@ -591,14 +589,12 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         }
                     }
 
-                    System.out.println("      [DEBUG] PR ${ticket}/${prId}: Fetching activities...")
                     // Get and process activities (comments, etc)
                     def prActivities = sourceControlREST.getActivities(prUrl)
                     System.out.println("      [DEBUG] PR ${ticket}/${prId}: Got ${prActivities.values.size()} activities")
 
                     def commentBlockers = new ArrayList<CommentBlocker>()
 
-                    System.out.println("      PR ${ticket} / ${prId} has ${prActivities.values.size()} activities")
                     // process from oldest to newest (reverse)
                     for (int i = prActivities.values.size() - 1; i >= 0; i--) {
                         def prInfo = (prActivities instanceof List) ? prActivities[i] : prActivities.values.get(i)
@@ -707,9 +703,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         // use the commit url if there is one, else use that from the PR
                         String commitUrl = (commit.url != null) ? commit.url : prUrl
 
-                        System.out.println("      [DEBUG] PR ${ticket}/${prId}: Fetching commit diffs for ${commitSHA}...")
                         def diffsResponse = sourceControlREST.getCommitDiffs(commitUrl, commitSHA)
-                        System.out.println("      [DEBUG] PR ${ticket}/${prId}: Got diffs for commit ${commitSHA}")
                         if (diffsResponse != null) {
                             processDiffs(COMMIT_PREFIX, diffsResponse, indexLookup)
                         }
@@ -727,17 +721,13 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                             && (database.getValue(indexLookup, UserActivity.COMMIT_ADDED.toString()) > 0
                             || database.getValue(indexLookup, UserActivity.COMMIT_REMOVED.toString()) > 0)) {
                         // Process Pull Request data
-                        System.out.println("      [DEBUG] PR ${ticket}/${prId}: Fetching PR-level diffs...")
                         def diffsResponse = sourceControlREST.getDiffs(prUrl)
-                        System.out.println("      [DEBUG] PR ${ticket}/${prId}: Got PR-level diffs")
                         if (diffsResponse != null) {
                             // Generate index to look for data
                             populateBaselineDBInfo(indexLookup, startDate, endDate, prAuthor)
                             processDiffs(PR_PREFIX, diffsResponse, indexLookup)
                         }
                     }
-
-                    System.out.println("      [DEBUG] PR ${ticket}/${prId}: Completed processing")
                 })
 
                 // Find comments in Jira - we do this after we process PR's so we can allocate to an appropriate
