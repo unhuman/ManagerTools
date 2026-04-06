@@ -138,7 +138,9 @@ abstract class RestService {
                                 throw new NeedsRetryException(response.getCode(), responseContent, request.getUri().toString(), retryAfter)
                             }
 
-                            throw new RESTException(response.getCode(), "Forbidden - no Rate Limit headers found: ${response.getHeaders()}", request.getUri().toString())
+                            def ssoHeader = response.getFirstHeader("x-github-sso")
+                            String ssoMessage = ssoHeader ? " (SSO authorization required: ${ssoHeader.getValue()})" : ""
+                            throw new RESTException(response.getCode(), "Forbidden${ssoMessage}: ${response.getHeaders()}", request.getUri().toString())
                         }
 
                         if (response.getCode() < 200 || response.getCode() > 299) {

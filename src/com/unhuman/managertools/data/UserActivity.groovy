@@ -22,7 +22,7 @@ enum UserActivity {
     OPENED(0),
     RESCOPED(0),
     UNAPPROVED(0),
-    UPDATED(0),
+    UPDATED(0)
 
     private Object defaultValue
 

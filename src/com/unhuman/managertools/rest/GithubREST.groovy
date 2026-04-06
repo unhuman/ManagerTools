@@ -41,7 +41,7 @@ class GithubREST extends SourceControlREST {
         try {
             activitiesList.addAll(getComments(prUrl))
         } catch (RESTException re) {
-            if (re.statusCode != HttpStatus.SC_NOT_FOUND) {
+            if (re.statusCode != HttpStatus.SC_NOT_FOUND && re.statusCode != HttpStatus.SC_FORBIDDEN) {
                 throw re
             }
             errors.add("Comments (${re.statusCode})")
@@ -49,7 +49,7 @@ class GithubREST extends SourceControlREST {
         try {
             activitiesList.addAll(getReviews(prUrl))
         } catch (RESTException re) {
-            if (re.statusCode != HttpStatus.SC_NOT_FOUND) {
+            if (re.statusCode != HttpStatus.SC_NOT_FOUND && re.statusCode != HttpStatus.SC_FORBIDDEN) {
                 throw re
             }
             errors.add("Reviews (${re.statusCode})")
@@ -75,7 +75,11 @@ class GithubREST extends SourceControlREST {
         List<Object> comments = new ArrayList<>()
         for (int i = activities.values.size() - 1; i >= 0; i--) {
             def activity = (activities instanceof List) ? activities[i] : activities.values.get(i)
-            activity.user.name = mapUserToJiraName(activity.user)
+            if (activity.user == null) {
+                activity.user = [name: "unknown", displayName: "unknown"]
+            } else {
+                activity.user.name = mapUserToJiraName(activity.user)
+            }
 
             activity.createdDate = Instant.parse(activity.created_at).getEpochSecond() * 1000 // ms
 
@@ -107,7 +111,11 @@ class GithubREST extends SourceControlREST {
         for (int i = activities.values.size() - 1; i >= 0; i--) {
             def activity = (activities instanceof List) ? activities[i] : activities.values.get(i)
 
-            activity.user.name = mapUserToJiraName(activity.user)
+            if (activity.user == null) {
+                activity.user = [name: "unknown", displayName: "unknown"]
+            } else {
+                activity.user.name = mapUserToJiraName(activity.user)
+            }
 
             // skip activities that do not have a time
             if (activity.submitted_at == null) {
@@ -207,8 +215,15 @@ class GithubREST extends SourceControlREST {
             throw new RuntimeException("Invalid commitUrl ${commitUrl} not matching SHA: ${commitSHA}")
         }
 
-        Object commitData = getRequest(commitUrl)
-        return commitData
+        try {
+            return getRequest(commitUrl)
+        } catch (RESTException re) {
+            if (re.statusCode != HttpStatus.SC_FORBIDDEN && re.statusCode != HttpStatus.SC_NOT_FOUND) {
+                throw re
+            }
+            System.err.println("Unable to retrieve commit diffs ${re.toString()}")
+            return null
+        }
     }
 
     @Override
