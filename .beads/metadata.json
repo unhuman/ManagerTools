@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "ManagerTools",
+  "project_id": "aa3dc1f2-8f27-4253-bf9a-80b6e85cbdf9"
+}
