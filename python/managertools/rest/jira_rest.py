@@ -102,11 +102,12 @@ class JiraREST(RestService):
                                          dataType="pullrequest",
                                          applicationType="stash",
                                          _=now_ms)
-            if stash_data.get('errors'):
-                import sys
-                sys.stderr.write(f"Error in response: {stash_data.get('errors')}\n")
-            elif stash_data.get('detail', {}).get('pullRequests'):
-                pull_requests.extend(stash_data['detail']['pullRequests'][0])
+            if isinstance(stash_data, dict):
+                if stash_data.get('errors'):
+                    import sys
+                    sys.stderr.write(f"Error in response: {stash_data.get('errors')}\n")
+                elif stash_data.get('detail', {}).get('pullRequests'):
+                    pull_requests.extend(stash_data['detail']['pullRequests'][0])
         except RESTException as re:
             if re.status_code not in [HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND]:
                 raise
@@ -120,7 +121,7 @@ class JiraREST(RestService):
                                           dataType="pullrequest",
                                           applicationType="githube",
                                           _=now_ms)
-            if github_data.get('detail', {}).get('pullRequests'):
+            if isinstance(github_data, dict) and github_data.get('detail', {}).get('pullRequests'):
                 pull_requests.extend(github_data['detail']['pullRequests'][0])
         except RESTException as re:
             if re.status_code not in [HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND]:

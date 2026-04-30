@@ -89,22 +89,28 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         if mode == Mode.SCRUM:
             print(f"Processing Scrum: {len(sprint_ids)} sprints...")
             for i, sprint_id in enumerate(sprint_ids):
-                data = self.jira_rest.get_sprint_report(board_id, sprint_id)
+                try:
+                    data = self.jira_rest.get_sprint_report(board_id, sprint_id)
 
-                all_issues = []
-                all_issues.extend(data.get('contents', {}).get('completedIssues', []))
-                all_issues.extend(data.get('contents', {}).get('issuesNotCompletedInCurrentSprint', []))
+                    all_issues = []
+                    all_issues.extend(data.get('contents', {}).get('completedIssues', []))
+                    all_issues.extend(data.get('contents', {}).get('issuesNotCompletedInCurrentSprint', []))
 
-                sprint_name = data.get('sprint', {}).get('name', '')
-                sprint_state = data.get('sprint', {}).get('state', '').lower()
-                is_completed = sprint_state == 'closed'
+                    sprint_name = data.get('sprint', {}).get('name', '')
+                    sprint_state = data.get('sprint', {}).get('state', '').lower()
+                    is_completed = sprint_state == 'closed'
 
-                print(f"{i + 1} / {len(sprint_ids)}: {team_name}: {sprint_name} "
-                      f"(id: {sprint_id}, issues: {len(all_issues)}, "
-                      f"dates: {self.clean_date(data.get('sprint', {}).get('startDate', ''))} - "
-                      f"{self.clean_date(data.get('sprint', {}).get('endDate', ''))})")
+                    print(f"{i + 1} / {len(sprint_ids)}: {team_name}: {sprint_name} "
+                          f"(id: {sprint_id}, issues: {len(all_issues)}, "
+                          f"dates: {self.clean_date(data.get('sprint', {}).get('startDate', ''))} - "
+                          f"{self.clean_date(data.get('sprint', {}).get('endDate', ''))})")
 
-                self.process_potentially_cached_sprint_data(thread_count, team_name, data.get('sprint', {}), mode, all_issues, is_completed)
+                    self.process_potentially_cached_sprint_data(thread_count, team_name, data.get('sprint', {}), mode, all_issues, is_completed)
+                except Exception as e:
+                    print(f"Error processing sprint {sprint_id}: {e}", file=sys.stderr)
+                    import traceback
+                    traceback.print_exc(file=sys.stderr)
+                    continue
 
         elif mode == Mode.KANBAN:
             if not team_name:
@@ -388,6 +394,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
         counter = [0]  # Use list for mutable counter in nested function
         lock = threading.Lock()
+        processing_errors = []  # Track errors to prevent cache on failure
 
         print(f"      [DEBUG] Starting thread pool with {thread_count} threads for {len(issue_list)} issues")
 
@@ -415,6 +422,8 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 for pull_request in pull_requests:
                     self.process_pull_request(ticket, pull_request, sprint_name, start_date, end_date, sprint_start_ms, sprint_end_ms, mode)
             except Exception as e:
+                with lock:
+                    processing_errors.append(e)
                 print(f"Error processing issue: {e}", file=sys.stderr)
                 traceback.print_exc(file=sys.stderr)
 
@@ -423,6 +432,9 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
         print(f"      [DEBUG] Parallel processing completed for {len(issue_list)} issues")
         print(f"      [DEBUG] getIssueCategoryInformation finished for sprint: {sprint_name}")
+
+        if processing_errors:
+            raise RuntimeError(f"Encountered {len(processing_errors)} errors during issue processing. First error: {processing_errors[0]}")
 
     def process_pull_request(self, ticket: str, pull_request: Dict[str, Any], sprint_name: str, start_date: str, 
                             end_date: str, sprint_start_ms: float, sprint_end_ms: float, mode: Mode):
