@@ -162,7 +162,7 @@ class AbstractSprintReport(ABC):
             raise RuntimeError(f"Invalid auth method: {auth_method}")
 
         github_token = self.command_line_helper.get_github_token()
-        self.github_rest = (GithubREST(self.command_line_helper, github_token)
+        self.github_rest = (GithubREST(github_token)
                            if github_token else NullREST("github"))
 
         self.team_name = self.command_line_options.teamName or None
