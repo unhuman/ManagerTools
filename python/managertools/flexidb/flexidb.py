@@ -1,8 +1,8 @@
 import threading
 from typing import Any, Collection, List, Optional
 
-from managertools.flexidb.data.flexidb_index_key import FlexiDBIndexKey
-from managertools.flexidb.data.flexidb_query_column import FlexiDBQueryColumn
+from managertools.flexidb.flexidb_index_key import FlexiDBIndexKey
+from managertools.flexidb.flexidb_query_column import FlexiDBQueryColumn
 from managertools.flexidb.data.flexidb_row import FlexiDBRow
 from managertools.flexidb.exceptions import (
     ColumnNotFoundException, DataNotFoundException, InvalidRequestException, UnexpectedSituationException
