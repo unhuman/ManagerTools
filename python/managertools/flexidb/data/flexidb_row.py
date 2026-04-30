@@ -16,6 +16,12 @@ class FlexiDBRow(dict):
         if other is not None and isinstance(other, dict):
             self.update(other)
 
+    def __hash__(self):
+        return id(self)
+
+    def __eq__(self, other):
+        return self is other
+
     @classmethod
     def set_default(cls, key: str, value: Any) -> None:
         cls.defaults[key] = value
