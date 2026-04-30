@@ -314,18 +314,21 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
         # Sort rows by ticket, then PR ID
         def row_comparator(r1, r2):
-            ticket_cmp = str(r1.get(DBIndexData.TICKET.name, '')).casefold().__cmp__(
-                str(r2.get(DBIndexData.TICKET.name, '')).casefold())
-            if ticket_cmp != 0:
-                return ticket_cmp
+            ticket1 = str(r1.get(DBIndexData.TICKET.name, '')).casefold()
+            ticket2 = str(r2.get(DBIndexData.TICKET.name, '')).casefold()
+            if ticket1 < ticket2:
+                return -1
+            elif ticket1 > ticket2:
+                return 1
 
             try:
                 pr1 = int(str(r1.get(DBIndexData.PR_ID.name, '0')).replace('#', ''))
                 pr2 = int(str(r2.get(DBIndexData.PR_ID.name, '0')).replace('#', ''))
-                return pr1 - pr2
+                return -1 if pr1 < pr2 else (1 if pr1 > pr2 else 0)
             except ValueError:
-                return str(r1.get(DBIndexData.PR_ID.name, '')).casefold().__cmp__(
-                    str(r2.get(DBIndexData.PR_ID.name, '')).casefold())
+                pr_id1 = str(r1.get(DBIndexData.PR_ID.name, '')).casefold()
+                pr_id2 = str(r2.get(DBIndexData.PR_ID.name, '')).casefold()
+                return -1 if pr_id1 < pr_id2 else (1 if pr_id1 > pr_id2 else 0)
 
         from functools import cmp_to_key
         rows.sort(key=cmp_to_key(row_comparator))
