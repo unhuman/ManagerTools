@@ -1,4 +1,7 @@
 from enum import Enum
+from typing import Any, Optional
+
+from managertools.flexidb.flexidb import FlexiDB
 
 
 class UserActivity(Enum):
@@ -15,7 +18,7 @@ class UserActivity(Enum):
     COMMENTED = 0
     COMMENTED_ON_SELF = 0
     COMMENTED_ON_OTHERS = 0
-    OTHERS_COMMENTED = "EMPTY_INCREMENTOR"
+    OTHERS_COMMENTED = FlexiDB.EMPTY_INCREMENTOR
     DECLINED = 0
     MERGED = 0
     OPENED = 0
@@ -23,11 +26,17 @@ class UserActivity(Enum):
     UNAPPROVED = 0
     UPDATED = 0
 
+    def __init__(self, default_value: Any):
+        self.default_value = default_value
+
+    def get_default_value(self) -> Any:
+        return self.default_value
+
     @classmethod
-    def get_resolved_value(cls, desired_action: str):
+    def get_resolved_value(cls, desired_action: str) -> Optional['UserActivity']:
         try:
             return cls[desired_action]
-        except KeyError:
+        except (KeyError, Exception):
             import sys
             sys.stderr.write(f"Unknown action: {desired_action}\n")
             return None
