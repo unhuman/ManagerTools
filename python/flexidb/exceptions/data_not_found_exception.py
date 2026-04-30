@@ -1,0 +1,2 @@
+class DataNotFoundException(Exception):
+    pass

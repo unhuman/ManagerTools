@@ -1,0 +1,2 @@
+class UnexpectedSituationException(Exception):
+    pass
