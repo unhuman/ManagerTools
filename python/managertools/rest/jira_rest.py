@@ -4,7 +4,7 @@ from urllib.parse import urlencode, quote
 from http import HTTPStatus
 
 from .rest_service import RestService
-from .auth_info import AuthInfo
+from .auth_info import AuthInfo, AuthType
 from .exceptions import RESTException
 
 
@@ -15,8 +15,7 @@ class JiraREST(RestService):
         if password is not None:
             auth_info = AuthInfo(username_or_auth, password)
         else:
-            auth_type = AuthInfo.AuthType.Cookies if '=' in username_or_auth else AuthInfo.AuthType.Bearer
-            from .auth_info import AuthType
+            auth_type = AuthType.Cookies if '=' in username_or_auth else AuthType.Bearer
             auth_info = AuthInfo(auth_type, username_or_auth)
 
         super().__init__(auth_info)
