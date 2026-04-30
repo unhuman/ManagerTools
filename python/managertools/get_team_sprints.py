@@ -50,13 +50,8 @@ class GetTeamSprints:
         parser.add_argument('-l', '--limit', type=int, help='Limit of count to get')
         parser.add_argument('-q', '--quietMode', action='store_true', help='Quiet mode')
         parser.add_argument('-ia', '--includeActive', action='store_true', help='Include current active sprint')
-        parser.add_argument('-h', '--help', action='store_true', help='Show help')
 
         options = parser.parse_args(args)
-
-        if options.help:
-            parser.print_help()
-            return
 
         command_line_helper = CommandLineHelper('.managerTools.cfg')
         if options.quietMode:
