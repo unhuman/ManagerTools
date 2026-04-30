@@ -53,13 +53,7 @@ class JiraREST extends RestService {
                 || (x.state == "future"
                     && LocalDateTime.parse(x.startDate, DateTimeFormatter.ISO_DATE_TIME).toInstant(ZoneOffset.UTC).toEpochMilli() > System.currentTimeMillis()) }
 
-        // Sort this list by endDate
-        Collections.sort(values, new Comparator<Object>() {
-            @Override
-            int compare(Object o1, Object o2) {
-                return o1.endDate.compareTo(o2.endDate)
-            }
-        })
+        values.sort { a, b -> a.endDate.compareTo(b.endDate) }
         return values
     }
 

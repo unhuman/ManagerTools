@@ -106,11 +106,7 @@ class JiraCopyTicketEstimates extends Script {
     }
 
     private Pattern convertToPattern(boolean allowPrefixedData, String quarterPart) {
-        String regex = "${allowPrefixedData ? ".*" : ""}${regexEscape(quarterPart)}(.*)"
+        String regex = "${allowPrefixedData ? ".*" : ""}${Pattern.quote(quarterPart)}(.*)"
         return Pattern.compile(regex, Pattern.CASE_INSENSITIVE)
-    }
-
-    private String regexEscape(String regex) {
-        return regex.replaceAll("[\\W]", "\\\\\$0")
     }
 }

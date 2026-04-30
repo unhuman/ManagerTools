@@ -216,10 +216,4 @@ abstract class RestService {
         } while (true)
     }
 
-    private static RequestConfig getRequestConfig() {
-        return RequestConfig.custom()
-                .setConnectTimeout((long) 2L, TimeUnit.SECONDS)
-                .setResponseTimeout((long) 60L, TimeUnit.SECONDS)
-                .build()
-    }
 }
