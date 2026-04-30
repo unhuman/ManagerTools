@@ -1,2 +1,0 @@
-class DataNotFoundException(Exception):
-    pass
