@@ -64,6 +64,10 @@ class FlexiDB:
 
             return list(unique_values.keys())
 
+    def find_rows(self, column_filters: Collection[FlexiDBQueryColumn], allow_multiple: bool) -> List[FlexiDBRow]:
+        with self._lock:
+            return self._find_rows(column_filters, allow_multiple)
+
     def increment_field(self, column_filters: Collection[FlexiDBQueryColumn], increment_field: str, increment: int = 1) -> int:
         with self._lock:
             self._validate_column(increment_field)
