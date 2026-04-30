@@ -392,6 +392,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         print(f"      [DEBUG] Starting thread pool with {thread_count} threads for {len(issue_list)} issues")
 
         def process_issue(issue):
+            import traceback
             try:
                 ticket = issue.get('key')
 
@@ -415,6 +416,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     self.process_pull_request(ticket, pull_request, sprint_name, start_date, end_date, sprint_start_ms, sprint_end_ms, mode)
             except Exception as e:
                 print(f"Error processing issue: {e}", file=sys.stderr)
+                traceback.print_exc(file=sys.stderr)
 
         with ThreadPoolExecutor(max_workers=thread_count) as executor:
             list(executor.map(process_issue, issue_list))
