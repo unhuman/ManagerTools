@@ -1,11 +1,13 @@
 import pytest
-from flexidb import FlexiDB, FlexiDBQueryColumn
-from flexidb.init import FlexiDBInitIndexColumn, FlexiDBInitDataColumn
-from flexidb.exceptions import (
+from managertools.flexidb.flexidb import FlexiDB
+from managertools.flexidb.flexidb_query_column import FlexiDBQueryColumn
+from managertools.flexidb.init.flexidb_init_index_column import FlexiDBInitIndexColumn
+from managertools.flexidb.init.flexidb_init_data_column import FlexiDBInitDataColumn
+from managertools.flexidb.exceptions import (
     ColumnNotFoundException, DataNotFoundException,
     InvalidRequestException, UnexpectedSituationException,
 )
-from flexidb.data import FlexiDBRow
+from managertools.flexidb.data.flexidb_row import FlexiDBRow
 
 
 class TestFlexiDB:
