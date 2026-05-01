@@ -3,9 +3,13 @@ import io
 import sys
 import re
 import threading
+import time
+import random
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+from http.client import RemoteDisconnected
+from requests.exceptions import ConnectionError as RequestsConnectionError
 
 from managertools.abstract_sprint_report import AbstractSprintReport, Mode
 from managertools.flexidb.flexidb import FlexiDB
@@ -403,6 +407,9 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
         def process_issue(issue):
             import traceback
+            max_retries = 3
+            retry_delay = 2
+
             try:
                 ticket = issue.get('key')
 
@@ -412,11 +419,34 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 issue_id = issue.get('id')
 
                 pull_requests = []
-                try:
-                    pull_requests = self.jira_rest.get_ticket_pull_request_info(str(issue_id))
-                except RESTException as re:
-                    if re.status_code not in [403, 404]:  # FORBIDDEN, NOT_FOUND
-                        return
+                last_error = None
+
+                for attempt in range(1, max_retries + 1):
+                    try:
+                        pull_requests = self.jira_rest.get_ticket_pull_request_info(str(issue_id))
+                        last_error = None
+                        break
+                    except (RemoteDisconnected, RequestsConnectionError, BrokenPipeError, EOFError) as ce:
+                        last_error = ce
+                        if attempt < max_retries:
+                            # Calculate exponential backoff with jitter
+                            backoff = retry_delay * (2 ** (attempt - 1))
+                            jitter = random.uniform(0, backoff * 0.1)
+                            wait_time = backoff + jitter
+                            with lock:
+                                print(f"   {ticket}: Connection error (attempt {attempt}/{max_retries}): {type(ce).__name__}. "
+                                      f"Retrying in {wait_time:.1f}s...", file=sys.stderr)
+                            time.sleep(wait_time)
+                        else:
+                            with lock:
+                                print(f"   {ticket}: Connection error after {max_retries} attempts: {ce}", file=sys.stderr)
+                    except RESTException as re:
+                        if re.status_code not in [403, 404]:  # FORBIDDEN, NOT_FOUND
+                            return
+                        break
+
+                if last_error:
+                    raise last_error
 
                 with lock:
                     counter[0] += 1
@@ -439,7 +469,26 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         if processing_errors:
             raise RuntimeError(f"Encountered {len(processing_errors)} errors during issue processing. First error: {processing_errors[0]}")
 
-    def process_pull_request(self, ticket: str, pull_request: Dict[str, Any], sprint_name: str, start_date: str, 
+    def _retry_rest_call(self, func, max_retries: int = 3, retry_delay: int = 2):
+        last_error = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                return func()
+            except (RemoteDisconnected, RequestsConnectionError, BrokenPipeError, EOFError) as ce:
+                last_error = ce
+                if attempt < max_retries:
+                    backoff = retry_delay * (2 ** (attempt - 1))
+                    jitter = random.uniform(0, backoff * 0.1)
+                    wait_time = backoff + jitter
+                    print(f"Connection error (attempt {attempt}/{max_retries}): {type(ce).__name__}. "
+                          f"Retrying in {wait_time:.1f}s...", file=sys.stderr)
+                    time.sleep(wait_time)
+                else:
+                    print(f"Connection error after {max_retries} attempts: {ce}", file=sys.stderr)
+        if last_error:
+            raise last_error
+
+    def process_pull_request(self, ticket: str, pull_request: Dict[str, Any], sprint_name: str, start_date: str,
                             end_date: str, sprint_start_ms: float, sprint_end_ms: float, mode: Mode):
         print(f"      [DEBUG] Processing PR: {ticket}/{pull_request.get('id')}")
 
@@ -452,8 +501,8 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         pr_status = pull_request.get('status', '')
         pr_author = source_control_rest.map_user_to_jira_name(pull_request.get('author', ''))
 
-        # Get commits
-        pr_commits = source_control_rest.get_commits(pr_url)
+        # Get commits with retry logic
+        pr_commits = self._retry_rest_call(lambda: source_control_rest.get_commits(pr_url))
         print(f"      [DEBUG] PR {ticket}/{pr_id}: Got {len(pr_commits) if pr_commits else 0} commits")
 
         if pr_author is None:
@@ -468,8 +517,8 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 print(f"Skipping processing of PR {ticket} / {pr_id} due to unknown author: {pull_request.get('author')}", file=sys.stderr)
                 return
 
-        # Get activities
-        pr_activities = source_control_rest.get_activities(pr_url)
+        # Get activities with retry logic
+        pr_activities = self._retry_rest_call(lambda: source_control_rest.get_activities(pr_url))
         print(f"      [DEBUG] PR {ticket}/{pr_id}: Got {len(pr_activities) if pr_activities else 0} activities")
 
         comment_blockers = []
@@ -521,7 +570,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 self.populate_baseline_db_info(index_lookup, start_date, end_date, pr_author)
 
                 commit_url = commit.get('url') or pr_url
-                diffs_response = source_control_rest.get_commit_diffs(commit_url, commit_sha)
+                diffs_response = self._retry_rest_call(lambda: source_control_rest.get_commit_diffs(commit_url, commit_sha))
 
                 if diffs_response:
                     self.process_diffs(self.COMMIT_PREFIX, diffs_response, index_lookup)
@@ -536,7 +585,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             commit_added = self.database.get_value(index_lookup, UserActivity.COMMIT_ADDED.name) or 0
             commit_removed = self.database.get_value(index_lookup, UserActivity.COMMIT_REMOVED.name) or 0
             if commit_added > 0 or commit_removed > 0:
-                diffs_response = source_control_rest.get_diffs(pr_url)
+                diffs_response = self._retry_rest_call(lambda: source_control_rest.get_diffs(pr_url))
                 if diffs_response:
                     self.populate_baseline_db_info(index_lookup, start_date, end_date, pr_author)
                     self.process_diffs(self.PR_PREFIX, diffs_response, index_lookup)
