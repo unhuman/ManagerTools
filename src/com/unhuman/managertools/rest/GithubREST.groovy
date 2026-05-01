@@ -146,7 +146,9 @@ class GithubREST extends SourceControlREST {
                                                 "FIRST_TIMER", "FIRST_TIME_CONTRIBUTOR",
                                                 "MEMBER", "OWNER"] && activity.body != null) {
                 if (activity.state in ["APPROVED", "DISMISSED"]) {
-                    activity.action = activity.state
+                    // Remap DISMISSED to DECLINED here; the switch in SprintReportTeamAnalysis
+                    // is never reached because getResolvedValue("DISMISSED") returns null first
+                    activity.action = (activity.state == "DISMISSED") ? UserActivity.DECLINED.name() : activity.state
                     reviews.add(activity)
                 }
             }
