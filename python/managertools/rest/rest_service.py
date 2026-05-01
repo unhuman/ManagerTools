@@ -69,38 +69,43 @@ class RestService(ABC):
                 # Execute request
                 response = session.request(method, uri, **kwargs)
 
-                # Handle rate limiting (429, 403)
-                if response.status_code in [429, 403]:
-                    # Log rate limit headers
+                # Handle rate limiting (429 is always rate limit, 403 only if rate limit headers indicate it)
+                if response.status_code == 429:
+                    # 429 Too Many Requests is always a rate limit
                     rate_limit_headers = {k: v for k, v in response.headers.items()
                                         if 'ratelimit' in k.lower()}
                     if rate_limit_headers:
                         sys.stderr.write(f"Rate Limit Response Headers: {rate_limit_headers}\n")
 
-                    retry_after = None
-
-                    # Check Retry-After header (standard format)
+                    retry_after = 0
+                    # Check Retry-After header
                     if 'Retry-After' in response.headers:
                         try:
                             retry_after = int(response.headers['Retry-After'])
                         except ValueError:
                             pass
+                    raise NeedsRetryException(response.status_code, response.text, uri, retry_after)
 
-                    # Check GitHub-specific rate limit headers
-                    if retry_after is None:
-                        x_remaining = response.headers.get('X-RateLimit-Remaining')
-                        x_reset = response.headers.get('X-RateLimit-Reset')
-                        if x_remaining and x_reset:
-                            try:
-                                if int(x_remaining) == 0:
-                                    retry_after = max(0, int(x_reset) - int(time.time()))
-                            except ValueError:
-                                pass
+                elif response.status_code == 403:
+                    # 403 Forbidden might be rate limit or permission error
+                    # Only treat as rate limit if X-RateLimit-Remaining shows we're out
+                    x_remaining = response.headers.get('X-RateLimit-Remaining')
+                    is_rate_limited = False
+                    if x_remaining:
+                        try:
+                            if int(x_remaining) == 0:
+                                is_rate_limited = True
+                                x_reset = response.headers.get('X-RateLimit-Reset')
+                                if x_reset:
+                                    try:
+                                        retry_after = max(0, int(x_reset) - int(time.time()))
+                                        raise NeedsRetryException(response.status_code, response.text, uri, retry_after)
+                                    except ValueError:
+                                        pass
+                        except ValueError:
+                            pass
 
-                    if retry_after is not None and retry_after >= 0:
-                        raise NeedsRetryException(response.status_code, response.text, uri, retry_after)
-
-                    # Check for SSO requirement
+                    # Not a rate limit issue—it's a permission error
                     sso_header = response.headers.get('x-github-sso')
                     sso_msg = f" (SSO authorization required: {sso_header})" if sso_header else ""
                     raise RESTException(response.status_code, f"Forbidden{sso_msg}: {dict(response.headers)}", uri)
