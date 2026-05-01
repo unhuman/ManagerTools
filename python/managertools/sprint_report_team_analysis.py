@@ -23,7 +23,7 @@ from managertools.flexidb.output.output_filter import OutputFilter
 from managertools.data import DBData, DBIndexData, UserActivity
 from managertools.output.convert_self_metrics_empty_to_zero_output_filter import ConvertSelfMetricsEmptyToZeroOutputFilter
 from managertools.rest.source_control_rest import SourceControlREST
-from managertools.rest.exceptions import RESTException
+from managertools.rest.exceptions import RESTException, NeedsRetryException
 from managertools.util.command_line_helper import CommandLineHelper
 from managertools.util.sprint_data_cache import SprintDataCache
 
@@ -474,6 +474,15 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         for attempt in range(1, max_retries + 1):
             try:
                 return func()
+            except NeedsRetryException as nre:
+                last_error = nre
+                if attempt < max_retries:
+                    wait_time = nre.get_retry_after() or retry_delay
+                    print(f"Rate limited (attempt {attempt}/{max_retries}). "
+                          f"Waiting {wait_time}s as indicated by server...", file=sys.stderr)
+                    time.sleep(wait_time)
+                else:
+                    print(f"Rate limit after {max_retries} attempts: {nre}", file=sys.stderr)
             except (RemoteDisconnected, RequestsConnectionError, BrokenPipeError, EOFError) as ce:
                 last_error = ce
                 if attempt < max_retries:
