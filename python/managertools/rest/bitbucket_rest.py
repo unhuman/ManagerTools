@@ -43,7 +43,7 @@ class BitbucketREST(SourceControlREST):
             else:
                 break
 
-        return {'values': all_values}
+        return all_values
 
     def get_commits(self, pr_url: str) -> Optional[Any]:
         uri = f"{pr_url}/commits"
@@ -65,7 +65,7 @@ class BitbucketREST(SourceControlREST):
                 else:
                     break
 
-            return {'values': all_values}
+            return all_values
         except RESTException as re:
             if re.status_code not in [HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND]:
                 raise

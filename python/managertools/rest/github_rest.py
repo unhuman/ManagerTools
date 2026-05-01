@@ -197,7 +197,7 @@ class GithubREST(SourceControlREST):
                 except Exception as e:
                     sys.stderr.write(f"{e}\n")
 
-            return {'values': all_values}
+            return values
         except RESTException as re:
             if re.status_code not in [HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND]:
                 raise

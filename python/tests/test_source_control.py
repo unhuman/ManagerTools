@@ -109,27 +109,25 @@ class TestGithubREST:
 
     @patch.object(GithubREST, 'get_request')
     def test_get_commits(self, mock_request):
-        mock_request.return_value = {
-            'values': [
-                {
-                    'sha': 'abc123',
-                    'author': {'login': 'user1'},
-                    'committer': {'name': 'User One'},
-                    'commit': {
-                        'message': 'Fix bug',
-                        'committer': {'date': '2024-01-15T10:30:00Z'},
-                        'author': {'name': 'User One'}
-                    }
+        mock_request.return_value = [
+            {
+                'sha': 'abc123',
+                'author': {'login': 'user1'},
+                'committer': {'name': 'User One'},
+                'commit': {
+                    'message': 'Fix bug',
+                    'committer': {'date': '2024-01-15T10:30:00Z'},
+                    'author': {'name': 'User One'}
                 }
-            ]
-        }
+            }
+        ]
 
         github = GithubREST("test_token")
         result = github.get_commits("https://api.github.com/repos/owner/repo/pulls/123/commits")
 
-        assert len(result['values']) == 1
-        assert result['values'][0]['id'] == 'abc123'
-        assert result['values'][0]['message'] == 'Fix bug'
+        assert len(result) == 1
+        assert result[0]['id'] == 'abc123'
+        assert result[0]['message'] == 'Fix bug'
 
     @patch.object(GithubREST, 'get_request')
     def test_get_commits_handles_error(self, mock_request):
@@ -225,7 +223,7 @@ class TestBitbucketREST:
         result = bitbucket.get_activities("http://bitbucket.example.com/project/repo/pull-requests/123")
 
         mock_request.assert_called_once()
-        assert result['values'][0]['id'] == 1
+        assert result[0]['id'] == 1
 
     @patch.object(BitbucketREST, 'get_request')
     def test_get_commits(self, mock_request):
@@ -234,7 +232,7 @@ class TestBitbucketREST:
         bitbucket = BitbucketREST("http://bitbucket.example.com", "token123")
         result = bitbucket.get_commits("http://bitbucket.example.com/project/repo/pull-requests/123")
 
-        assert result['values'][0]['id'] == 'abc123'
+        assert result[0]['id'] == 'abc123'
 
     @patch.object(BitbucketREST, 'get_request')
     def test_get_commits_handles_404(self, mock_request):
