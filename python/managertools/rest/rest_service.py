@@ -108,7 +108,13 @@ class RestService(ABC):
                     # Not a rate limit issue—it's a permission error
                     sso_header = response.headers.get('x-github-sso')
                     sso_msg = f" (SSO authorization required: {sso_header})" if sso_header else ""
-                    raise RESTException(response.status_code, f"Forbidden{sso_msg}: {dict(response.headers)}", uri)
+
+                    # For Jira, also suggest login requirement
+                    jira_msg = ""
+                    if 'jira' in uri.lower():
+                        jira_msg = " For Jira: You may need to log in via browser or refresh your PAT token."
+
+                    raise RESTException(response.status_code, f"Forbidden{sso_msg}{jira_msg}: {dict(response.headers)}", uri)
 
                 # Handle other HTTP errors
                 if not (200 <= response.status_code <= 299):
