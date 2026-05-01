@@ -3,14 +3,14 @@ from typing import Any, Optional
 
 
 class DBData(Enum):
-    START_DATE = ("startDate", None)
-    END_DATE = ("endDate", None)
-    AUTHOR = ("author", None)
-    COMMENTS = ("comments", [])
-    OTHERS_COMMENTS = (None, [])
-    COMMIT_MESSAGES = (None, [])
+    START_DATE = ("startDate", None, 0)
+    END_DATE = ("endDate", None, 1)
+    AUTHOR = ("author", None, 2)
+    COMMENTS = ("comments", [], 3)
+    OTHERS_COMMENTS = (None, [], 4)
+    COMMIT_MESSAGES = (None, [], 5)
 
-    def __init__(self, jira_field: Optional[str], default_value: Any):
+    def __init__(self, jira_field: Optional[str], default_value: Any, _unique_id: int):
         self.jira_field = jira_field
         self.default_value = default_value
 

@@ -136,10 +136,10 @@ class GithubREST(SourceControlREST):
             author_association = activity.get('author_association', '')
             if (author_association in ['CONTRIBUTOR', 'COLLABORATOR', 'FIRST_TIMER',
                                        'FIRST_TIME_CONTRIBUTOR', 'MEMBER', 'OWNER']
-                    and activity.get('body')):
+                    and activity.get('body') is not None):
                 state = activity.get('state', '')
                 if state in ['APPROVED', 'DISMISSED']:
-                    activity['action'] = state
+                    activity['action'] = UserActivity.DECLINED.name if state == 'DISMISSED' else state
                     reviews.append(activity)
 
         return reviews

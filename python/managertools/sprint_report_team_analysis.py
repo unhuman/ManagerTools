@@ -50,7 +50,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
     STANDARD_OUTPUT_RULES = [ConvertZerosToEmptyOutputFilter()]
     SAME_USER_OUTPUT_RULES = [ConvertSelfMetricsEmptyToZeroOutputFilter()]
 
-    MERGE_COMMIT_REGEX = r"(?i)(?:^|.*[ :])s*(down)?merge.*"
+    MERGE_COMMIT_REGEX = r"(?i)(?:^|.*[ :])\s*(down)?merge.*"
 
     def __init__(self, args: List[str]):
         super().__init__(args)
