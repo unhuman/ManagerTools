@@ -65,16 +65,24 @@ class GithubREST extends SourceControlREST {
 
     protected ArrayList<Object> getComments(String prUrl) {
         String uri = "${prUrl}/comments"
-        NameValuePair startPair = new BasicNameValuePair("start", STARTING_PAGE)
-        NameValuePair limitPair = new BasicNameValuePair("limit", PAGE_SIZE_LIMIT)
-        NameValuePair markupPair = new BasicNameValuePair("markup", "true")
 
-        Object activities = getRequest(uri, startPair, limitPair, markupPair)
+        List<Object> allActivities = new ArrayList<>()
+        int page = 1
+        while (true) {
+            NameValuePair pagePair = new BasicNameValuePair("page", String.valueOf(page))
+            NameValuePair perPagePair = new BasicNameValuePair("per_page", PAGE_SIZE_LIMIT)
+            Object response = getRequest(uri, pagePair, perPagePair)
+            List<Object> pageItems = (response instanceof List) ? response : response.values
+            if (!pageItems) break
+            allActivities.addAll(pageItems)
+            if (pageItems.size() < Integer.parseInt(PAGE_SIZE_LIMIT)) break
+            page++
+        }
 
         // make this data look the same as bitbucket
         List<Object> comments = new ArrayList<>()
-        for (int i = activities.values.size() - 1; i >= 0; i--) {
-            def activity = (activities instanceof List) ? activities[i] : activities.values.get(i)
+        for (int i = allActivities.size() - 1; i >= 0; i--) {
+            def activity = allActivities[i]
             if (activity.user == null) {
                 activity.user = [name: "unknown", displayName: "unknown"]
             } else {
@@ -100,16 +108,24 @@ class GithubREST extends SourceControlREST {
 
     protected ArrayList<Object> getReviews(String prUrl) {
         String uri = "${prUrl}/reviews"
-        NameValuePair startPair = new BasicNameValuePair("start", STARTING_PAGE)
-        NameValuePair limitPair = new BasicNameValuePair("limit", PAGE_SIZE_LIMIT)
-        NameValuePair markupPair = new BasicNameValuePair("markup", "true")
 
-        Object activities = getRequest(uri, startPair, limitPair, markupPair)
+        List<Object> allActivities = new ArrayList<>()
+        int page = 1
+        while (true) {
+            NameValuePair pagePair = new BasicNameValuePair("page", String.valueOf(page))
+            NameValuePair perPagePair = new BasicNameValuePair("per_page", PAGE_SIZE_LIMIT)
+            Object response = getRequest(uri, pagePair, perPagePair)
+            List<Object> pageItems = (response instanceof List) ? response : response.values
+            if (!pageItems) break
+            allActivities.addAll(pageItems)
+            if (pageItems.size() < Integer.parseInt(PAGE_SIZE_LIMIT)) break
+            page++
+        }
 
         // make this data look the same as bitbucket
         List<Object> reviews = new ArrayList<>()
-        for (int i = activities.values.size() - 1; i >= 0; i--) {
-            def activity = (activities instanceof List) ? activities[i] : activities.values.get(i)
+        for (int i = allActivities.size() - 1; i >= 0; i--) {
+            def activity = allActivities[i]
 
             if (activity.user == null) {
                 activity.user = [name: "unknown", displayName: "unknown"]
@@ -142,14 +158,23 @@ class GithubREST extends SourceControlREST {
     // Get Commits
     Object getCommits(String prUrl) {
         String uri = "${prUrl}/commits"
-        NameValuePair startPair = new BasicNameValuePair("start", STARTING_PAGE)
-        NameValuePair limitPair = new BasicNameValuePair("limit", PAGE_SIZE_LIMIT)
         try {
-            Object commits = getRequest(uri, startPair, limitPair)
+            List<Object> allCommits = new ArrayList<>()
+            int page = 1
+            while (true) {
+                NameValuePair pagePair = new BasicNameValuePair("page", String.valueOf(page))
+                NameValuePair perPagePair = new BasicNameValuePair("per_page", PAGE_SIZE_LIMIT)
+                Object response = getRequest(uri, pagePair, perPagePair)
+                List<Object> pageItems = (response instanceof List) ? response : response.values
+                if (!pageItems) break
+                allCommits.addAll(pageItems)
+                if (pageItems.size() < Integer.parseInt(PAGE_SIZE_LIMIT)) break
+                page++
+            }
 
             // make the data look like bitbucket
-            for (int i = commits.values.size() - 1; i >= 0; i--) {
-                def commit = (commits instanceof List) ? commits.get(i) : commits.values.get(i)
+            for (int i = allCommits.size() - 1; i >= 0; i--) {
+                def commit = allCommits[i]
                 commit.id = commit.sha
                 commit.committerTimestamp = java.time.Instant.parse(commit.commit.committer.date).getEpochSecond() * 1000 // ms
                 commit.message = commit.commit.message
@@ -177,7 +202,8 @@ class GithubREST extends SourceControlREST {
                 }
             }
 
-            return commits
+            // Return Bitbucket-compatible structure so SprintReportTeamAnalysis iterates via .values
+            return [values: allCommits]
         } catch (RESTException re) {
             if (re.statusCode != HttpStatus.SC_FORBIDDEN && re.statusCode != HttpStatus.SC_NOT_FOUND) {
                 throw re
