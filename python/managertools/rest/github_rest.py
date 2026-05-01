@@ -48,19 +48,31 @@ class GithubREST(SourceControlREST):
 
     def get_comments(self, pr_url: str) -> List[Any]:
         uri = f"{pr_url}/comments"
-        activities = self.get_request(uri,
-                                     start=self.STARTING_PAGE,
-                                     limit=self.PAGE_SIZE_LIMIT,
-                                     markup="true")
+        all_values = []
+        page = 1
+
+        while True:
+            activities = self.get_request(uri,
+                                         per_page=self.PAGE_SIZE_LIMIT,
+                                         page=str(page))
+
+            values = activities.get('values', []) if isinstance(activities, dict) else activities
+            if not isinstance(values, list):
+                values = list(values.values()) if hasattr(values, 'values') else []
+
+            if not values:
+                break
+
+            all_values.extend(values)
+
+            if len(values) < int(self.PAGE_SIZE_LIMIT):
+                break
+
+            page += 1
+
+        values = list(reversed(all_values))
 
         comments = []
-        values = activities.get('values', []) if isinstance(activities, dict) else activities
-        if isinstance(values, list):
-            values = list(reversed(values))
-        else:
-            # If values is a dict-like object, convert to list
-            values = list(reversed(list(values.values()) if hasattr(values, 'values') else []))
-
         for activity in values:
             if activity.get('user') is None:
                 activity['user'] = {'name': 'unknown', 'displayName': 'unknown'}
@@ -83,18 +95,31 @@ class GithubREST(SourceControlREST):
 
     def get_reviews(self, pr_url: str) -> List[Any]:
         uri = f"{pr_url}/reviews"
-        activities = self.get_request(uri,
-                                     start=self.STARTING_PAGE,
-                                     limit=self.PAGE_SIZE_LIMIT,
-                                     markup="true")
+        all_values = []
+        page = 1
+
+        while True:
+            activities = self.get_request(uri,
+                                         per_page=self.PAGE_SIZE_LIMIT,
+                                         page=str(page))
+
+            values = activities.get('values', []) if isinstance(activities, dict) else activities
+            if not isinstance(values, list):
+                values = list(values.values()) if hasattr(values, 'values') else []
+
+            if not values:
+                break
+
+            all_values.extend(values)
+
+            if len(values) < int(self.PAGE_SIZE_LIMIT):
+                break
+
+            page += 1
+
+        values = list(reversed(all_values))
 
         reviews = []
-        values = activities.get('values', []) if isinstance(activities, dict) else activities
-        if isinstance(values, list):
-            values = list(reversed(values))
-        else:
-            values = list(reversed(list(values.values()) if hasattr(values, 'values') else []))
-
         for activity in values:
             if activity.get('user') is None:
                 activity['user'] = {'name': 'unknown', 'displayName': 'unknown'}
@@ -122,15 +147,29 @@ class GithubREST(SourceControlREST):
     def get_commits(self, pr_url: str) -> Optional[Any]:
         uri = f"{pr_url}/commits"
         try:
-            commits = self.get_request(uri,
-                                      start=self.STARTING_PAGE,
-                                      limit=self.PAGE_SIZE_LIMIT)
+            all_values = []
+            page = 1
 
-            values = commits.get('values', []) if isinstance(commits, dict) else commits
-            if isinstance(values, list):
-                values = list(reversed(values))
-            else:
-                values = list(reversed(list(values.values()) if hasattr(values, 'values') else []))
+            while True:
+                commits = self.get_request(uri,
+                                          per_page=self.PAGE_SIZE_LIMIT,
+                                          page=str(page))
+
+                values = commits.get('values', []) if isinstance(commits, dict) else commits
+                if not isinstance(values, list):
+                    values = list(values.values()) if hasattr(values, 'values') else []
+
+                if not values:
+                    break
+
+                all_values.extend(values)
+
+                if len(values) < int(self.PAGE_SIZE_LIMIT):
+                    break
+
+                page += 1
+
+            values = list(reversed(all_values))
 
             for commit in values:
                 commit['id'] = commit.get('sha')
@@ -158,7 +197,7 @@ class GithubREST(SourceControlREST):
                 except Exception as e:
                     sys.stderr.write(f"{e}\n")
 
-            return commits
+            return {'values': all_values}
         except RESTException as re:
             if re.status_code not in [HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND]:
                 raise

@@ -25,17 +25,47 @@ class BitbucketREST(SourceControlREST):
 
     def get_activities(self, pr_url: str) -> Any:
         uri = f"{pr_url}/activities"
-        return self.get_request(uri,
-                               start=self.STARTING_PAGE,
-                               limit=self.PAGE_SIZE_LIMIT,
-                               markup="true")
+        all_values = []
+        start = self.STARTING_PAGE
+
+        while True:
+            response = self.get_request(uri,
+                                       start=start,
+                                       limit=self.PAGE_SIZE_LIMIT,
+                                       markup="true")
+
+            values = response.get('values', []) if isinstance(response, dict) else response
+            if isinstance(values, list):
+                all_values.extend(values)
+
+            if isinstance(response, dict) and not response.get('isLastPage', True):
+                start = str(response.get('nextPageStart', int(start) + len(values)))
+            else:
+                break
+
+        return {'values': all_values}
 
     def get_commits(self, pr_url: str) -> Optional[Any]:
         uri = f"{pr_url}/commits"
         try:
-            return self.get_request(uri,
-                                   start=self.STARTING_PAGE,
-                                   limit=self.PAGE_SIZE_LIMIT)
+            all_values = []
+            start = self.STARTING_PAGE
+
+            while True:
+                response = self.get_request(uri,
+                                           start=start,
+                                           limit=self.PAGE_SIZE_LIMIT)
+
+                values = response.get('values', []) if isinstance(response, dict) else response
+                if isinstance(values, list):
+                    all_values.extend(values)
+
+                if isinstance(response, dict) and not response.get('isLastPage', True):
+                    start = str(response.get('nextPageStart', int(start) + len(values)))
+                else:
+                    break
+
+            return {'values': all_values}
         except RESTException as re:
             if re.status_code not in [HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND]:
                 raise
