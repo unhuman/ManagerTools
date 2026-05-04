@@ -120,7 +120,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             if not team_name:
                 raise RuntimeError("Team name is required for Kanban mode")
 
-            cycle_length = (CommandLineHelper.prompt_number("Kanban cycle length, in weeks")
+            cycle_length = (int(CommandLineHelper.prompt_number("Kanban cycle length, in weeks"))
                            if self.command_line_options.prompt
                            else self.command_line_options.kanbanCycleLength)
 
