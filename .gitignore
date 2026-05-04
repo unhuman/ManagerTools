@@ -9,9 +9,20 @@ ManagerTools.iml
 **/*.orig
 **/*.zip
 .DS_Store
-**/*.orig
 **/*.log
-**/*cache*
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+.egg-info/
+dist/
+build/
+
+# General cache
+**/*cache*/
 
 # Beads / Dolt files (added by bd init)
 .dolt/
