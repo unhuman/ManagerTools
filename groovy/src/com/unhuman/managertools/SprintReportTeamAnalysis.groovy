@@ -73,9 +73,9 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         cli.i(longOpt: 'isolateTicket', required: false, args:1, argName: 'isolateTicket',  'Isolate ticket for processing (for debugging)')
         cli.o(longOpt: 'outputCSV', required: true, args: 1, argName: 'outputCSV', 'Output filename (.csv)')
         cli.mt(longOpt: 'multithread', required: false, args: 1, argName: 'number', 'Number of threads, default to 1, *=cores')
+        cli.k(longOpt: 'kanbanCycleLength', required: false, args: 1, argName: 'number', 'The length of a kanban cycle, in weeks (defaults to 2)')
         cli.includeMergeCommits(required: false, 'Include merge commit data in code metrics')
         cli.maxCommitSize(required: false, args: 1, argName: 'number', 'Limit the amount of size (adds+removes) of a commit to be counted in code metrics')
-        cli.kanbanCycleLength(required: false, args: 1, argName: 'number', defaultValue: "2", 'The length of a kanban cycle, in weeks (defaults to 2)')
     }
 
     @Override
@@ -134,7 +134,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                 def cycleLength = Integer.parseInt(
                         (getCommandLineOptions().'prompt'
                                 ? CommandLineHelper.promptNumber("Kanban cycle length, in weeks")
-                                : getCommandLineOptions().kanbanCycleLength))
+                                : getCommandLineOptions().kanbanCycleLength ?: '2'))
 
                 // TODO: Gather information about all the time periods (cycles)
                 System.out.println("Processing Kanban ${cycles} cycles...")
