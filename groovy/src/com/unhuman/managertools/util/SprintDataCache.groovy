@@ -1,0 +1,106 @@
+package com.unhuman.managertools.util
+
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+import java.security.MessageDigest
+
+class SprintDataCache {
+    private static final String CACHE_DIR = "cacheData"
+    private static final String CACHE_VERSION = "1.0"
+
+    /**
+     * Generate a cache key based on sprint parameters (case-insensitive)
+     */
+    static String generateCacheKey(String teamName, String sprintName, String startDate, String endDate) {
+        // Convert all parameters to lowercase for case-insensitive matching
+        String input = "${teamName?.toLowerCase()}|${sprintName?.toLowerCase()}|${startDate?.toLowerCase()}|${endDate?.toLowerCase()}"
+        MessageDigest md = MessageDigest.getInstance("MD5")
+        byte[] digest = md.digest(input.getBytes("UTF-8"))
+        return digest.collect { String.format("%02x", it) }.join()
+    }
+
+    /**
+     * Get the cache file path for a given cache key
+     */
+    static String getCacheFilePath(String cacheKey) {
+        return "${CACHE_DIR}/${cacheKey}.json"
+    }
+
+    /**
+     * Ensure the cache directory exists
+     */
+    static void ensureCacheDirectoryExists() {
+        File cacheDir = new File(CACHE_DIR)
+        if (!cacheDir.exists()) {
+            cacheDir.mkdirs()
+        }
+    }
+
+    /**
+     * Check if cached data exists for the given parameters
+     */
+    static boolean hasCachedData(String teamName, String sprintName, String startDate, String endDate) {
+        String cacheKey = generateCacheKey(teamName, sprintName, startDate, endDate)
+        String filePath = getCacheFilePath(cacheKey)
+        File cacheFile = new File(filePath)
+
+        if (!cacheFile.exists()) {
+            return false
+        }
+
+        // Check if the cache version matches
+        try {
+            def cachedData = new JsonSlurper().parse(cacheFile)
+            return cachedData.version == CACHE_VERSION
+        } catch (Exception e) {
+            System.err.println("Error reading cache file ${filePath}: ${e.message}")
+            return false
+        }
+    }
+
+    /**
+     * Load cached data
+     */
+    static Map loadCachedData(String teamName, String sprintName, String startDate, String endDate) {
+        String cacheKey = generateCacheKey(teamName, sprintName, startDate, endDate)
+        String filePath = getCacheFilePath(cacheKey)
+
+        System.out.println("Loading cached data from: ${filePath}")
+
+        File cacheFile = new File(filePath)
+        def cachedData = new JsonSlurper().parse(cacheFile)
+
+        if (cachedData.version != CACHE_VERSION) {
+            throw new RuntimeException("Cache version mismatch. Expected ${CACHE_VERSION}, found ${cachedData.version}")
+        }
+
+        return cachedData.data as Map
+    }
+
+    /**
+     * Save data to cache
+     */
+    static void saveToCache(String teamName, String sprintName, String startDate, String endDate, Map data) {
+        ensureCacheDirectoryExists()
+
+        String cacheKey = generateCacheKey(teamName, sprintName, startDate, endDate)
+        String filePath = getCacheFilePath(cacheKey)
+
+        def cacheData = [
+            version: CACHE_VERSION,
+            teamName: teamName,
+            sprintName: sprintName,
+            startDate: startDate,
+            endDate: endDate,
+            timestamp: System.currentTimeMillis(),
+            data: data
+        ]
+
+        File cacheFile = new File(filePath)
+        cacheFile.text = JsonOutput.prettyPrint(JsonOutput.toJson(cacheData))
+
+        System.out.println("Saved data to cache: ${filePath}")
+    }
+}
+
