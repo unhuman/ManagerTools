@@ -788,6 +788,9 @@ if __name__ == '__main__':
     try:
         analysis = SprintReportTeamAnalysis(sys.argv[1:])
         analysis.run()
+    except KeyboardInterrupt:
+        print("\nOperation cancelled by user.", file=sys.stderr)
+        sys.exit(0)
     except RuntimeError as e:
         print(f"Caught: {type(e).__name__}: {e}", file=sys.stderr)
         sys.exit(1)
