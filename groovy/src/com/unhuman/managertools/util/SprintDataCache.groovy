@@ -17,8 +17,9 @@ class SprintDataCache {
      * the key is consistent regardless of formatting variations.
      */
     static String generateCacheKey(String teamName, String sprintName, String startDate, String endDate) {
-        List<String> parts = [sanitize(teamName), sanitize(sprintName), sanitize(startDate), sanitize(endDate)]
-        return parts.findAll { it }.join('_')
+        List<String> prefix = [sanitize(teamName), sanitize(sprintName)].findAll { it }
+        String dateRange = "${sanitize(startDate)}-${sanitize(endDate)}"
+        return (prefix + [dateRange]).join('_')
     }
 
     /**

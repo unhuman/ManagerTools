@@ -15,13 +15,9 @@ class SprintDataCache:
 
     @staticmethod
     def generate_cache_key(team_name: str, sprint_name: str, start_date: str, end_date: str) -> str:
-        parts = [
-            SprintDataCache._sanitize(team_name),
-            SprintDataCache._sanitize(sprint_name),
-            SprintDataCache._sanitize(start_date),
-            SprintDataCache._sanitize(end_date),
-        ]
-        return '_'.join(p for p in parts if p)
+        prefix = [p for p in [SprintDataCache._sanitize(team_name), SprintDataCache._sanitize(sprint_name)] if p]
+        date_range = f"{SprintDataCache._sanitize(start_date)}-{SprintDataCache._sanitize(end_date)}"
+        return '_'.join(prefix + [date_range])
 
     @staticmethod
     def get_cache_file_path(cache_key: str) -> str:
