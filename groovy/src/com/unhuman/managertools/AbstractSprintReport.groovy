@@ -174,6 +174,13 @@ abstract class AbstractSprintReport extends Script {
             sprintIds = commandLineOptions.'sprintIds'.split(',')
         }
 
+        // Validate that at least one sprint/cycle selection option was provided
+        if (!limit && !weeks && !sprintIds) {
+            System.out.println("Error: Must provide one of: -l (limit), -w (weeks), -s (sprintIds), or -p (prompt)")
+            cli.usage()
+            System.exit(-1)
+        }
+
         // This is separate since it can be reset in prompt mode during limit check, above
         if (weeks) {
             mode = Mode.KANBAN
