@@ -104,9 +104,8 @@ abstract class AbstractSprintReport extends Script {
         def scrumOrKanbanOptions = new OptionGroup(required: false)
         scrumOrKanbanOptions.with {
             // Note these params must be kept up to date with the commandLineOptions validation below
-            addOption(cli.option('l', [longOpt: 'limit', args: 1, argName: 'limitSprints'], 'Number of recent sprints to process'))
+            addOption(cli.option('l', [longOpt: 'limit', args: 1, argName: 'limitSprints'], 'Number of recent sprints/cycles to process'))
             addOption(cli.option('s', [longOpt: 'sprintIds', args: 1, argName: 'sprintIds'], 'Sprint Id Numbers (comma separated)'))
-            addOption(cli.option('w', [longOpt: 'weeks', args: 1, argName: 'weeks'], 'Kanban weeks to process'))
             addOption(promptOption)
         }
 
@@ -125,8 +124,8 @@ abstract class AbstractSprintReport extends Script {
 
         // ensure things are set up correctly (re-use of prompt in 2 groups is handled inconsistently)
         if (commandLineOptions.p &&
-                (commandLineOptions.b || commandLineOptions.t || commandLineOptions.l || commandLineOptions.s || commandLineOptions.w)) {
-            System.out.println("Cannot mix prompt with board/team/limit/sprintIds/weeks")
+                (commandLineOptions.b || commandLineOptions.t || commandLineOptions.l || commandLineOptions.s)) {
+            System.out.println("Cannot mix prompt with board/team/limit/sprintIds")
             cli.usage()
             System.exit(-1)
         }
@@ -151,8 +150,6 @@ abstract class AbstractSprintReport extends Script {
             limit = Integer.parseInt(CommandLineHelper.promptNumber("Number of Sprints/Cycles"))
         } else if (commandLineOptions.'limit') {
             limit = Integer.parseInt(commandLineOptions.'limit')
-        } else if (commandLineOptions.'weeks') {
-            weeks = Integer.parseInt(commandLineOptions.'weeks')
         }
 
         if (limit) {
@@ -175,19 +172,15 @@ abstract class AbstractSprintReport extends Script {
         }
 
         // Validate that at least one sprint/cycle selection option was provided
-        if (!limit && !weeks && !sprintIds) {
-            System.out.println("Error: Must provide one of: -l (limit), -w (weeks), -s (sprintIds), or -p (prompt)")
+        if (!limit && !sprintIds) {
+            System.out.println("Error: Must provide one of: -l (limit), -s (sprintIds), or -p (prompt)")
             cli.usage()
             System.exit(-1)
         }
 
-        // This is separate since it can be reset in prompt mode during limit check, above
+        // Set mode to Kanban if weeks was set (happens when 400 error detects Kanban board)
         if (weeks) {
             mode = Mode.KANBAN
-            // in prompt mode, we already have the weeks value from processing above
-            if (!commandLineOptions.'prompt' && commandLineOptions.'weeks') {
-                weeks = Integer.parseInt(commandLineOptions.'weeks')
-            }
         }
     }
 
