@@ -576,7 +576,10 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
                         if (prCommits != null) {
                             // stream all the prCommits and get all the author names
                             // TODO: this is a bit of a hack to check all committers, but...  Should we pick the majority count?
-                            Set<String> authorNames = prCommits.stream().map(commit -> commit.committer.name).collect(Collectors.toSet())
+                            Set<String> authorNames = prCommits.stream()
+                                    .filter(commit -> commit.committer != null)
+                                    .map(commit -> commit.committer.name)
+                                    .collect(Collectors.toSet())
 
                             if (authorNames.size() == 1) {
                                 prAuthor = sourceControlREST.mapUserToJiraName(authorNames.iterator().next())
