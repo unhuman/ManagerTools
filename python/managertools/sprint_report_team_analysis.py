@@ -145,7 +145,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
         end_date = start_date + timedelta(days=7 * cycle_length - 1, hours=23, minutes=59, seconds=59)
 
-        start_date_str = start_date.strftime("%d/%b/%y 00:00 AM")
+        start_date_str = start_date.strftime("%d/%b/%y 12:00 AM")
         end_date_str = end_date.strftime("%d/%b/%y 11:59 PM")
         clean_start_date = self.clean_date(start_date_str)
         clean_end_date = self.clean_date(end_date_str)

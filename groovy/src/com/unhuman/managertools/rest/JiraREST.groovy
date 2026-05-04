@@ -94,7 +94,7 @@ class JiraREST extends RestService {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MMM/yy")
         String startDateStr = startDate.format(formatter)
         String endDateStr = endDate.format(formatter)
-        response.startDate = startDateStr + " 00:00 AM"
+        response.startDate = startDateStr + " 12:00 AM"
         response.endDate = endDateStr + " 11:59 PM"
         return response
     }

@@ -81,7 +81,7 @@ class JiraREST(RestService):
         response['name'] = f"{team} Week {cycle}"
         start_fmt = start_date.strftime("%d/%b/%y")
         end_fmt = end_date.strftime("%d/%b/%y")
-        response['startDate'] = f"{start_fmt} 00:00 AM"
+        response['startDate'] = f"{start_fmt} 12:00 AM"
         response['endDate'] = f"{end_fmt} 11:59 PM"
         return response
 

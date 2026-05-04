@@ -166,7 +166,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
         // Format dates
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MMM/yy")
-        String startDateStr = startDate.format(formatter) + " 00:00 AM"
+        String startDateStr = startDate.format(formatter) + " 12:00 AM"
         String endDateStr = endDate.format(formatter) + " 11:59 PM"
         String cleanStartDate = cleanDate(startDateStr)
         String cleanEndDate = cleanDate(endDateStr)
