@@ -86,7 +86,7 @@ class GithubREST(SourceControlREST):
             author_association = activity.get('author_association', '')
             if (author_association in ['CONTRIBUTOR', 'COLLABORATOR', 'FIRST_TIMER',
                                        'FIRST_TIME_CONTRIBUTOR', 'MEMBER', 'OWNER']
-                    and activity.get('body')):
+                    and activity.get('body') is not None):
                 activity['action'] = UserActivity.COMMENTED.name
                 activity['comment'] = {'text': activity['body']}
                 comments.append(activity)

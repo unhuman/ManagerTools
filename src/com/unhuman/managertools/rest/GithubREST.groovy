@@ -205,6 +205,7 @@ class GithubREST extends SourceControlREST {
             }
 
             // Return Bitbucket-compatible structure so SprintReportTeamAnalysis iterates via .values
+            Collections.reverse(allCommits)
             return [values: allCommits]
         } catch (RESTException re) {
             if (re.statusCode != HttpStatus.SC_FORBIDDEN && re.statusCode != HttpStatus.SC_NOT_FOUND) {

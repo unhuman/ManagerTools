@@ -770,14 +770,18 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
     @staticmethod
     def clean_date(date_str: str) -> str:
         try:
-            parsed = datetime.strptime(date_str, "%d/%b/%y")
+            parsed = datetime.strptime(date_str, "%d/%b/%y %I:%M %p")
             return parsed.strftime("%Y/%m/%d")
         except ValueError:
             try:
-                parsed = datetime.strptime(date_str, "%Y-%m-%d")
+                parsed = datetime.strptime(date_str, "%d/%b/%y")
                 return parsed.strftime("%Y/%m/%d")
             except ValueError:
-                return date_str
+                try:
+                    parsed = datetime.strptime(date_str, "%Y-%m-%d")
+                    return parsed.strftime("%Y/%m/%d")
+                except ValueError:
+                    return date_str
 
 
 if __name__ == '__main__':
