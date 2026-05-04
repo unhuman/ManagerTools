@@ -125,7 +125,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                            else self.command_line_options.kanbanCycleLength)
 
             print(f"Processing Kanban {cycles} cycles...")
-            for cycle in range(cycles):
+            for cycle in range(1, cycles + 1):
                 print(f"Kanban Cycle: {cycle} / {cycles}")
                 try:
                     self.process_kanban_cycle(thread_count, team_name, cycle, cycles, cycle_length, mode)
@@ -136,7 +136,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
     def process_kanban_cycle(self, thread_count: int, team_name: str, cycle: int, cycles: int, cycle_length: int, mode: Mode):
         # Calculate cycle dates
         from datetime import datetime
-        start_date = datetime.now() - timedelta(weeks=(cycles - cycle) * cycle_length)
+        start_date = datetime.now() - timedelta(weeks=(cycles - cycle + 1) * cycle_length)
         start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
         # Move to Monday
         days_since_monday = start_date.weekday()

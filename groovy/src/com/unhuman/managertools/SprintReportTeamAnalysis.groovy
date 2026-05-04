@@ -138,7 +138,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
                 // TODO: Gather information about all the time periods (cycles)
                 System.out.println("Processing Kanban ${cycles} cycles...")
-                for (int cycle = 0; cycle < cycles; cycle++) {
+                for (int cycle = 1; cycle <= cycles; cycle++) {
                     System.out.println("Kanban Cycle: ${cycle} / ${cycles}")
 
                     try {
@@ -161,7 +161,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
      */
     private void processKanbanCycle(int threadCount, String teamName, int cycle, int cycles, int cycleLength, Mode mode) {
         // Calculate the expected dates for this cycle
-        LocalDate startDate = LocalDate.now().minusWeeks((cycles - cycle) * cycleLength).with(DayOfWeek.MONDAY)
+        LocalDate startDate = LocalDate.now().minusWeeks((cycles - cycle + 1) * cycleLength).with(DayOfWeek.MONDAY)
         LocalDate endDate = startDate.plusDays(7 * cycleLength - 1)
 
         // Format dates
