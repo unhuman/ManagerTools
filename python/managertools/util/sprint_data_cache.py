@@ -1,6 +1,6 @@
-import hashlib
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -10,10 +10,18 @@ class SprintDataCache:
     CACHE_VERSION = "1.0"
 
     @staticmethod
+    def _sanitize(s: str) -> str:
+        return re.sub(r'[^a-z0-9]', '', (s or '').lower())
+
+    @staticmethod
     def generate_cache_key(team_name: str, sprint_name: str, start_date: str, end_date: str) -> str:
-        input_str = f"{team_name.lower() if team_name else ''}|{sprint_name.lower() if sprint_name else ''}|{start_date.lower() if start_date else ''}|{end_date.lower() if end_date else ''}"
-        digest = hashlib.md5(input_str.encode("utf-8")).hexdigest()
-        return digest
+        parts = [
+            SprintDataCache._sanitize(team_name),
+            SprintDataCache._sanitize(sprint_name),
+            SprintDataCache._sanitize(start_date),
+            SprintDataCache._sanitize(end_date),
+        ]
+        return '_'.join(p for p in parts if p)
 
     @staticmethod
     def get_cache_file_path(cache_key: str) -> str:

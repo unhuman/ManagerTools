@@ -3,21 +3,22 @@ package com.unhuman.managertools.util
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 
-import java.security.MessageDigest
-
 class SprintDataCache {
     private static final String CACHE_DIR = "cacheData"
     private static final String CACHE_VERSION = "1.0"
 
+    private static String sanitize(String s) {
+        return (s ?: '').toLowerCase().replaceAll('[^a-z0-9]', '')
+    }
+
     /**
-     * Generate a cache key based on sprint parameters (case-insensitive)
+     * Generate a human-readable cache key based on sprint parameters.
+     * Non-alphanumeric characters (including date separators) are stripped so
+     * the key is consistent regardless of formatting variations.
      */
     static String generateCacheKey(String teamName, String sprintName, String startDate, String endDate) {
-        // Convert all parameters to lowercase for case-insensitive matching
-        String input = "${teamName?.toLowerCase()}|${sprintName?.toLowerCase()}|${startDate?.toLowerCase()}|${endDate?.toLowerCase()}"
-        MessageDigest md = MessageDigest.getInstance("MD5")
-        byte[] digest = md.digest(input.getBytes("UTF-8"))
-        return digest.collect { String.format("%02x", it) }.join()
+        List<String> parts = [sanitize(teamName), sanitize(sprintName), sanitize(startDate), sanitize(endDate)]
+        return parts.findAll { it }.join('_')
     }
 
     /**
