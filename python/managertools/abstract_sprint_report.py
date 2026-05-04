@@ -73,9 +73,8 @@ class AbstractSprintReport(ABC):
         parser.add_argument('-t', '--teamName', help='Sprint Team Name')
         parser.add_argument('-p', '--prompt', action='store_true', help='Prompt for team / timeframe info')
         parser.add_argument('-q', '--quietMode', action='store_true', help='Quiet mode (use default/stored values)')
-        parser.add_argument('-l', '--limit', type=int, help='Number of recent sprints to process')
+        parser.add_argument('-l', '--limit', type=int, help='Number of recent sprints/cycles to process')
         parser.add_argument('-s', '--sprintIds', help='Sprint Id Numbers (comma separated)')
-        parser.add_argument('-w', '--weeks', type=int, help='Kanban weeks to process')
         parser.add_argument('-ia', '--includeActive', action='store_true', help='Include current active sprint')
 
         self.add_custom_command_line_options(parser)
@@ -85,10 +84,9 @@ class AbstractSprintReport(ABC):
         # Validate conflicting options
         if self.command_line_options.prompt:
             conflicting = [self.command_line_options.boardId, self.command_line_options.teamName,
-                          self.command_line_options.limit, self.command_line_options.sprintIds,
-                          self.command_line_options.weeks]
+                          self.command_line_options.limit, self.command_line_options.sprintIds]
             if any(conflicting):
-                print("Cannot mix prompt with board/team/limit/sprintIds/weeks")
+                print("Cannot mix prompt with board/team/limit/sprintIds")
                 parser.print_help()
                 sys.exit(1)
 
@@ -106,8 +104,6 @@ class AbstractSprintReport(ABC):
             limit_val = int(CommandLineHelper.prompt_number("Number of Sprints/Cycles"))
         elif self.command_line_options.limit:
             limit_val = self.command_line_options.limit
-        elif self.command_line_options.weeks:
-            self.weeks = self.command_line_options.weeks
 
         if limit_val:
             try:
@@ -120,20 +116,19 @@ class AbstractSprintReport(ABC):
                 self.sprint_ids = [str(sprint.get('id')) for sprint in sprint_data]
             except RESTException as re:
                 if re.status_code == 400:  # BAD_REQUEST
-                    if (self.command_line_options.prompt or
-                            getattr(self.command_line_options, 'kanbanCycleLength', None)):
-                        self.weeks = limit_val
-                    else:
-                        raise RuntimeError("Notice: This is a Kanban board - no sprints found")
+                    # Kanban board detected; auto-enter Kanban mode
+                    self.weeks = limit_val
                 else:
                     raise
         elif self.command_line_options.sprintIds:
             self.sprint_ids = self.command_line_options.sprintIds.split(',')
 
+        # Validate that at least one sprint/cycle selection option was provided
+        if not limit_val and not self.sprint_ids:
+            parser.error('Must provide one of: -l (limit), -s (sprintIds), or -p (prompt)')
+
         if self.weeks:
             self.mode = Mode.KANBAN
-            if not self.command_line_options.prompt and self.command_line_options.weeks:
-                self.weeks = self.command_line_options.weeks
 
     def setup_services(self):
         self.command_line_helper = CommandLineHelper(self.CONFIG_FILENAME)
