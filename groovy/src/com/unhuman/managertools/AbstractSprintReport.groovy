@@ -30,7 +30,7 @@ abstract class AbstractSprintReport extends Script {
     private Mode mode = Mode.SCRUM
     protected String boardId
     protected String teamName
-    private List<String> sprintIds
+    private List<String> sprintIds = []
     private Integer weeks
 
     /**
