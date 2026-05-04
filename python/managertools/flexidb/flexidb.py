@@ -157,18 +157,19 @@ class FlexiDB:
             desired_column_value = column_filter.get_match_value()
 
             index_key = self._create_flexidb_index_key(desired_column_name, desired_column_value)
-            filter_rows = set(self.indexes.get(index_key, []))
+            filter_rows = self.indexes.get(index_key, [])
 
             if found_rows is None:
-                found_rows = filter_rows
+                found_rows = list(filter_rows)
             else:
-                found_rows = found_rows.intersection(filter_rows)
+                filter_set = set(filter_rows)
+                found_rows = [r for r in found_rows if r in filter_set]
 
             if not found_rows:
                 break
 
         if found_rows is None:
-            found_rows = set()
+            found_rows = []
 
         if len(found_rows) == 0:
             return []
@@ -195,9 +196,9 @@ class FlexiDB:
             index_key = self._create_flexidb_index_key(column_name, match_value)
 
             if index_key not in self.indexes:
-                self.indexes[index_key] = set()
+                self.indexes[index_key] = []
 
-            self.indexes[index_key].add(row)
+            self.indexes[index_key].append(row)
 
         self.database.append(row)
 
