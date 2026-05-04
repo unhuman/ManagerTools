@@ -120,7 +120,8 @@ class AbstractSprintReport(ABC):
                 self.sprint_ids = [str(sprint.get('id')) for sprint in sprint_data]
             except RESTException as re:
                 if re.status_code == 400:  # BAD_REQUEST
-                    if self.command_line_options.prompt:
+                    if (self.command_line_options.prompt or
+                            getattr(self.command_line_options, 'kanbanCycleLength', None)):
                         self.weeks = limit_val
                     else:
                         raise RuntimeError("Notice: This is a Kanban board - no sprints found")
@@ -131,7 +132,7 @@ class AbstractSprintReport(ABC):
 
         if self.weeks:
             self.mode = Mode.KANBAN
-            if not self.command_line_options.prompt:
+            if not self.command_line_options.prompt and self.command_line_options.weeks:
                 self.weeks = self.command_line_options.weeks
 
     def setup_services(self):
