@@ -785,5 +785,9 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
 
 if __name__ == '__main__':
-    analysis = SprintReportTeamAnalysis(sys.argv[1:])
-    analysis.run()
+    try:
+        analysis = SprintReportTeamAnalysis(sys.argv[1:])
+        analysis.run()
+    except RuntimeError as e:
+        print(f"Caught: {type(e).__name__}: {e}", file=sys.stderr)
+        sys.exit(1)
