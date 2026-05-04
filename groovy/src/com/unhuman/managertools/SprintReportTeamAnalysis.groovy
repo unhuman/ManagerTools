@@ -179,10 +179,10 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
 
         System.out.println("   Cycle dates: ${cleanStartDate} - ${cleanEndDate}, complete: ${isCycleComplete}")
 
-        // Check cache BEFORE making API calls to Jira
-        if (isCycleComplete && SprintDataCache.hasCachedData(teamName, cycleName, cleanStartDate, cleanEndDate)) {
+        // Check cache BEFORE making API calls to Jira — key on team+dates only (cycle number shifts over time)
+        if (isCycleComplete && SprintDataCache.hasCachedData(teamName, "", cleanStartDate, cleanEndDate)) {
             System.out.println("   [DEBUG] Found cached data for cycle ${cycle}, loading from cache...")
-            Map cachedData = SprintDataCache.loadCachedData(teamName, cycleName, cleanStartDate, cleanEndDate)
+            Map cachedData = SprintDataCache.loadCachedData(teamName, "", cleanStartDate, cleanEndDate)
             loadCachedDataIntoDatabase(cachedData)
             System.out.println("   [DEBUG] Successfully loaded cycle ${cycle} from cache")
             return
@@ -237,7 +237,7 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         if (isCycleComplete) {
             System.out.println("   [DEBUG] Saving cycle ${cycle} to cache...")
             Map dataToCache = extractDatabaseDataForCache(cycleName)
-            SprintDataCache.saveToCache(teamName, cycleName, cleanStartDate, cleanEndDate, dataToCache)
+            SprintDataCache.saveToCache(teamName, "", cleanStartDate, cleanEndDate, dataToCache)
             System.out.println("   [DEBUG] Cycle ${cycle} saved to cache")
         }
     }

@@ -158,10 +158,10 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
         print(f"   Cycle dates: {clean_start_date} - {clean_end_date}, complete: {is_cycle_complete}")
 
-        # Check cache
-        if is_cycle_complete and SprintDataCache.has_cached_data(team_name, cycle_name, clean_start_date, clean_end_date):
+        # Check cache — key on team+dates only (cycle number is display-only and shifts over time)
+        if is_cycle_complete and SprintDataCache.has_cached_data(team_name, "", clean_start_date, clean_end_date):
             print(f"   [DEBUG] Found cached data for cycle {cycle}, loading from cache...")
-            cached_data = SprintDataCache.load_cached_data(team_name, cycle_name, clean_start_date, clean_end_date)
+            cached_data = SprintDataCache.load_cached_data(team_name, "", clean_start_date, clean_end_date)
             self.load_cached_data_into_database(cached_data)
             print(f"   [DEBUG] Successfully loaded cycle {cycle} from cache")
             return
@@ -206,7 +206,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         if is_cycle_complete:
             print(f"   [DEBUG] Saving cycle {cycle} to cache...")
             data_to_cache = self.extract_database_data_for_cache(cycle_name)
-            SprintDataCache.save_to_cache(team_name, cycle_name, clean_start_date, clean_end_date, data_to_cache)
+            SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache)
             print(f"   [DEBUG] Cycle {cycle} saved to cache")
 
     def process_potentially_cached_sprint_data(self, thread_count: int, team_name: str, sprint: Dict[str, Any], mode: Mode, all_issues: List[Any], use_cache: bool):
