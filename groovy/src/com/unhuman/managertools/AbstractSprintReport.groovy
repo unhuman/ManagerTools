@@ -104,7 +104,7 @@ abstract class AbstractSprintReport extends Script {
         def scrumOrKanbanOptions = new OptionGroup(required: false)
         scrumOrKanbanOptions.with {
             // Note these params must be kept up to date with the commandLineOptions validation below
-            addOption(cli.option('l', [longOpt: 'limit', args: 1, argName: 'limitSprints'], 'Number of recent sprints/cycles to process'))
+            addOption(cli.option('l', [longOpt: 'limit', args: 1, argName: 'limit'], 'Number of recent sprints/cycles to process'))
             addOption(cli.option('s', [longOpt: 'sprintIds', args: 1, argName: 'sprintIds'], 'Sprint Id Numbers (comma separated)'))
             addOption(promptOption)
         }
