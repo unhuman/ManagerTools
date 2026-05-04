@@ -139,10 +139,7 @@ class RestService(ABC):
 
             except NeedsRetryException as nre:
                 sys.stderr.write(f"Rate limit exceeded. Details: {str(nre)}\n")
-                # When retry_after is 0 (reset already past or header missing), use a 60s minimum
-                # to avoid an immediate-retry loop (GitHub secondary rate limit requires ~1 min wait)
-                wait_seconds = nre.get_retry_after() if nre.get_retry_after() > 0 else 60
-                reset_timestamp = time.time() + wait_seconds
+                reset_timestamp = time.time() + nre.get_retry_after()
 
                 while True:
                     current_time = time.time()

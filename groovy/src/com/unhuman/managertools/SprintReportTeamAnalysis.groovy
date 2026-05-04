@@ -156,101 +156,89 @@ class SprintReportTeamAnalysis extends AbstractSprintReport {
         }
     }
 
-    private List fetchKanbanWeek(String teamName, LocalDate weekStart, LocalDate weekEnd) {
-        int maxRetries = 3
-        int retryDelay = 5000
-        for (int attempt = 1; attempt <= maxRetries; attempt++) {
-            try {
-                Object weekData = jiraREST.getKanbanWeek(teamName, weekStart, weekEnd)
-                return weekData.issues ?: []
-            } catch (Exception e) {
-                System.err.println("   [ERROR] Attempt ${attempt}/${maxRetries} failed for week ${weekStart}: ${e.message}")
-                if (attempt < maxRetries) {
-                    Thread.sleep(retryDelay)
-                    retryDelay *= 2
-                } else {
-                    throw new RuntimeException("Failed to fetch week ${weekStart} after ${maxRetries} attempts", e)
-                }
-            }
-        }
-    }
-
     /**
-     * Process a single Kanban cycle with two-tier caching:
-     *   1. Exact cycle-level cache hit — skips all API calls.
-     *   2. Per-week raw issue cache — avoids Jira re-fetches across cycle-length changes.
+     * Process a single Kanban cycle with smart caching
      */
     private void processKanbanCycle(int threadCount, String teamName, int cycle, int cycles, int cycleLength, Mode mode) {
-        LocalDate cycleStart = LocalDate.now().minusWeeks((cycles - cycle + 1) * cycleLength).with(DayOfWeek.MONDAY)
-        LocalDate cycleEnd = cycleStart.plusDays(7 * cycleLength - 1)
+        // Calculate the expected dates for this cycle
+        LocalDate startDate = LocalDate.now().minusWeeks((cycles - cycle + 1) * cycleLength).with(DayOfWeek.MONDAY)
+        LocalDate endDate = startDate.plusDays(7 * cycleLength - 1)
 
+        // Format dates
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MMM/yy")
-        String startDateStr = cycleStart.format(formatter) + " 12:00 AM"
-        String endDateStr = cycleEnd.format(formatter) + " 11:59 PM"
+        String startDateStr = startDate.format(formatter) + " 12:00 AM"
+        String endDateStr = endDate.format(formatter) + " 11:59 PM"
         String cleanStartDate = cleanDate(startDateStr)
         String cleanEndDate = cleanDate(endDateStr)
 
         String cycleName = "${teamName} Cycle ${cycle}"
 
+        // Check if this cycle is complete (end date in the past)
         Date cycleEndDate = DATE_TIME_PARSER.parse(endDateStr)
         boolean isCycleComplete = cycleEndDate.getTime() < System.currentTimeMillis()
 
         System.out.println("   Cycle dates: ${cleanStartDate} - ${cleanEndDate}, complete: ${isCycleComplete}")
 
-        // Exact cycle-level cache hit — skips all API calls
+        // Check cache BEFORE making API calls to Jira — key on team+dates only (cycle number shifts over time)
         if (isCycleComplete && SprintDataCache.hasCachedData(teamName, "", cleanStartDate, cleanEndDate)) {
-            System.out.println("   [DEBUG] Cycle ${cycle} loaded from cycle cache")
+            System.out.println("   [DEBUG] Found cached data for cycle ${cycle}, loading from cache...")
             Map cachedData = SprintDataCache.loadCachedData(teamName, "", cleanStartDate, cleanEndDate)
             loadCachedDataIntoDatabase(cachedData)
+            System.out.println("   [DEBUG] Successfully loaded cycle ${cycle} from cache")
             return
         }
 
-        // Assemble issues from per-week caches, fetching any uncached weeks from Jira
-        System.out.println("   [DEBUG] Building cycle ${cycle} from weekly caches...")
-        List allIssues = new ArrayList()
-        Set seenKeys = new HashSet()
+        // No cache or incomplete cycle - fetch from Jira
+        System.out.println("   [DEBUG] No cache for cycle ${cycle}, fetching from Jira...")
 
-        for (int w = 0; w < cycleLength; w++) {
-            LocalDate weekStart = cycleStart.plusDays(7 * w)
-            LocalDate weekEnd = weekStart.plusDays(6)
-            boolean isWeekComplete = weekEnd.isBefore(LocalDate.now())
+        Object data = null
+        int maxRetries = 3
+        int retryDelay = 5000 // 5 seconds
 
-            String weekStartClean = cleanDate(weekStart.format(formatter) + " 12:00 AM")
-            String weekEndClean = cleanDate(weekEnd.format(formatter) + " 11:59 PM")
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                data = jiraREST.getKanbanCycle(teamName, cycle, cycles, cycleLength)
+                System.out.println("   [DEBUG] Successfully fetched cycle ${cycle} data from Jira")
+                break
+            } catch (Exception e) {
+                System.err.println("   [ERROR] Attempt ${attempt}/${maxRetries} failed for cycle ${cycle}: ${e.message}")
 
-            List weekIssues
-            if (isWeekComplete && SprintDataCache.hasCachedData(teamName, "week", weekStartClean, weekEndClean)) {
-                System.out.println("      Week ${w + 1}/${cycleLength}: cache hit (${weekStartClean})")
-                Map weekData = SprintDataCache.loadCachedData(teamName, "week", weekStartClean, weekEndClean)
-                weekIssues = weekData.issues ?: []
-            } else {
-                System.out.println("      Week ${w + 1}/${cycleLength}: fetching from Jira (${weekStartClean})")
-                weekIssues = fetchKanbanWeek(teamName, weekStart, weekEnd)
-                if (isWeekComplete) {
-                    SprintDataCache.saveToCache(teamName, "week", weekStartClean, weekEndClean, [issues: weekIssues])
-                }
-            }
-
-            weekIssues.each { issue ->
-                if (issue.key && seenKeys.add(issue.key)) {
-                    allIssues.add(issue)
+                if (attempt < maxRetries) {
+                    System.err.println("   [INFO] Retrying in ${retryDelay / 1000} seconds...")
+                    Thread.sleep(retryDelay)
+                    retryDelay *= 2 // Exponential backoff
+                } else {
+                    System.err.println("   [ERROR] All retry attempts exhausted for cycle ${cycle}")
+                    throw new RuntimeException("Failed to fetch Kanban cycle ${cycle} after ${maxRetries} attempts", e)
                 }
             }
         }
 
-        System.out.println("   Cycle ${cycle} / ${cycles}: ${allIssues.size()} issues")
+        if (data == null) {
+            throw new RuntimeException("Failed to fetch Kanban cycle ${cycle} - data is null")
+        }
+
+        def allIssues = new ArrayList()
+        allIssues.addAll(data.issues)
+
+        System.out.println("   Cycle ${cycle} / ${cycles}: ${data.issues.size()} issues")
 
         Object sprintSimulation = new HashMap()
         sprintSimulation.name = cycleName
-        sprintSimulation.startDate = startDateStr
-        sprintSimulation.endDate = endDateStr
+        sprintSimulation.startDate = data.startDate
+        sprintSimulation.endDate = data.endDate
 
+        // Process the data
+        System.out.println("   [DEBUG] Processing fresh data for cycle ${cycle}...")
         getIssueCategoryInformation(threadCount, sprintSimulation, mode, allIssues)
+        System.out.println("   [DEBUG] Finished processing cycle ${cycle}")
 
+        // Save to cache if complete
         if (isCycleComplete) {
-            System.out.println("   [DEBUG] Saving cycle ${cycle} to cycle cache...")
+            System.out.println("   [DEBUG] Saving cycle ${cycle} to cache...")
             Map dataToCache = extractDatabaseDataForCache(cycleName)
             SprintDataCache.saveToCache(teamName, "", cleanStartDate, cleanEndDate, dataToCache)
+            System.out.println("   [DEBUG] Cycle ${cycle} saved to cache")
         }
     }
 

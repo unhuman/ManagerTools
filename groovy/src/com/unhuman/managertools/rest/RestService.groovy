@@ -161,10 +161,8 @@ abstract class RestService {
             } catch (NeedsRetryException nre) {
                 System.err.println("Rate limit exceeded. Details: ${nre.toString()}")
 
-                // When retryAfter is 0 (reset already past or header missing), use a 60s minimum
-                // to avoid an immediate-retry loop (GitHub secondary rate limit requires ~1 min wait)
-                long waitSeconds = nre.getRetryAfter() > 0 ? nre.getRetryAfter() : 60L
-                long resetTimestamp = System.currentTimeMillis() / 1000 + waitSeconds
+                // Calculate the absolute reset time
+                long resetTimestamp = System.currentTimeMillis() / 1000 + nre.getRetryAfter()
 
                 // Sleep in 1-second increments with countdown display
                 while (true) {

@@ -85,19 +85,6 @@ class JiraREST(RestService):
         response['endDate'] = f"{end_fmt} 11:59 PM"
         return response
 
-    def get_kanban_week(self, team: str, start_date, end_date) -> Any:
-        start_str = start_date.strftime("%Y-%m-%d")
-        end_str = end_date.strftime("%Y-%m-%d")
-        jql = (f'"Sprint Team" = "{team}" '
-               f'AND issueType NOT IN subTaskIssueTypes() '
-               f'AND ((resolutiondate >= {start_str} AND resolutiondate <= {end_str}) '
-               f'OR (resolved >= {start_str} AND resolved <= {end_str}) '
-               f'OR ("Resolved Date" >= {start_str} AND "Resolved Date" <= {end_str}))')
-        response = self.jql_summary_query(jql)
-        response['startDate'] = start_date.strftime("%d/%b/%y") + " 12:00 AM"
-        response['endDate'] = end_date.strftime("%d/%b/%y") + " 11:59 PM"
-        return response
-
     def get_ticket(self, ticket_id: str) -> Any:
         uri = f"https://{self.jira_server}/rest/api/latest/issue/{ticket_id}"
         return self.get_request(uri, _=str(int(datetime.now(timezone.utc).timestamp() * 1000)))
