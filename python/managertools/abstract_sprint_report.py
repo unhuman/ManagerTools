@@ -115,8 +115,13 @@ class AbstractSprintReport(ABC):
                 )
                 self.sprint_ids = [str(sprint.get('id')) for sprint in sprint_data]
             except RESTException as re:
-                if re.status_code == 400:  # BAD_REQUEST
-                    # Kanban board detected; auto-enter Kanban mode
+                if re.status_code == 400:  # BAD_REQUEST — Kanban board
+                    self.weeks = limit_val
+                elif re.status_code == 403:
+                    # Some Jira instances return 403 (not 400) for boards that don't support
+                    # sprints (e.g. team-managed Kanban boards). Accept it if the user is
+                    # running by team name; a real auth failure will surface during Kanban fetch.
+                    print("Sprint endpoint returned 403 — treating board as Kanban", file=sys.stderr)
                     self.weeks = limit_val
                 else:
                     raise

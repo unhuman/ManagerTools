@@ -99,6 +99,25 @@ class JiraREST extends RestService {
         return response
     }
 
+    Object getKanbanWeek(String team, LocalDate startDate, LocalDate endDate) {
+        DateTimeFormatter jqlFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+        String startDateJQLStr = startDate.format(jqlFormatter)
+        String endDateJQLStr = endDate.format(jqlFormatter)
+
+        String jql = "\"Sprint Team\" = \"${team}\"" +
+                " AND issueType NOT IN subTaskIssueTypes()" +
+                " AND ((resolutiondate >= ${startDateJQLStr} AND resolutiondate <= ${endDateJQLStr})" +
+                "   OR (resolved >= ${startDateJQLStr} AND resolved <= ${endDateJQLStr})" +
+                "   OR (\"Resolved Date\" >= ${startDateJQLStr} AND \"Resolved Date\" <= ${endDateJQLStr}))"
+
+        Object response = jqlSummaryQuery(jql)
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MMM/yy")
+        response.startDate = startDate.format(formatter) + " 12:00 AM"
+        response.endDate = endDate.format(formatter) + " 11:59 PM"
+        return response
+    }
+
     // get ticket info
     // https://jira.x.com/rest/api/latest/issue/ISSUE-ID
     Object getTicket(String ticketId) {

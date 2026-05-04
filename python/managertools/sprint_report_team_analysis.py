@@ -25,7 +25,9 @@ from managertools.output.convert_self_metrics_empty_to_zero_output_filter import
 from managertools.rest.source_control_rest import SourceControlREST
 from managertools.rest.exceptions import RESTException, NeedsRetryException
 from managertools.util.command_line_helper import CommandLineHelper
+from managertools.util.pr_data_cache import PRDataCache
 from managertools.util.sprint_data_cache import SprintDataCache
+from managertools.util.ticket_pr_cache import TicketPRCache
 
 
 class CommentBlocker:
@@ -120,25 +122,41 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             if not team_name:
                 raise RuntimeError("Team name is required for Kanban mode")
 
+            # -l/--limit = number of cycles; --kanbanCycleLength = weeks per cycle
+            num_cycles = cycles  # cycles == self.weeks == --limit value
             cycle_length = (int(CommandLineHelper.prompt_number("Kanban cycle length, in weeks"))
                            if self.command_line_options.prompt
                            else self.command_line_options.kanbanCycleLength)
 
-            print(f"Processing Kanban {cycles} cycles...")
-            for cycle in range(1, cycles + 1):
-                print(f"Kanban Cycle: {cycle} / {cycles}")
+            print(f"Processing Kanban {num_cycles} cycle(s) of {cycle_length} week(s) each...")
+            for cycle in range(1, num_cycles + 1):
+                print(f"Kanban Cycle: {cycle} / {num_cycles}")
                 try:
-                    self.process_kanban_cycle(thread_count, team_name, cycle, cycles, cycle_length, mode)
+                    self.process_kanban_cycle(thread_count, team_name, cycle, num_cycles, cycle_length, mode)
                 except Exception as e:
                     print(f"Error processing Kanban cycle {cycle}: {e}", file=sys.stderr)
                     continue
 
+    def _fetch_kanban_week(self, team_name: str, week_start, week_end) -> list:
+        max_retries = 3
+        retry_delay = 5
+        for attempt in range(1, max_retries + 1):
+            try:
+                data = self.jira_rest.get_kanban_week(team_name, week_start, week_end)
+                return data.get('issues', [])
+            except Exception as e:
+                print(f"   [ERROR] Attempt {attempt}/{max_retries} failed for week {week_start}: {e}", file=sys.stderr)
+                if attempt < max_retries:
+                    import time
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                else:
+                    raise RuntimeError(f"Failed to fetch week {week_start} after {max_retries} attempts") from e
+
     def process_kanban_cycle(self, thread_count: int, team_name: str, cycle: int, cycles: int, cycle_length: int, mode: Mode):
-        # Calculate cycle dates
         from datetime import datetime
         start_date = datetime.now() - timedelta(weeks=(cycles - cycle + 1) * cycle_length)
         start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
-        # Move to Monday
         days_since_monday = start_date.weekday()
         if days_since_monday != 0:
             start_date -= timedelta(days=days_since_monday)
@@ -152,62 +170,95 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
         cycle_name = f"{team_name} Cycle {cycle}"
 
-        # Check if cycle is complete
         cycle_end_datetime = datetime.strptime(end_date_str, "%d/%b/%y %I:%M %p").replace(tzinfo=timezone.utc)
         is_cycle_complete = cycle_end_datetime.timestamp() * 1000 < datetime.now(timezone.utc).timestamp() * 1000
 
         print(f"   Cycle dates: {clean_start_date} - {clean_end_date}, complete: {is_cycle_complete}")
 
-        # Check cache — key on team+dates only (cycle number is display-only and shifts over time)
+        # Tier 1: exact cycle-level cache hit — zero API calls
         if is_cycle_complete and SprintDataCache.has_cached_data(team_name, "", clean_start_date, clean_end_date):
-            print(f"   [DEBUG] Found cached data for cycle {cycle}, loading from cache...")
+            print(f"   [DEBUG] Cycle {cycle} loaded from cycle cache")
             cached_data = SprintDataCache.load_cached_data(team_name, "", clean_start_date, clean_end_date)
             self.load_cached_data_into_database(cached_data)
-            print(f"   [DEBUG] Successfully loaded cycle {cycle} from cache")
             return
 
-        print(f"   [DEBUG] No cache for cycle {cycle}, fetching from Jira...")
+        # Tier 1.5: assemble from individual 1-week cycle caches.
+        # Any prior run that processed each week as its own cycle (e.g. -l4 -k1) leaves
+        # per-week cycle caches that compose directly into a larger cycle — no API calls.
+        if cycle_length > 1:
+            assembled_rows = []
+            all_weeks_cycle_cached = True
+            for w in range(cycle_length):
+                wstart = start_date + timedelta(days=7 * w)
+                wend = wstart + timedelta(days=6)
+                wcs = self.clean_date(wstart.strftime("%d/%b/%y"))
+                wce = self.clean_date(wend.strftime("%d/%b/%y"))
+                if not SprintDataCache.has_cached_data(team_name, "", wcs, wce):
+                    all_weeks_cycle_cached = False
+                    break
+                week_data = SprintDataCache.load_cached_data(team_name, "", wcs, wce)
+                full_start = self.clean_date(start_date_str)
+                full_end = self.clean_date(end_date_str)
+                for row in week_data.get('rows', []):
+                    row[DBIndexData.SPRINT.name] = cycle_name
+                    row[DBData.START_DATE.name] = full_start
+                    row[DBData.END_DATE.name] = full_end
+                assembled_rows.extend(week_data.get('rows', []))
 
-        data = None
-        max_retries = 3
-        retry_delay = 5
+            if all_weeks_cycle_cached:
+                print(f"   [DEBUG] Cycle {cycle} assembled from {cycle_length} per-week cycle caches")
+                self.load_cached_data_into_database({'rows': assembled_rows})
+                if is_cycle_complete:
+                    data_to_cache = self.extract_database_data_for_cache(cycle_name)
+                    SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache)
+                return
 
-        for attempt in range(1, max_retries + 1):
-            try:
-                data = self.jira_rest.get_kanban_cycle(team_name, cycle, cycles, cycle_length)
-                print(f"   [DEBUG] Successfully fetched cycle {cycle} data from Jira")
-                break
-            except Exception as e:
-                print(f"   [ERROR] Attempt {attempt}/{max_retries} failed for cycle {cycle}: {e}", file=sys.stderr)
-                if attempt < max_retries:
-                    print(f"   [INFO] Retrying in {retry_delay} seconds...", file=sys.stderr)
-                    import time
-                    time.sleep(retry_delay)
-                    retry_delay *= 2
-                else:
-                    raise RuntimeError(f"Failed to fetch Kanban cycle {cycle} after {max_retries} attempts")
+        # Tier 2: collect Jira issues from per-week Jira caches, then process all at once
+        # with full cycle dates so PR date filtering is correct regardless of cycle length.
+        print(f"   [DEBUG] Building cycle {cycle} from weekly Jira caches...")
 
-        if data is None:
-            raise RuntimeError(f"Failed to fetch Kanban cycle {cycle} - data is None")
+        all_issues = []
+        for w in range(cycle_length):
+            week_start = start_date + timedelta(days=7 * w)
+            week_end = week_start + timedelta(days=6)
+            is_week_complete = week_end.date() < datetime.now().date()
 
-        all_issues = data.get('issues', [])
-        print(f"   Cycle {cycle} / {cycles}: {len(all_issues)} issues")
+            week_start_clean = self.clean_date(week_start.strftime("%d/%b/%y"))
+            week_end_clean = self.clean_date(week_end.strftime("%d/%b/%y"))
 
-        sprint_simulation = {
-            'name': cycle_name,
-            'startDate': data.get('startDate'),
-            'endDate': data.get('endDate')
-        }
+            if SprintDataCache.has_cached_data(team_name, "jira_week", week_start_clean, week_end_clean):
+                week_data = SprintDataCache.load_cached_data(team_name, "jira_week", week_start_clean, week_end_clean)
+                week_issues = week_data.get('issues', [])
+                print(f"      Week {w + 1}/{cycle_length}: Jira cache hit ({week_start_clean}, {len(week_issues)} issues)")
+            else:
+                print(f"      Week {w + 1}/{cycle_length}: fetching from Jira ({week_start_clean})")
+                week_issues = self._fetch_kanban_week(team_name, week_start.date(), week_end.date())
+                if is_week_complete:
+                    SprintDataCache.save_to_cache(team_name, "jira_week", week_start_clean, week_end_clean,
+                                                  {'issues': week_issues})
 
-        print(f"   [DEBUG] Processing fresh data for cycle {cycle}...")
-        self.get_issue_category_information(thread_count, sprint_simulation, mode, all_issues)
+            all_issues.extend(week_issues)
+
+        # Deduplicate by issue key (safety net — resolution dates are disjoint across weeks)
+        seen_keys = set()
+        deduped_issues = []
+        for issue in all_issues:
+            key = issue.get('key')
+            if key not in seen_keys:
+                seen_keys.add(key)
+                deduped_issues.append(issue)
+
+        print(f"   [DEBUG] Processing {len(deduped_issues)} issues with full cycle dates...")
+        sprint_sim = {'name': cycle_name, 'startDate': start_date_str, 'endDate': end_date_str}
+        self.get_issue_category_information(thread_count, sprint_sim, mode, deduped_issues)
+
         print(f"   [DEBUG] Finished processing cycle {cycle}")
 
+        # Save processed cycle for exact-match future hits
         if is_cycle_complete:
-            print(f"   [DEBUG] Saving cycle {cycle} to cache...")
+            print(f"   [DEBUG] Saving cycle {cycle} to cycle cache...")
             data_to_cache = self.extract_database_data_for_cache(cycle_name)
             SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache)
-            print(f"   [DEBUG] Cycle {cycle} saved to cache")
 
     def process_potentially_cached_sprint_data(self, thread_count: int, team_name: str, sprint: Dict[str, Any], mode: Mode, all_issues: List[Any], use_cache: bool):
         sprint_name = sprint.get('name', '')
@@ -252,8 +303,9 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         serialized_rows = cached_data.get('rows', [])
 
         for serialized_row in serialized_rows:
+            sprint = serialized_row.get(DBIndexData.SPRINT.name)
             index_lookup = [
-                FlexiDBQueryColumn(DBIndexData.SPRINT.name, serialized_row.get(DBIndexData.SPRINT.name)),
+                FlexiDBQueryColumn(DBIndexData.SPRINT.name, sprint),
                 FlexiDBQueryColumn(DBIndexData.TICKET.name, serialized_row.get(DBIndexData.TICKET.name)),
                 FlexiDBQueryColumn(DBIndexData.PR_ID.name, serialized_row.get(DBIndexData.PR_ID.name)),
                 FlexiDBQueryColumn(DBIndexData.PR_STATUS.name, serialized_row.get(DBIndexData.PR_STATUS.name, '')),
@@ -268,8 +320,6 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                             self.database.append(index_lookup, field_name, item)
                     else:
                         self.database.set_value(index_lookup, field_name, value)
-
-    # ... (continue with rest of methods in next message due to size)
 
     def generate_columns_order(self) -> List[str]:
         column_order = list(self.database.get_original_column_order())
@@ -421,32 +471,37 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 pull_requests = []
                 last_error = None
 
-                for attempt in range(1, max_retries + 1):
-                    try:
-                        pull_requests = self.jira_rest.get_ticket_pull_request_info(str(issue_id))
-                        last_error = None
-                        break
-                    except (RemoteDisconnected, RequestsConnectionError, BrokenPipeError, EOFError) as ce:
-                        last_error = ce
-                        if attempt < max_retries:
-                            # Calculate exponential backoff with jitter
-                            backoff = retry_delay * (2 ** (attempt - 1))
-                            jitter = random.uniform(0, backoff * 0.1)
-                            wait_time = backoff + jitter
-                            with lock:
-                                print(f"   {ticket}: Connection error (attempt {attempt}/{max_retries}): {type(ce).__name__}. "
-                                      f"Retrying in {wait_time:.1f}s...", file=sys.stderr)
-                            time.sleep(wait_time)
-                        else:
-                            with lock:
-                                print(f"   {ticket}: Connection error after {max_retries} attempts: {ce}", file=sys.stderr)
-                    except RESTException as re:
-                        if re.status_code not in [403, 404]:  # FORBIDDEN, NOT_FOUND
-                            return
-                        break
+                issue_id_str = str(issue_id)
+                if TicketPRCache.has_cached(issue_id_str):
+                    pull_requests = TicketPRCache.load_cached(issue_id_str)
+                else:
+                    for attempt in range(1, max_retries + 1):
+                        try:
+                            pull_requests = self.jira_rest.get_ticket_pull_request_info(issue_id_str)
+                            TicketPRCache.save(issue_id_str, pull_requests)
+                            last_error = None
+                            break
+                        except (RemoteDisconnected, RequestsConnectionError, BrokenPipeError, EOFError) as ce:
+                            last_error = ce
+                            if attempt < max_retries:
+                                # Calculate exponential backoff with jitter
+                                backoff = retry_delay * (2 ** (attempt - 1))
+                                jitter = random.uniform(0, backoff * 0.1)
+                                wait_time = backoff + jitter
+                                with lock:
+                                    print(f"   {ticket}: Connection error (attempt {attempt}/{max_retries}): {type(ce).__name__}. "
+                                          f"Retrying in {wait_time:.1f}s...", file=sys.stderr)
+                                time.sleep(wait_time)
+                            else:
+                                with lock:
+                                    print(f"   {ticket}: Connection error after {max_retries} attempts: {ce}", file=sys.stderr)
+                        except RESTException as re:
+                            if re.status_code not in [403, 404]:  # FORBIDDEN, NOT_FOUND
+                                return
+                            break
 
-                if last_error:
-                    raise last_error
+                    if last_error:
+                        raise last_error
 
                 with lock:
                     counter[0] += 1
@@ -499,8 +554,6 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
     def process_pull_request(self, ticket: str, pull_request: Dict[str, Any], sprint_name: str, start_date: str,
                             end_date: str, sprint_start_ms: float, sprint_end_ms: float, mode: Mode):
-        print(f"      [DEBUG] Processing PR: {ticket}/{pull_request.get('id')}")
-
         pr_url = pull_request.get('url', '')
         is_github = 'github.com/' in pr_url.lower()
         source_control_rest = self.github_rest if is_github else self.bitbucket_rest
@@ -510,10 +563,42 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         pr_status = pull_request.get('status', '')
         pr_author = source_control_rest.map_user_to_jira_name(pull_request.get('author', ''))
 
-        # Get commits with retry logic
-        pr_commits = self._retry_rest_call(lambda: source_control_rest.get_commits(pr_url))
-        print(f"      [DEBUG] PR {ticket}/{pr_id}: Got {len(pr_commits) if pr_commits else 0} commits")
+        # Load raw PR data from cache, or fetch all data and cache it
+        if PRDataCache.has_cached_pr(pr_url):
+            pr_raw = PRDataCache.load_cached_pr(pr_url)
+            pr_commits = pr_raw.get('commits') or []
+            pr_activities = pr_raw.get('activities')
+            commit_diffs_by_sha = pr_raw.get('commit_diffs') or {}
+            pr_diffs = pr_raw.get('pr_diffs')
+            print(f"      [DEBUG] PR {ticket}/{pr_id}: cache hit ({len(pr_commits)} commits)")
+        else:
+            pr_commits = self._retry_rest_call(lambda: source_control_rest.get_commits(pr_url)) or []
+            pr_activities = self._retry_rest_call(lambda: source_control_rest.get_activities(pr_url))
 
+            # Fetch commit diffs for ALL commits upfront so future runs with wider date
+            # windows never need to re-fetch (date filtering happens at processing time)
+            commit_diffs_by_sha = {}
+            for commit in pr_commits:
+                commit_sha = commit.get('id', '')
+                commit_url = commit.get('url') or pr_url
+                diffs = self._retry_rest_call(
+                    lambda cu=commit_url, cs=commit_sha: source_control_rest.get_commit_diffs(cu, cs)
+                )
+                if diffs is not None:
+                    commit_diffs_by_sha[commit_sha] = diffs
+
+            # Always fetch PR diffs so the cache is complete for any date window
+            pr_diffs = self._retry_rest_call(lambda: source_control_rest.get_diffs(pr_url))
+
+            PRDataCache.save_pr(pr_url, {
+                'commits': pr_commits,
+                'activities': pr_activities,
+                'commit_diffs': commit_diffs_by_sha,
+                'pr_diffs': pr_diffs,
+            })
+            print(f"      [DEBUG] PR {ticket}/{pr_id}: fetched and cached ({len(pr_commits)} commits)")
+
+        # Resolve author from commits when not available from PR metadata
         if pr_author is None:
             if pr_commits:
                 author_names = set()
@@ -525,10 +610,6 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             if pr_author is None:
                 print(f"Skipping processing of PR {ticket} / {pr_id} due to unknown author: {pull_request.get('author')}", file=sys.stderr)
                 return
-
-        # Get activities with retry logic
-        pr_activities = self._retry_rest_call(lambda: source_control_rest.get_activities(pr_url))
-        print(f"      [DEBUG] PR {ticket}/{pr_id}: Got {len(pr_activities) if pr_activities else 0} activities")
 
         comment_blockers = []
 
@@ -559,45 +640,40 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     self.increment_counter(index_lookup, pr_info_action)
 
         # Process commits
-        if pr_commits:
-            for commit in reversed(pr_commits):
-                commit_sha = commit.get('id', '')
-                commit_timestamp = commit.get('committerTimestamp', 0)
+        for commit in reversed(pr_commits):
+            commit_sha = commit.get('id', '')
+            commit_timestamp = commit.get('committerTimestamp', 0)
 
-                if sprint_start_ms > commit_timestamp or commit_timestamp >= sprint_end_ms:
-                    continue
+            if sprint_start_ms > commit_timestamp or commit_timestamp >= sprint_end_ms:
+                continue
 
-                if not self.command_line_options.includeMergeCommits and re.match(self.MERGE_COMMIT_REGEX, commit.get('message', '')):
-                    continue
+            if not self.command_line_options.includeMergeCommits and re.match(self.MERGE_COMMIT_REGEX, commit.get('message', '')):
+                continue
 
-                user_name = commit.get('committer', {}).get('name', '')
+            user_name = commit.get('committer', {}).get('name', '')
 
-                if user_name.lower() in self.IGNORE_USERS:
-                    continue
+            if user_name.lower() in self.IGNORE_USERS:
+                continue
 
-                index_lookup = self.create_index_lookup(sprint_name, ticket, pr_id, user_name, pr_status)
-                self.populate_baseline_db_info(index_lookup, start_date, end_date, pr_author)
+            index_lookup = self.create_index_lookup(sprint_name, ticket, pr_id, user_name, pr_status)
+            self.populate_baseline_db_info(index_lookup, start_date, end_date, pr_author)
 
-                commit_url = commit.get('url') or pr_url
-                diffs_response = self._retry_rest_call(lambda: source_control_rest.get_commit_diffs(commit_url, commit_sha))
+            diffs_response = commit_diffs_by_sha.get(commit_sha)
+            if diffs_response:
+                self.process_diffs(self.COMMIT_PREFIX, diffs_response, index_lookup)
 
-                if diffs_response:
-                    self.process_diffs(self.COMMIT_PREFIX, diffs_response, index_lookup)
+            commit_message = re.sub(r'(\r|\n)?\n', '  ', commit.get('message', '').strip())
+            self.database.increment_field(index_lookup, UserActivity.COMMITS.name)
+            self.database.append(index_lookup, DBData.COMMIT_MESSAGES.name, commit_message, True)
 
-                commit_message = re.sub(r'(\r|\n)?\n', '  ', commit.get('message', '').strip())
-                self.database.increment_field(index_lookup, UserActivity.COMMITS.name)
-                self.database.append(index_lookup, DBData.COMMIT_MESSAGES.name, commit_message, True)
-
-        # Process PR diffs if there was commit activity
+        # Apply PR-level diffs if there was in-window commit activity
         index_lookup = self.create_index_lookup(sprint_name, ticket, pr_id, pr_author, pr_status)
         if self.database.find_rows(index_lookup, False):
             commit_added = self.database.get_value(index_lookup, UserActivity.COMMIT_ADDED.name) or 0
             commit_removed = self.database.get_value(index_lookup, UserActivity.COMMIT_REMOVED.name) or 0
-            if commit_added > 0 or commit_removed > 0:
-                diffs_response = self._retry_rest_call(lambda: source_control_rest.get_diffs(pr_url))
-                if diffs_response:
-                    self.populate_baseline_db_info(index_lookup, start_date, end_date, pr_author)
-                    self.process_diffs(self.PR_PREFIX, diffs_response, index_lookup)
+            if (commit_added > 0 or commit_removed > 0) and pr_diffs:
+                self.populate_baseline_db_info(index_lookup, start_date, end_date, pr_author)
+                self.process_diffs(self.PR_PREFIX, pr_diffs, index_lookup)
 
     @staticmethod
     def sanitize_name_for_index(name: str) -> str:
