@@ -164,11 +164,7 @@ abstract class AbstractSprintReport extends Script {
             } catch (RESTException re) {
                 if (re.statusCode == HttpStatus.SC_BAD_REQUEST) {
                     // No sprintIds = this could be Kanban board
-                    if (commandLineOptions.'prompt' || commandLineOptions.'kanbanCycleLength') {
-                        weeks = limit
-                    } else {
-                        throw new RuntimeException("Notice: This is a Kanban board - no sprints found")
-                    }
+                    weeks = limit
                 } else {
                     throw re
                 }
