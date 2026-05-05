@@ -161,8 +161,9 @@ abstract class RestService {
             } catch (NeedsRetryException nre) {
                 System.err.println("Rate limit exceeded. Details: ${nre.toString()}")
 
-                // Calculate the absolute reset time
-                long resetTimestamp = System.currentTimeMillis() / 1000 + nre.getRetryAfter()
+                // Calculate the absolute reset time, with minimum 1-second backoff
+                int retryAfter = Math.max(nre.getRetryAfter(), 1)
+                long resetTimestamp = System.currentTimeMillis() / 1000 + retryAfter
 
                 // Sleep in 1-second increments with countdown display
                 while (true) {
