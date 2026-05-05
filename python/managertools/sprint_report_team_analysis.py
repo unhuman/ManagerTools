@@ -364,14 +364,29 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 value = row.get(column)
                 if isinstance(value, (int, float)):
                     long_value = int(value)
-                    sprint_totals_row[column] = sprint_totals_row.get(column, 0) + long_value
-                    overall_totals_row[column] = overall_totals_row.get(column, 0) + long_value
+                    sprint_existing = sprint_totals_row.get(column, 0)
+                    overall_existing = overall_totals_row.get(column, 0)
+
+                    if isinstance(sprint_existing, str):
+                        sprint_existing = 0
+                    if isinstance(overall_existing, str):
+                        overall_existing = 0
+
+                    sprint_totals_row[column] = sprint_existing + long_value
+                    overall_totals_row[column] = overall_existing + long_value
 
         sprint_totals_row[self.TOTAL_PRS] = total_prs
         sprint_totals_row[self.NON_DECLINED_PRS] = non_declined_prs
 
-        overall_totals_row[self.TOTAL_PRS] = overall_totals_row.get(self.TOTAL_PRS, 0) + total_prs
-        overall_totals_row[self.NON_DECLINED_PRS] = overall_totals_row.get(self.NON_DECLINED_PRS, 0) + non_declined_prs
+        overall_pr_count = overall_totals_row.get(self.TOTAL_PRS, 0)
+        overall_non_declined = overall_totals_row.get(self.NON_DECLINED_PRS, 0)
+        if isinstance(overall_pr_count, str):
+            overall_pr_count = 0
+        if isinstance(overall_non_declined, str):
+            overall_non_declined = 0
+
+        overall_totals_row[self.TOTAL_PRS] = overall_pr_count + total_prs
+        overall_totals_row[self.NON_DECLINED_PRS] = overall_non_declined + non_declined_prs
 
         self.append_totals_info(sb, "Sprint Totals", sprint_totals_row)
         sb.append("")
