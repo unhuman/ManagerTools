@@ -44,7 +44,25 @@ class SprintDataCache:
             return False
 
     @staticmethod
-    def load_cached_data(team_name: str, sprint_name: str, start_date: str, end_date: str) -> Dict[str, Any]:
+    def is_cache_complete(team_name: str, sprint_name: str, start_date: str, end_date: str) -> bool:
+        cache_key = SprintDataCache.generate_cache_key(team_name, sprint_name, start_date, end_date)
+        file_path = SprintDataCache.get_cache_file_path(cache_key)
+
+        if not os.path.exists(file_path):
+            return True
+
+        try:
+            with open(file_path, 'r') as f:
+                cached_data = json.load(f)
+            if cached_data.get("version") != SprintDataCache.CACHE_VERSION:
+                return True
+            return cached_data.get("complete", True)
+        except Exception as e:
+            print(f"Error reading cache file {file_path}: {e}", file=__import__('sys').stderr)
+            return True
+
+    @staticmethod
+    def load_cached_data(team_name: str, sprint_name: str, start_date: str, end_date: str) -> tuple[Dict[str, Any], list[str]]:
         cache_key = SprintDataCache.generate_cache_key(team_name, sprint_name, start_date, end_date)
         file_path = SprintDataCache.get_cache_file_path(cache_key)
 
@@ -56,10 +74,13 @@ class SprintDataCache:
         if cached_data.get("version") != SprintDataCache.CACHE_VERSION:
             raise RuntimeError(f"Cache version mismatch. Expected {SprintDataCache.CACHE_VERSION}, found {cached_data.get('version')}")
 
-        return cached_data.get("data", {})
+        return cached_data.get("data", {}), cached_data.get("failed_issues", [])
 
     @staticmethod
-    def save_to_cache(team_name: str, sprint_name: str, start_date: str, end_date: str, data: Dict[str, Any]) -> None:
+    def save_to_cache(team_name: str, sprint_name: str, start_date: str, end_date: str, data: Dict[str, Any], is_complete: bool = True, failed_issues: Optional[list] = None) -> None:
+        if failed_issues is None:
+            failed_issues = []
+
         SprintDataCache.ensure_cache_directory_exists()
 
         cache_key = SprintDataCache.generate_cache_key(team_name, sprint_name, start_date, end_date)
@@ -68,6 +89,8 @@ class SprintDataCache:
         import time
         cache_data = {
             "version": SprintDataCache.CACHE_VERSION,
+            "complete": is_complete,
+            "failed_issues": failed_issues,
             "teamName": team_name,
             "sprintName": sprint_name,
             "startDate": start_date,
