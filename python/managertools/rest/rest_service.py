@@ -77,14 +77,13 @@ class RestService(ABC):
                     if rate_limit_headers:
                         sys.stderr.write(f"Rate Limit Response Headers: {rate_limit_headers}\n")
 
-                    retry_after = 0
+                    retry_after = 1  # Default to 1-second minimum backoff
                     # Check Retry-After header
                     if 'Retry-After' in response.headers:
                         try:
-                            retry_after = int(response.headers['Retry-After'])
+                            retry_after = max(1, int(response.headers['Retry-After']))
                         except ValueError:
                             pass
-                    retry_after = max(1, retry_after)  # Ensure minimum 1-second backoff
                     raise NeedsRetryException(response.status_code, response.text, uri, retry_after)
 
                 elif response.status_code == 403:
@@ -99,7 +98,7 @@ class RestService(ABC):
                                 x_reset = response.headers.get('X-RateLimit-Reset')
                                 if x_reset:
                                     try:
-                                        retry_after = max(1, int(x_reset) - int(time.time()))
+                                        retry_after = max(1, int(x_reset) - int(time.time()) + 1)
                                         raise NeedsRetryException(response.status_code, response.text, uri, retry_after)
                                     except ValueError:
                                         pass
