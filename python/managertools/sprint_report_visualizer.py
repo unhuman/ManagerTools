@@ -212,86 +212,58 @@ def generate_team_png(team_name, team_dataframes, output_dir):
     # Sort by code volume descending
     team_members = sorted(team_members, key=lambda m: metrics_dict[m].get('Code Volume', 0), reverse=True)
 
-    # Create figure with 3 sections
-    fig = plt.figure(figsize=(16, 14))
-    gs = gridspec.GridSpec(3, 1, height_ratios=[2, 2, 3], hspace=0.4)
-
-    # Section 1: Heatmap
-    ax_heatmap = fig.add_subplot(gs[0])
-    create_team_heatmap(ax_heatmap, team_members, metrics_dict)
-
-    # Section 2: Bar charts (will use subplots internally)
-    ax_bars = fig.add_subplot(gs[1])
-    ax_bars.axis('off')
-
-    # Create bar charts in a grid
-    bar_fig = plt.figure(figsize=(16, 3))
-    create_team_bar_charts(bar_fig, team_members, metrics_dict)
-
-    # Section 3: Radar charts
-    ax_spiders = fig.add_subplot(gs[2])
-    ax_spiders.axis('off')
-
-    # Calculate team maximums for normalization
     metric_names = ['Code Volume', 'Commits', 'PRs Merged', 'Reviews Given', 'Engagement Received']
     team_max = [max([metrics_dict[m].get(metric, 0) for m in team_members]) for metric in metric_names]
-    team_max = [max(1, m) for m in team_max]  # Avoid division by zero
+    team_max = [max(1, m) for m in team_max]
 
-    # Create radar charts in a grid
     n_members = len(team_members)
-    n_cols = 4
-    n_rows = (n_members + n_cols - 1) // n_cols
+    n_spider_cols = 4
+    n_spider_rows = (n_members + n_spider_cols - 1) // n_spider_cols
 
-    spider_fig, spider_axes = plt.subplots(n_rows, n_cols, figsize=(16, 4 * n_rows), subplot_kw=dict(projection='polar'))
-    if n_members == 1:
-        spider_axes = [spider_axes]
-    else:
-        spider_axes = spider_axes.flatten()
+    # Calculate figure height based on content
+    heatmap_height = 2.5
+    bar_height = 2.5
+    spider_height = 3 * n_spider_rows
+    total_height = heatmap_height + bar_height + spider_height + 1
 
-    for idx, member in enumerate(team_members):
-        ax = spider_axes[idx]
-        create_radar_chart(ax, member, metrics_dict[member], team_max)
+    # Create single figure with clear GridSpec
+    fig = plt.figure(figsize=(18, total_height))
+    n_gs_rows = 2 + n_spider_rows
+    height_ratios = [heatmap_height, bar_height] + [3] * n_spider_rows
+    gs = gridspec.GridSpec(
+        n_gs_rows, 5,
+        height_ratios=height_ratios,
+        hspace=0.5,
+        wspace=0.3
+    )
 
-    # Hide extra subplots
-    for idx in range(n_members, len(spider_axes)):
-        spider_axes[idx].axis('off')
+    # Section 1: Heatmap (top, spans all 5 columns)
+    ax_heatmap = fig.add_subplot(gs[0, :])
+    create_team_heatmap(ax_heatmap, team_members, metrics_dict)
 
-    # Create combined figure manually
-    fig = plt.figure(figsize=(16, 16))
-
-    # Heatmap section (top 1/3)
-    ax1 = plt.subplot(3, 1, 1)
-    create_team_heatmap(ax1, team_members, metrics_dict)
-
-    # Bar charts section (middle 1/3)
-    ax2 = plt.subplot(3, 5, 6)
-    ax2.axis('off')
-
-    # Manually create subplots for bars
-    metric_names = ['Code Volume', 'Commits', 'PRs Merged', 'Reviews Given', 'Engagement Received']
-    member_names = [m for m in team_members if m in metrics_dict]
+    # Section 2: Bar charts (middle, 5 columns for 5 metrics)
+    member_names = team_members
     colors = plt.cm.tab20(np.linspace(0, 1, len(member_names)))
     x = np.arange(len(member_names))
     width = 0.8
 
     for idx, metric in enumerate(metric_names):
-        sub_ax = plt.subplot(3, 5, 5 + idx + 1)
+        ax_bar = fig.add_subplot(gs[1, idx])
         values = [metrics_dict[m].get(metric, 0) for m in member_names]
-        sub_ax.bar(x, values, width, color=colors)
-        sub_ax.set_ylabel(metric, fontsize=8)
-        sub_ax.set_xticks(x)
-        sub_ax.set_xticklabels(member_names, rotation=45, ha='right', fontsize=7)
-        sub_ax.grid(axis='y', alpha=0.3)
+        ax_bar.bar(x, values, width, color=colors)
+        ax_bar.set_ylabel(metric, fontsize=9, fontweight='bold')
+        ax_bar.set_xticks(x)
+        ax_bar.set_xticklabels(member_names, rotation=45, ha='right', fontsize=8)
+        ax_bar.grid(axis='y', alpha=0.3)
 
-    # Radar charts section (bottom 2/3)
-    n_rows = (n_members + 3) // 4
+    # Section 3: Radar charts (bottom, arranged in grid)
     for idx, member in enumerate(team_members):
-        row = 1 + (idx // 4)
-        col = (idx % 4) + 1
-        ax_spider = plt.subplot(2 + n_rows, 4, (row * 4) + col, projection='polar')
+        row = 2 + (idx // n_spider_cols)
+        col = idx % n_spider_cols
+        ax_spider = fig.add_subplot(gs[row, col], projection='polar')
         create_radar_chart(ax_spider, member, metrics_dict[member], team_max)
 
-    plt.suptitle(f'{team_name} — Overall Totals Report', fontsize=14, fontweight='bold', y=0.995)
+    plt.suptitle(f'{team_name} — Overall Totals Report', fontsize=16, fontweight='bold', y=0.98)
 
     # Save
     output_path = os.path.join(output_dir, f'team-{team_name}.png')
