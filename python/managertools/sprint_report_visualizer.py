@@ -192,8 +192,8 @@ def create_radar_chart(ax, member_name, metrics, team_max):
     ax.fill(angles, values_plot, alpha=0.25, color='steelblue')
     ax.set_xticks(angles[:-1])
 
-    # Abbreviate metric names for radar charts
-    radar_labels = ['Volume', 'Commits', 'Merged', 'Reviews', 'Engage']
+    # Multi-line labels for radar charts to prevent horizontal overlap
+    radar_labels = ['Code\nVolume', 'Commits', 'PRs\nMerged', 'Reviews\nGiven', 'Engagement\nReceived']
     ax.set_xticklabels(radar_labels, fontsize=5)
     ax.xaxis.set_tick_params(pad=6)
     ax.set_ylim(0, 1.0)
