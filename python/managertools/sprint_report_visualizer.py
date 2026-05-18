@@ -30,9 +30,9 @@ def parse_csv(filepath):
 
 
 def extract_team_and_user(filename):
-    """Extract team and user from 'individual-{Team}-{User}.csv'."""
+    """Extract team and user from 'individualAnalysis-{Team}-{User}.csv'."""
     basename = Path(filename).stem
-    match = re.match(r'individual-(.+?)-(.+)$', basename)
+    match = re.match(r'individualAnalysis-(.+?)-(.+)$', basename)
     if match:
         return match.group(1), match.group(2)
     return None, None
@@ -54,10 +54,11 @@ def safe_int(val):
 
 def aggregate_metrics(df, user):
     """Aggregate metrics by sprint for a specific user."""
-    user_data = df[df['USER'] == user].copy()
+    # Case-insensitive user matching
+    user_data = df[df['USER'].str.lower() == user.lower()].copy()
 
     # Coerce columns to numeric
-    numeric_cols = ['PR_ADDED', 'PR_REMOVED', 'COMMITS', 'MERGED', 'OPENED', 'APPROVED',
+    numeric_cols = ['PR_ADDED', 'PR_REMOVED', 'COMMITS', 'APPROVED',
                     'COMMENTED_ON_OTHERS', 'OTHERS_COMMENTED']
     for col in numeric_cols:
         if col in user_data.columns:
@@ -73,10 +74,25 @@ def aggregate_metrics(df, user):
     grouped['Reviews Given'] = grouped['APPROVED'] + grouped['COMMENTED_ON_OTHERS']
     grouped['Engagement Received'] = grouped['OTHERS_COMMENTED']
 
+    # Derive PR counts from MERGED/OPENED columns and AUTHOR
+    # Only count PRs the user authored (not ones they reviewed)
+    authored = user_data[user_data['AUTHOR'].str.lower() == user.lower()]
+
+    # PRs Merged: count distinct PR_IDs per sprint where MERGED is non-blank
+    merged_prs = (authored[authored['MERGED'].notna() & (authored['MERGED'] != '')]
+                  .groupby('SPRINT')['PR_ID'].nunique()
+                  .rename('PRs Merged'))
+
+    # PRs Opened: count distinct PR_IDs per sprint (authored by user)
+    opened_prs = (authored.groupby('SPRINT')['PR_ID'].nunique()
+                  .rename('PRs Opened'))
+
+    # Join PR counts into grouped data
+    grouped = grouped.join(merged_prs, how='left').join(opened_prs, how='left')
+    grouped[['PRs Merged', 'PRs Opened']] = grouped[['PRs Merged', 'PRs Opened']].fillna(0).astype(int)
+
     return grouped.rename(columns={
-        'COMMITS': 'Commits',
-        'MERGED': 'PRs Merged',
-        'OPENED': 'PRs Opened'
+        'COMMITS': 'Commits'
     })
 
 
@@ -84,7 +100,7 @@ def load_reports(reports_dir):
     """Load all individual CSV files and organize by team."""
     teams = defaultdict(lambda: defaultdict(pd.DataFrame))
 
-    csv_files = glob.glob(os.path.join(reports_dir, 'individual-*.csv'))
+    csv_files = glob.glob(os.path.join(reports_dir, 'individualAnalysis-*.csv'))
 
     for filepath in csv_files:
         team, user = extract_team_and_user(filepath)
