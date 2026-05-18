@@ -192,7 +192,7 @@ def create_radar_chart(ax, member_name, metrics, team_max):
     ax.fill(angles, values_plot, alpha=0.25, color='steelblue')
     ax.set_xticks(angles[:-1])
     ax.set_xticklabels(metric_names, fontsize=5)
-    ax.set_ylim(0, 1)
+    ax.set_ylim(0, 1.35)
     ax.set_title(member_name, fontsize=7, fontweight='bold', pad=8)
     ax.grid(True, alpha=0.3)
     ax.set_yticks([0.25, 0.5, 0.75, 1.0])
