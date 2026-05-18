@@ -191,12 +191,12 @@ def create_radar_chart(ax, member_name, metrics, team_max):
     ax.plot(angles, values_plot, 'o-', linewidth=1.5, markersize=4, color='steelblue')
     ax.fill(angles, values_plot, alpha=0.25, color='steelblue')
     ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(metric_names, fontsize=7)
+    ax.set_xticklabels(metric_names, fontsize=5)
     ax.set_ylim(0, 1)
-    ax.set_title(member_name, fontsize=8, fontweight='bold')
+    ax.set_title(member_name, fontsize=7, fontweight='bold', pad=8)
     ax.grid(True, alpha=0.3)
     ax.set_yticks([0.25, 0.5, 0.75, 1.0])
-    ax.set_yticklabels(['0.25', '0.5', '0.75', '1.0'], fontsize=6)
+    ax.set_yticklabels(['', '', '', ''], fontsize=5)
 
 
 def generate_team_png(team_name, team_dataframes, output_dir):
@@ -224,7 +224,7 @@ def generate_team_png(team_name, team_dataframes, output_dir):
     heatmap_height = 2.5
     bar_height = 2.5
     spider_height = 3 * n_spider_rows
-    total_height = heatmap_height + bar_height + spider_height + 1
+    total_height = heatmap_height + bar_height + spider_height + 2
 
     # Create single figure with clear GridSpec
     fig = plt.figure(figsize=(18, total_height))
@@ -233,8 +233,8 @@ def generate_team_png(team_name, team_dataframes, output_dir):
     gs = gridspec.GridSpec(
         n_gs_rows, 5,
         height_ratios=height_ratios,
-        hspace=0.5,
-        wspace=0.3
+        hspace=0.8,
+        wspace=0.4
     )
 
     # Section 1: Heatmap (top, spans all 5 columns)
@@ -251,10 +251,11 @@ def generate_team_png(team_name, team_dataframes, output_dir):
         ax_bar = fig.add_subplot(gs[1, idx])
         values = [metrics_dict[m].get(metric, 0) for m in member_names]
         ax_bar.bar(x, values, width, color=colors)
-        ax_bar.set_ylabel(metric, fontsize=9, fontweight='bold')
+        ax_bar.set_title(metric, fontsize=8, fontweight='bold', pad=5)
         ax_bar.set_xticks(x)
-        ax_bar.set_xticklabels(member_names, rotation=45, ha='right', fontsize=8)
+        ax_bar.set_xticklabels(member_names, rotation=45, ha='right', fontsize=7)
         ax_bar.grid(axis='y', alpha=0.3)
+        ax_bar.tick_params(axis='y', labelsize=7)
 
     # Section 3: Radar charts (bottom, arranged in grid)
     for idx, member in enumerate(team_members):
