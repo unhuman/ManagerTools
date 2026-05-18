@@ -59,6 +59,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         self.max_commit_size = None
         self.ignore_filenames = set()
         self.incomplete_sprints = []
+        self._counted_pr_activities = set()
 
     def add_custom_command_line_options(self, parser):
         parser.add_argument('-i', '--isolateTicket', help='Isolate ticket for processing (debugging)')
@@ -79,6 +80,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
         self.database = FlexiDB(self.generate_db_signature(), True)
         self.incomplete_sprints = []
+        self._counted_pr_activities = set()
 
         # Determine thread count
         if self.command_line_options.multithread:
@@ -656,8 +658,14 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 print(f"Skipping processing of PR {ticket} / {pr_id} due to unknown author: {pull_request.get('author')}", file=sys.stderr)
                 return
 
-        # Get activities with retry logic
-        pr_activities = self._retry_rest_call(lambda: source_control_rest.get_activities(pr_url))
+        # Skip activity counting if this PR in this sprint was already processed
+        activity_key = (sprint_name, pr_id)
+        if activity_key in self._counted_pr_activities:
+            pr_activities = None
+        else:
+            self._counted_pr_activities.add(activity_key)
+            # Get activities with retry logic
+            pr_activities = self._retry_rest_call(lambda: source_control_rest.get_activities(pr_url))
         print(f"      [DEBUG] PR {ticket}/{pr_id}: Got {len(pr_activities) if pr_activities else 0} activities")
 
         comment_blockers = []
