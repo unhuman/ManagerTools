@@ -78,13 +78,15 @@ def aggregate_metrics(df, user):
     # Only count PRs the user authored (not ones they reviewed)
     authored = user_data[user_data['AUTHOR'].str.lower() == user.lower()]
 
-    # PRs Merged: count distinct PR_IDs per sprint where MERGED is non-blank
-    merged_prs = (authored[authored['MERGED'].notna() & (authored['MERGED'] != '')]
+    # PRs Merged: rows where USER authored AND performed the merge action
+    # Use safe_int() to handle spaces and blank values correctly
+    merged_prs = (authored[authored['MERGED'].apply(safe_int) > 0]
                   .groupby('SPRINT')['PR_ID'].nunique()
                   .rename('PRs Merged'))
 
-    # PRs Opened: count distinct PR_IDs per sprint (authored by user)
-    opened_prs = (authored.groupby('SPRINT')['PR_ID'].nunique()
+    # PRs Opened: rows where USER authored AND opened the PR
+    opened_prs = (authored[authored['OPENED'].apply(safe_int) > 0]
+                  .groupby('SPRINT')['PR_ID'].nunique()
                   .rename('PRs Opened'))
 
     # Join PR counts into grouped data
