@@ -195,7 +195,7 @@ def create_radar_chart(ax, member_name, metrics, team_max):
     # Abbreviate metric names for radar charts
     radar_labels = ['Volume', 'Commits', 'Merged', 'Reviews', 'Engage']
     ax.set_xticklabels(radar_labels, fontsize=5)
-    ax.xaxis.set_tick_params(pad=12)
+    ax.xaxis.set_tick_params(pad=6)
     ax.set_ylim(0, 1.0)
     ax.set_title(member_name, fontsize=7, fontweight='bold', pad=8)
     ax.grid(True, alpha=0.3)
