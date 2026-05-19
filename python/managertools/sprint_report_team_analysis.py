@@ -660,10 +660,14 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
         # Increment OPENED if the PR was created within the sprint/cycle window
         pr_created_ms = self._retry_rest_call(lambda: source_control_rest.get_pr_created_ms(pr_url))
+        print(f"      [DEBUG] PR {ticket}/{pr_id}: created_ms={pr_created_ms}, sprint_window=[{sprint_start_ms}, {sprint_end_ms}), mode={mode.name}")
         if pr_created_ms and (mode == Mode.KANBAN or sprint_start_ms <= pr_created_ms < sprint_end_ms):
+            print(f"      [DEBUG] PR {ticket}/{pr_id}: Incrementing OPENED for {pr_author}")
             open_index = self.create_index_lookup(sprint_name, ticket, pr_id, pr_author, pr_status)
             self.populate_baseline_db_info(open_index, start_date, end_date, pr_author)
             self.increment_counter(open_index, UserActivity.OPENED)
+        else:
+            print(f"      [DEBUG] PR {ticket}/{pr_id}: Skipping OPENED - condition not met (created_ms={pr_created_ms}, in_window={pr_created_ms and sprint_start_ms <= pr_created_ms < sprint_end_ms})")
 
         # Skip activity counting if this PR in this sprint was already processed
         activity_key = (sprint_name, pr_id)
