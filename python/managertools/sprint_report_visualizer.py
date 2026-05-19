@@ -30,9 +30,13 @@ def parse_csv(filepath):
 
 
 def extract_team_and_user(filename, prefix='individual'):
-    """Extract team and user from '{prefix}-{Team}-{User}.csv'."""
+    """Extract team and user from '{prefix}-{Team}-{User}.csv'.
+
+    Teams can contain dashes; usernames cannot. Uses greedy match for team
+    to capture everything before the last dash, non-dash pattern for user.
+    """
     basename = Path(filename).stem
-    pattern = re.escape(prefix) + r'-(.+?)-(.+)$'
+    pattern = re.escape(prefix) + r'-(.+)-([^-]+)$'
     match = re.match(pattern, basename)
     if match:
         return match.group(1), match.group(2)
