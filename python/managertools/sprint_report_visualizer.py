@@ -313,8 +313,8 @@ def generate_individual_png(user, df, team_name, output_dir):
     sprint_dates = {}
     for sprint in aggregated.index:
         sprint_data = user_data[user_data['SPRINT'] == sprint]
-        if not sprint_data.empty and 'START_DATE' in sprint_data.columns:
-            sprint_dates[sprint] = pd.to_datetime(sprint_data['START_DATE'].iloc[0])
+        if not sprint_data.empty and 'startDate' in sprint_data.columns:
+            sprint_dates[sprint] = pd.to_datetime(sprint_data['startDate'].iloc[0])
         else:
             sprint_dates[sprint] = pd.Timestamp.max
 
