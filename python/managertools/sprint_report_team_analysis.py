@@ -663,8 +663,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 return
 
         # Increment OPENED if the PR was created within the sprint/cycle window
-        # Use createdDate from Jira's cached PR data (already in milliseconds)
-        pr_created_ms = pull_request.get('createdDate', 0)
+        pr_created_ms = self._retry_rest_call(lambda: source_control_rest.get_pr_created_ms(pr_url))
         print(f"      [DEBUG] PR {ticket}/{pr_id}: created_ms={pr_created_ms}, sprint_window=[{sprint_start_ms}, {sprint_end_ms}), mode={mode.name}")
         if pr_created_ms and (mode == Mode.KANBAN or sprint_start_ms <= pr_created_ms < sprint_end_ms):
             print(f"      [DEBUG] PR {ticket}/{pr_id}: Incrementing OPENED for {pr_author}")

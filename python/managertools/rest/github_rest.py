@@ -227,6 +227,21 @@ class GithubREST(SourceControlREST):
             return None
 
 
+    def get_pr_created_ms(self, pr_url: str) -> int:
+        try:
+            pr = self.get_request(pr_url)
+            if not isinstance(pr, dict):
+                return 0
+            created_at = pr.get('created_at', '')
+            if created_at:
+                return int(datetime.fromisoformat(created_at.replace('Z', '+00:00')).timestamp() * 1000)
+            return 0
+        except RESTException as re:
+            if re.status_code not in [HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND]:
+                raise
+            sys.stderr.write(f"Unable to retrieve PR created date {str(re)}\n")
+            return 0
+
     def map_user_to_jira_name(self, user_data: Any) -> Optional[str]:
         if user_data is None:
             return None
