@@ -308,8 +308,18 @@ def generate_individual_png(user, df, team_name, output_dir):
     if aggregated.empty:
         return None
 
-    # Sprint names as x-axis labels
-    sprint_names = aggregated.index.tolist()
+    # Sort sprints chronologically by their earliest date in the data
+    user_data = df[df['AUTHOR'].str.lower() == user.lower()]
+    sprint_dates = {}
+    for sprint in aggregated.index:
+        sprint_data = user_data[user_data['SPRINT'] == sprint]
+        if not sprint_data.empty and 'START_DATE' in sprint_data.columns:
+            sprint_dates[sprint] = pd.to_datetime(sprint_data['START_DATE'].iloc[0])
+        else:
+            sprint_dates[sprint] = pd.Timestamp.max
+
+    sprint_names = sorted(aggregated.index.tolist(), key=lambda s: sprint_dates.get(s, pd.Timestamp.max))
+    aggregated = aggregated.loc[sprint_names]
     x = np.arange(len(sprint_names))
 
     # Create 2x3 grid
