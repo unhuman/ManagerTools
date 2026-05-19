@@ -29,10 +29,11 @@ def parse_csv(filepath):
     return df.reset_index(drop=True)
 
 
-def extract_team_and_user(filename):
-    """Extract team and user from 'individualAnalysis-{Team}-{User}.csv'."""
+def extract_team_and_user(filename, prefix='individual'):
+    """Extract team and user from '{prefix}-{Team}-{User}.csv'."""
     basename = Path(filename).stem
-    match = re.match(r'individualAnalysis-(.+?)-(.+)$', basename)
+    pattern = re.escape(prefix) + r'-(.+?)-(.+)$'
+    match = re.match(pattern, basename)
     if match:
         return match.group(1), match.group(2)
     return None, None
@@ -98,14 +99,14 @@ def aggregate_metrics(df, user):
     })
 
 
-def load_reports(reports_dir):
+def load_reports(reports_dir, prefix='individual'):
     """Load all individual CSV files and organize by team."""
     teams = defaultdict(lambda: defaultdict(pd.DataFrame))
 
-    csv_files = glob.glob(os.path.join(reports_dir, 'individualAnalysis-*.csv'))
+    csv_files = glob.glob(os.path.join(reports_dir, f'{prefix}-*.csv'))
 
     for filepath in csv_files:
-        team, user = extract_team_and_user(filepath)
+        team, user = extract_team_and_user(filepath, prefix)
         if team is None or user is None:
             continue
 
@@ -397,6 +398,7 @@ def main():
     parser = argparse.ArgumentParser(description='Generate PNG reports from individual analysis CSVs.')
     parser.add_argument('--reports-dir', default='./reports/', help='Directory containing individual CSV files')
     parser.add_argument('--output-dir', default='./reports/', help='Directory to save PNG reports')
+    parser.add_argument('--prefix', default='individual', help='Filename prefix to match (e.g., "individual", "individualAnalysis")')
     parser.add_argument('--team', help='Only process a specific team')
     parser.add_argument('--skip-individual', action='store_true', help='Skip individual PNG generation')
     parser.add_argument('--skip-team', action='store_true', help='Skip team PNG generation')
@@ -408,7 +410,7 @@ def main():
 
     # Load all reports
     print(f"Loading reports from {args.reports_dir}...")
-    teams = load_reports(args.reports_dir)
+    teams = load_reports(args.reports_dir, args.prefix)
 
     if args.team:
         teams = {args.team: teams.get(args.team, {})}
