@@ -658,6 +658,13 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 print(f"Skipping processing of PR {ticket} / {pr_id} due to unknown author: {pull_request.get('author')}", file=sys.stderr)
                 return
 
+        # Increment OPENED if the PR was created within the sprint/cycle window
+        pr_created_ms = self._retry_rest_call(lambda: source_control_rest.get_pr_created_ms(pr_url))
+        if pr_created_ms and (mode == Mode.KANBAN or sprint_start_ms <= pr_created_ms < sprint_end_ms):
+            open_index = self.create_index_lookup(sprint_name, ticket, pr_id, pr_author, pr_status)
+            self.populate_baseline_db_info(open_index, start_date, end_date, pr_author)
+            self.increment_counter(open_index, UserActivity.OPENED)
+
         # Skip activity counting if this PR in this sprint was already processed
         activity_key = (sprint_name, pr_id)
         if activity_key in self._counted_pr_activities:

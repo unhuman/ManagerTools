@@ -1,5 +1,6 @@
 import re
 import sys
+from datetime import datetime
 from http import HTTPStatus
 from typing import Any, Optional
 
@@ -100,6 +101,20 @@ class BitbucketREST(SourceControlREST):
                                contextLines="0",
                                whitespace="ignore-all",
                                ignoreComments="true")
+
+    def get_pr_created_ms(self, pr_url: str) -> int:
+        try:
+            pr = self.get_request(pr_url)
+            if isinstance(pr, dict):
+                created_date = pr.get('createdDate', 0)
+                if created_date:
+                    return created_date
+            return 0
+        except RESTException as re:
+            if re.status_code not in [HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND]:
+                raise
+            sys.stderr.write(f"Unable to retrieve PR creation time {str(re)}\n")
+            return 0
 
     def map_user_to_jira_name(self, user_data: Any) -> Optional[str]:
         if user_data is None:
