@@ -673,6 +673,16 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         else:
             print(f"      [DEBUG] PR {ticket}/{pr_id}: Skipping OPENED - condition not met (created_ms={pr_created_ms}, in_window={pr_created_ms and sprint_start_ms <= pr_created_ms < sprint_end_ms})")
 
+        # For GitHub PRs, MERGED doesn't come from activities — fetch merge timestamp directly
+        if is_github and pr_status == 'MERGED':
+            pr_merged_ms = self._retry_rest_call(lambda: source_control_rest.get_pr_merged_ms(pr_url))
+            print(f"      [DEBUG] PR {ticket}/{pr_id}: merged_ms={pr_merged_ms}, sprint_window=[{sprint_start_ms}, {sprint_end_ms})")
+            if pr_merged_ms and (mode == Mode.KANBAN or sprint_start_ms <= pr_merged_ms < sprint_end_ms):
+                print(f"      [DEBUG] PR {ticket}/{pr_id}: Incrementing MERGED for {pr_author}")
+                merged_index = self.create_index_lookup(sprint_name, ticket, pr_id, pr_author, pr_status)
+                self.populate_baseline_db_info(merged_index, start_date, end_date, pr_author)
+                self.increment_counter(merged_index, UserActivity.MERGED)
+
         # Skip activity counting if this PR in this sprint was already processed
         activity_key = (sprint_name, pr_id)
         if activity_key in self._counted_pr_activities:

@@ -115,6 +115,9 @@ class BitbucketREST(SourceControlREST):
             sys.stderr.write(f"Unable to retrieve PR created date {str(re)}\n")
             return 0
 
+    def get_pr_merged_ms(self, pr_url: str) -> int:
+        return 0
+
     def map_user_to_jira_name(self, user_data: Any) -> Optional[str]:
         if user_data is None:
             return None
