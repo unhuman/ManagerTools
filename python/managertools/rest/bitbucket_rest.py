@@ -105,15 +105,19 @@ class BitbucketREST(SourceControlREST):
     def get_pr_created_ms(self, pr_url: str) -> int:
         try:
             pr = self.get_request(pr_url)
-            if isinstance(pr, dict):
-                created_date = pr.get('createdDate', 0)
-                if created_date:
-                    return created_date
+            if not isinstance(pr, dict):
+                sys.stderr.write(f"Warning: PR response not a dict for {pr_url}: {type(pr)}\n")
+                return 0
+            created_date = pr.get('createdDate', 0)
+            if created_date:
+                sys.stderr.write(f"[OPENED] PR {pr_url}: createdDate={created_date}ms\n")
+                return created_date
+            sys.stderr.write(f"Warning: No createdDate field in PR response for {pr_url}\n")
             return 0
         except RESTException as re:
             if re.status_code not in [HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND]:
                 raise
-            sys.stderr.write(f"Unable to retrieve PR creation time {str(re)}\n")
+            sys.stderr.write(f"[OPENED] REST error retrieving PR {pr_url}: {re.status_code}\n")
             return 0
 
     def map_user_to_jira_name(self, user_data: Any) -> Optional[str]:

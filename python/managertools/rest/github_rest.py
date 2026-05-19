@@ -229,14 +229,20 @@ class GithubREST(SourceControlREST):
     def get_pr_created_ms(self, pr_url: str) -> int:
         try:
             pr = self.get_request(pr_url)
-            created_at = pr.get('created_at', '') if isinstance(pr, dict) else ''
+            if not isinstance(pr, dict):
+                sys.stderr.write(f"Warning: PR response not a dict for {pr_url}: {type(pr)}\n")
+                return 0
+            created_at = pr.get('created_at', '')
             if created_at:
-                return int(datetime.fromisoformat(created_at.replace('Z', '+00:00')).timestamp() * 1000)
+                ms = int(datetime.fromisoformat(created_at.replace('Z', '+00:00')).timestamp() * 1000)
+                sys.stderr.write(f"[OPENED] PR {pr_url}: created_at={created_at} -> {ms}ms\n")
+                return ms
+            sys.stderr.write(f"Warning: No created_at field in PR response for {pr_url}\n")
             return 0
         except RESTException as re:
             if re.status_code not in [HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND]:
                 raise
-            sys.stderr.write(f"Unable to retrieve PR creation time {str(re)}\n")
+            sys.stderr.write(f"[OPENED] REST error retrieving PR {pr_url}: {re.status_code}\n")
             return 0
 
     def map_user_to_jira_name(self, user_data: Any) -> Optional[str]:
