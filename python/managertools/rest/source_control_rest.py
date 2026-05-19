@@ -24,10 +24,6 @@ class SourceControlREST(RestService, ABC):
     def get_commit_diffs(self, pr_url: str, commit_sha: str):
         pass
 
-    @abstractmethod
-    def get_pr_created_ms(self, pr_url: str) -> int:
-        pass
-
     def api_convert(self, pr_url: str) -> str:
         return pr_url
 

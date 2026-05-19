@@ -631,9 +631,13 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
     def process_pull_request(self, ticket: str, pull_request: Dict[str, Any], sprint_name: str, start_date: str,
                             end_date: str, sprint_start_ms: float, sprint_end_ms: float, mode: Mode):
-        print(f"      [DEBUG] Processing PR: {ticket}/{pull_request.get('id')}")
-
+        pr_id = pull_request.get('id', 'UNKNOWN')
         pr_url = pull_request.get('url', '')
+        print(f"      [DEBUG] Processing PR: {ticket}/{pr_id}")
+        if not pr_url:
+            print(f"      [DEBUG] PR {ticket}/{pr_id}: WARNING - No URL in pull_request data. Keys: {list(pull_request.keys())}")
+        print(f"      [DEBUG] PR {ticket}/{pr_id}: url={pr_url}, keys={list(pull_request.keys())}")
+
         is_github = 'github.com/' in pr_url.lower()
         source_control_rest = self.github_rest if is_github else self.bitbucket_rest
 
@@ -659,7 +663,8 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 return
 
         # Increment OPENED if the PR was created within the sprint/cycle window
-        pr_created_ms = self._retry_rest_call(lambda: source_control_rest.get_pr_created_ms(pr_url))
+        # Use createdDate from Jira's cached PR data (already in milliseconds)
+        pr_created_ms = pull_request.get('createdDate', 0)
         print(f"      [DEBUG] PR {ticket}/{pr_id}: created_ms={pr_created_ms}, sprint_window=[{sprint_start_ms}, {sprint_end_ms}), mode={mode.name}")
         if pr_created_ms and (mode == Mode.KANBAN or sprint_start_ms <= pr_created_ms < sprint_end_ms):
             print(f"      [DEBUG] PR {ticket}/{pr_id}: Incrementing OPENED for {pr_author}")
