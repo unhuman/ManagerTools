@@ -103,4 +103,13 @@ _Add a brief overview of your project architecture_
 
 ## Conventions & Patterns
 
-_Add your project-specific conventions here_
+### Cache Versioning
+
+`SprintDataCache.CACHE_VERSION` is defined in `python/managertools/util/sprint_data_cache.py`.
+
+**Bump the version whenever a change causes existing cache files to produce incomplete or incorrect data**, including:
+- Adding new issue categories to sprint processing (e.g., `puntedIssues`)
+- Changing what fields are fetched or stored per issue/PR
+- Fixing bugs where previously cached data is known to be wrong
+
+Bumping the version causes old cache files to be ignored and re-fetched on the next run. Use semantic versioning (`1.0` → `1.1` for additive/fix changes, `2.0` for structural changes).
