@@ -100,9 +100,18 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 try:
                     data = self.jira_rest.get_sprint_report(board_id, sprint_id)
 
+                    contents = data.get('contents', {})
+                    completed = contents.get('completedIssues', [])
+                    incomplete = contents.get('issuesNotCompletedInCurrentSprint', [])
+                    punted = contents.get('puntedIssues', [])
+
+                    seen_ids = set()
                     all_issues = []
-                    all_issues.extend(data.get('contents', {}).get('completedIssues', []))
-                    all_issues.extend(data.get('contents', {}).get('issuesNotCompletedInCurrentSprint', []))
+                    for issue in completed + incomplete + punted:
+                        issue_id_key = issue.get('id') or issue.get('key')
+                        if issue_id_key not in seen_ids:
+                            seen_ids.add(issue_id_key)
+                            all_issues.append(issue)
 
                     sprint_name = data.get('sprint', {}).get('name', '')
                     sprint_state = data.get('sprint', {}).get('state', '').lower()
@@ -111,7 +120,8 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     end_date = self.clean_date(data.get('sprint', {}).get('endDate', ''))
 
                     print(f"{i + 1} / {len(sprint_ids)}: {team_name}: {sprint_name} "
-                          f"(id: {sprint_id}, issues: {len(all_issues)}, "
+                          f"(id: {sprint_id}, issues: {len(all_issues)} "
+                          f"[{len(completed)} done, {len(incomplete)} incomplete, {len(punted)} punted], "
                           f"dates: {start_date} - {end_date})")
 
                     self.process_potentially_cached_sprint_data(thread_count, team_name, data.get('sprint', {}), mode, all_issues, is_completed)
