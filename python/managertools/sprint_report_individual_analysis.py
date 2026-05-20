@@ -17,6 +17,11 @@ class SprintReportIndividualAnalysis(SprintReportTeamAnalysis):
         self.team_users = self.command_line_helper.get_team_board_users(self.team_name, self.board_id)
         print()
 
+    def add_custom_command_line_options(self, parser):
+        super().add_custom_command_line_options(parser)
+        parser.add_argument('--no-visualize', action='store_true',
+                            help='Skip PNG generation after analysis')
+
     def generate_columns_order(self) -> List[str]:
         column_order = super().generate_columns_order()
 
@@ -67,6 +72,44 @@ class SprintReportIndividualAnalysis(SprintReportTeamAnalysis):
                 '.csv', f'-{data_indicator}-{user}.csv'
             )
             self.write_results_file(filename, '\n'.join(sb))
+
+        if not self.command_line_options.no_visualize:
+            self._run_visualization()
+
+    def _run_visualization(self):
+        import os
+        from managertools.sprint_report_visualizer import (
+            load_reports, generate_individual_png, generate_team_png,
+        )
+
+        output_csv = self.command_line_options.outputCSV
+        reports_dir = os.path.dirname(output_csv) or '.'
+        prefix = os.path.splitext(os.path.basename(output_csv))[0]
+
+        print("\nGenerating visualizations...")
+        os.makedirs(reports_dir, exist_ok=True)
+        teams = load_reports(reports_dir, prefix)
+
+        for team_name in sorted(teams.keys()):
+            team_dataframes = teams[team_name]
+            if not team_dataframes:
+                continue
+
+            # Generate team PNG
+            try:
+                path = generate_team_png(team_name, team_dataframes, reports_dir)
+                print(f"  ✓ {path}")
+            except Exception as e:
+                print(f"  ✗ Team PNG error: {e}")
+
+            # Generate individual PNGs
+            for user in sorted(team_dataframes.keys()):
+                try:
+                    path = generate_individual_png(user, team_dataframes[user], team_name, reports_dir)
+                    if path:
+                        print(f"  ✓ {path}")
+                except Exception as e:
+                    print(f"  ✗ {user} PNG error: {e}")
 
 
 if __name__ == '__main__':
