@@ -183,7 +183,7 @@ class GithubREST(SourceControlREST):
                 user_name = self.map_user_to_jira_name(commit.get('author'))
                 if user_name is None:
                     committer = commit.get('committer')
-                    user_name = committer.get('name') if committer else None
+                    user_name = self.map_user_to_jira_name(committer) if committer else None
 
                 if user_name is None:
                     nested_commit = commit.get('commit')

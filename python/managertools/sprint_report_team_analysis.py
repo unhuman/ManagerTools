@@ -527,8 +527,8 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         print(f"      [DEBUG] getIssueCategoryInformation started for sprint: {sprint_name}")
 
         # Parse sprint times
-        sprint_start_time = datetime.strptime(sprint.get('startDate', ''), "%d/%b/%y %I:%M %p")
-        sprint_end_time = datetime.strptime(sprint.get('endDate', ''), "%d/%b/%y %I:%M %p")
+        sprint_start_time = datetime.strptime(sprint.get('startDate', ''), "%d/%b/%y %I:%M %p").replace(tzinfo=timezone.utc)
+        sprint_end_time = datetime.strptime(sprint.get('endDate', ''), "%d/%b/%y %I:%M %p").replace(tzinfo=timezone.utc)
         sprint_start_ms = sprint_start_time.timestamp() * 1000
         sprint_end_ms = sprint_end_time.timestamp() * 1000
 
