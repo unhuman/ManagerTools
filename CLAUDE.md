@@ -113,3 +113,13 @@ _Add a brief overview of your project architecture_
 - Fixing bugs where previously cached data is known to be wrong
 
 Bumping the version causes old cache files to be ignored and re-fetched on the next run. Use semantic versioning (`1.0` → `1.1` for additive/fix changes, `2.0` for structural changes).
+
+**After bumping the cache version, offer to delete the stale cache files.** Old files are harmless but waste disk space and can cause confusion. The cache directory is `python/cacheData/` (or `cacheData/` relative to the working directory). To remove only the outdated versioned files:
+```bash
+# Preview what would be deleted
+grep -rl '"version": "1.0"' python/cacheData/ --include="*.json"
+
+# Delete them
+grep -rl '"version": "1.0"' python/cacheData/ --include="*.json" | xargs rm
+```
+Replace `1.0` with the version being superseded.
