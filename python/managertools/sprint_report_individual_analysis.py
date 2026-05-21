@@ -90,6 +90,10 @@ class SprintReportIndividualAnalysis(SprintReportTeamAnalysis):
         os.makedirs(reports_dir, exist_ok=True)
         teams = load_reports(reports_dir, prefix)
 
+        # Only visualize the team that was processed
+        if self.team_name and self.team_name in teams:
+            teams = {self.team_name: teams[self.team_name]}
+
         for team_name in sorted(teams.keys()):
             team_dataframes = teams[team_name]
             if not team_dataframes:
