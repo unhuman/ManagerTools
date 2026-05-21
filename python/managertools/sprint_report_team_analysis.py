@@ -168,6 +168,8 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                         self.incomplete_sprints.append(cycle_name)
                 except Exception as e:
                     print(f"Error processing Kanban cycle {cycle}: {e}", file=sys.stderr)
+                    cycle_name = f"{team_name} Cycle {cycle}"
+                    self.incomplete_sprints.append(cycle_name)
                     continue
 
         # Print end-of-run summary for incomplete sprints/cycles
