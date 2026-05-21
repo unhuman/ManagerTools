@@ -10,7 +10,7 @@ class GetTeamSprints:
     def __init__(self, jira_rest: Optional[JiraREST] = None):
         self.jira_rest = jira_rest
 
-    def get_recent_sprints(self, include_active_sprint: bool, board_id: str, limit_count: Optional[int]) -> List[dict]:
+    def _fetch_and_filter_sprints(self, include_active_sprint: bool, board_id: str) -> List[dict]:
         data = self.jira_rest.get_sprints(board_id)
 
         # Filter out sprints not from this board
@@ -33,7 +33,10 @@ class GetTeamSprints:
             else:
                 filtered_data.append(sprint)
 
-        data = filtered_data
+        return filtered_data
+
+    def get_recent_sprints(self, include_active_sprint: bool, board_id: str, limit_count: Optional[int]) -> List[dict]:
+        data = self._fetch_and_filter_sprints(include_active_sprint, board_id)
 
         if limit_count is not None:
             data = data[:min(limit_count, len(data))]
@@ -43,11 +46,32 @@ class GetTeamSprints:
 
         return data
 
+    def get_sprints_by_date_range(self, include_active_sprint: bool, board_id: str,
+                                   start_after: datetime,
+                                   end_before: Optional[datetime]) -> List[dict]:
+        data = self._fetch_and_filter_sprints(include_active_sprint, board_id)
+
+        result = []
+        for sprint in data:
+            start_str = sprint.get('startDate')
+            if not start_str:
+                continue
+            sprint_start = datetime.fromisoformat(start_str.replace('Z', '+00:00'))
+            if sprint_start < start_after:
+                continue
+            if end_before is not None and sprint_start >= end_before:
+                continue
+            result.append(sprint)
+
+        # Sort by startDate (ascending)
+        result.sort(key=lambda x: x.get('startDate', ''))
+        return result
+
     def run(self, args: List[str]):
         import argparse
         parser = argparse.ArgumentParser(description='Get Team Sprints')
         parser.add_argument('-b', '--boardId', required=True, help='Sprint Board Id Number')
-        parser.add_argument('-l', '--limit', type=int, help='Limit of count to get')
+        parser.add_argument('-l', '--limit', help='Limit count, "ytd", "year", or 4-digit year')
         parser.add_argument('-q', '--quietMode', action='store_true', help='Quiet mode')
         parser.add_argument('-ia', '--includeActive', action='store_true', help='Include current active sprint')
 
@@ -62,7 +86,38 @@ class GetTeamSprints:
 
         self.jira_rest = JiraREST(jira_server, jira_auth)
 
-        data = self.get_recent_sprints(options.includeActive, options.boardId, options.limit)
+        if options.limit is not None:
+            limit_str = options.limit.strip()
+            s = limit_str.lower()
+
+            # Check for date-based limits first
+            if s in ('ytd', 'year'):
+                now = datetime.now(timezone.utc)
+                if s == 'ytd':
+                    start_date, end_date = datetime(now.year, 1, 1, tzinfo=timezone.utc), None
+                else:  # year
+                    try:
+                        start_date = now.replace(year=now.year - 1)
+                    except ValueError:  # Feb 29 on a leap year
+                        start_date = now.replace(year=now.year - 1, day=28)
+                    end_date = None
+                data = self.get_sprints_by_date_range(options.includeActive, options.boardId, start_date, end_date)
+            elif limit_str.isdigit() and len(limit_str) == 4 and int(limit_str) >= 1000:
+                # 4-digit year
+                year = int(limit_str)
+                start_date = datetime(year, 1, 1, tzinfo=timezone.utc)
+                end_date = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+                data = self.get_sprints_by_date_range(options.includeActive, options.boardId, start_date, end_date)
+            elif limit_str.lstrip('-').isdigit():
+                # Numeric limit (sprint count)
+                data = self.get_recent_sprints(options.includeActive, options.boardId, int(limit_str))
+            else:
+                raise ValueError(f"Invalid limit '{limit_str}'. Use a positive integer, 'ytd', 'year', or a 4-digit year.")
+        else:
+            # No limit, get all sprints
+            data = self.get_sprints_by_date_range(options.includeActive, options.boardId,
+                                                   datetime(1970, 1, 1, tzinfo=timezone.utc), None)
+
         for sprint in data:
             print(f"{sprint.get('id')}: {sprint.get('name')}")
 

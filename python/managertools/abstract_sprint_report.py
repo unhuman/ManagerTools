@@ -13,6 +13,21 @@ from managertools.rest.exceptions import RESTException
 from managertools.get_team_sprints import GetTeamSprints
 
 
+def _sprint_limit_type(value: str) -> str:
+    s = value.lower()
+    if s in ('ytd', 'year'):
+        return value
+    if value.isdigit() and len(value) == 4 and int(value) >= 1000:
+        return value
+    if value.lstrip('-').isdigit():
+        if int(value) <= 0:
+            raise argparse.ArgumentTypeError(f"Limit must be positive, got: {value}")
+        return value
+    raise argparse.ArgumentTypeError(
+        f"Invalid limit '{value}'. Use a positive integer, 'ytd', 'year', or a 4-digit year."
+    )
+
+
 class Mode(Enum):
     SCRUM = "SCRUM"
     KANBAN = "KANBAN"
@@ -48,6 +63,23 @@ class AbstractSprintReport(ABC):
     def validate_custom_command_line_options(self):
         pass
 
+    @staticmethod
+    def _resolve_limit_date_range(limit_str: str) -> tuple:
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        s = limit_str.lower()
+        if s == 'ytd':
+            return datetime(now.year, 1, 1, tzinfo=timezone.utc), None
+        elif s == 'year':
+            try:
+                start = now.replace(year=now.year - 1)
+            except ValueError:  # Feb 29 on a leap year
+                start = now.replace(year=now.year - 1, day=28)
+            return start, None
+        else:  # 4-digit year
+            year = int(limit_str)
+            return datetime(year, 1, 1, tzinfo=timezone.utc), datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+
     def run(self):
         self.setup_run()
 
@@ -73,7 +105,7 @@ class AbstractSprintReport(ABC):
         parser.add_argument('-t', '--teamName', help='Sprint Team Name')
         parser.add_argument('-p', '--prompt', action='store_true', help='Prompt for team / timeframe info')
         parser.add_argument('-q', '--quietMode', action='store_true', help='Quiet mode (use default/stored values)')
-        parser.add_argument('-l', '--limit', type=int, help='Number of recent sprints/cycles to process')
+        parser.add_argument('-l', '--limit', type=_sprint_limit_type, help='Recent sprints to process: a count, "ytd", "year", or a 4-digit year (e.g. "2025")')
         parser.add_argument('-s', '--sprintIds', help='Sprint Id Numbers (comma separated)')
         parser.add_argument('-ia', '--includeActive', action='store_true', help='Include current active sprint')
 
@@ -99,32 +131,45 @@ class AbstractSprintReport(ABC):
 
         self.setup_services()
 
-        limit_val = None
+        limit_raw = None
         if self.command_line_options.prompt:
-            limit_val = int(CommandLineHelper.prompt_number("Number of Sprints/Cycles"))
+            limit_raw = CommandLineHelper.prompt_number("Number of Sprints/Cycles")
         elif self.command_line_options.limit:
-            limit_val = self.command_line_options.limit
+            limit_raw = self.command_line_options.limit
 
-        if limit_val:
-            try:
-                get_team_sprints = GetTeamSprints(self.jira_rest)
-                sprint_data = get_team_sprints.get_recent_sprints(
-                    self.command_line_options.includeActive,
-                    self.board_id,
-                    limit_val
-                )
-                self.sprint_ids = [str(sprint.get('id')) for sprint in sprint_data]
-            except RESTException as re:
-                if re.status_code == 400:  # BAD_REQUEST
-                    # Kanban board detected; auto-enter Kanban mode
-                    self.weeks = limit_val
-                else:
+        if limit_raw is not None:
+            limit_str = str(limit_raw).strip()
+            if limit_str.lstrip('-').isdigit():
+                # Numeric path — existing behaviour
+                limit_int = int(limit_str)
+                try:
+                    sprint_data = GetTeamSprints(self.jira_rest).get_recent_sprints(
+                        self.command_line_options.includeActive, self.board_id, limit_int)
+                    self.sprint_ids = [str(s.get('id')) for s in sprint_data]
+                except RESTException as re:
+                    if re.status_code == 400:
+                        self.weeks = limit_int   # Kanban fallback
+                    else:
+                        raise
+            else:
+                # Date-based path — new behaviour
+                start_date, end_date = self._resolve_limit_date_range(limit_str)
+                try:
+                    sprint_data = GetTeamSprints(self.jira_rest).get_sprints_by_date_range(
+                        self.command_line_options.includeActive, self.board_id, start_date, end_date)
+                    self.sprint_ids = [str(s.get('id')) for s in sprint_data]
+                except RESTException as re:
+                    if re.status_code == 400:
+                        raise RuntimeError(
+                            f"Date-based limits ('{limit_str}') are not supported for Kanban boards. "
+                            "Use a number of cycles instead."
+                        )
                     raise
         elif self.command_line_options.sprintIds:
             self.sprint_ids = self.command_line_options.sprintIds.split(',')
 
         # Validate that at least one sprint/cycle selection option was provided
-        if not limit_val and not self.sprint_ids:
+        if not limit_raw and not self.sprint_ids:
             parser.error('Must provide one of: -l (limit), -s (sprintIds), or -p (prompt)')
 
         if self.weeks:
