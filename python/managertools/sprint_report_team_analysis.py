@@ -73,7 +73,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         if not self.command_line_options.outputCSV.endswith('.csv'):
             raise RuntimeError("Output filename must end in .csv")
 
-    def aggregate_data(self, team_name: Optional[str], board_id: Optional[str], mode: Mode, sprint_ids: List[str], cycles: Optional[int]):
+    def aggregate_data(self, team_name: Optional[str], board_id: Optional[str], mode: Mode, sprint_ids: List[str], cycles: Optional[int], kanban_start_date: Optional[str] = None):
         self.max_file_change_size = self.command_line_helper.get_config_file_manager().get_value("maxFileChangeSize")
         self.max_commit_size = self.command_line_helper.get_config_file_manager().get_value("maxCommitSize")
         self.ignore_filenames = self.command_line_helper.get_config_file_manager().get_value("ignoreFilenames") or set()
@@ -149,8 +149,14 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 try:
                     # Calculate cycle dates for tracking incomplete cycles
                     from datetime import datetime
-                    start_date_calc = datetime.now() - timedelta(weeks=(cycles - cycle + 1) * cycle_length)
-                    start_date_calc = start_date_calc.replace(hour=0, minute=0, second=0, microsecond=0)
+                    if kanban_start_date:
+                        start_date_calc = datetime.fromisoformat(kanban_start_date)
+                        start_date_calc = start_date_calc.replace(hour=0, minute=0, second=0, microsecond=0)
+                        # Move forward to the start of this cycle
+                        start_date_calc += timedelta(weeks=(cycle - 1) * cycle_length)
+                    else:
+                        start_date_calc = datetime.now() - timedelta(weeks=(cycles - cycle + 1) * cycle_length)
+                        start_date_calc = start_date_calc.replace(hour=0, minute=0, second=0, microsecond=0)
                     days_since_monday = start_date_calc.weekday()
                     if days_since_monday != 0:
                         start_date_calc -= timedelta(days=days_since_monday)
@@ -159,7 +165,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     clean_end_date = self.clean_date(end_date_calc.strftime("%d/%b/%y 11:59 PM"))
                     cycle_name = f"{team_name} Cycle {cycle}"
 
-                    self.process_kanban_cycle(thread_count, team_name, cycle, cycles, cycle_length, mode)
+                    self.process_kanban_cycle(thread_count, team_name, cycle, cycles, cycle_length, mode, kanban_start_date)
 
                     # Track incomplete cycles
                     cycle_end_datetime = end_date_calc.replace(tzinfo=timezone.utc)
@@ -180,11 +186,17 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             print("Re-run the same command to retry fetching the missing issues.", file=sys.stderr)
             print("Only the previously-failed issues will be re-fetched.", file=sys.stderr)
 
-    def process_kanban_cycle(self, thread_count: int, team_name: str, cycle: int, cycles: int, cycle_length: int, mode: Mode):
+    def process_kanban_cycle(self, thread_count: int, team_name: str, cycle: int, cycles: int, cycle_length: int, mode: Mode, kanban_start_date: Optional[str] = None):
         # Calculate cycle dates
         from datetime import datetime
-        start_date = datetime.now() - timedelta(weeks=(cycles - cycle + 1) * cycle_length)
-        start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        if kanban_start_date:
+            start_date = datetime.fromisoformat(kanban_start_date)
+            start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            # Move forward to the start of this cycle
+            start_date += timedelta(weeks=(cycle - 1) * cycle_length)
+        else:
+            start_date = datetime.now() - timedelta(weeks=(cycles - cycle + 1) * cycle_length)
+            start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
         # Move to Monday
         days_since_monday = start_date.weekday()
         if days_since_monday != 0:

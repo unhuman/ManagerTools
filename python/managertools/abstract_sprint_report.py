@@ -48,9 +48,10 @@ class AbstractSprintReport(ABC):
         self.team_name = None
         self.sprint_ids = []
         self.weeks = None
+        self.kanban_start_date = None
 
     @abstractmethod
-    def aggregate_data(self, team_name: Optional[str], board_id: Optional[str], mode: Mode, sprint_ids: List[str], weeks: Optional[int]):
+    def aggregate_data(self, team_name: Optional[str], board_id: Optional[str], mode: Mode, sprint_ids: List[str], weeks: Optional[int], kanban_start_date: Optional[str] = None):
         pass
 
     @abstractmethod
@@ -86,7 +87,7 @@ class AbstractSprintReport(ABC):
         import time
         start_time = time.time()
 
-        self.aggregate_data(self.team_name, self.board_id, self.mode, self.sprint_ids, self.weeks)
+        self.aggregate_data(self.team_name, self.board_id, self.mode, self.sprint_ids, self.weeks, self.kanban_start_date)
         self.generate_output()
 
         elapsed_seconds = int(time.time() - start_time)
@@ -160,11 +161,16 @@ class AbstractSprintReport(ABC):
                     self.sprint_ids = [str(s.get('id')) for s in sprint_data]
                 except RESTException as re:
                     if re.status_code == 400:
-                        raise RuntimeError(
-                            f"Date-based limits ('{limit_str}') are not supported for Kanban boards. "
-                            "Use a number of cycles instead."
-                        )
-                    raise
+                        # Kanban board: convert date range to cycle count
+                        import math
+                        from datetime import datetime, timezone
+                        effective_end = end_date or datetime.now(timezone.utc)
+                        cycle_length = getattr(self.command_line_options, 'kanbanCycleLength', 2)
+                        total_weeks = (effective_end - start_date).days / 7
+                        self.weeks = max(1, math.ceil(total_weeks / cycle_length))
+                        self.kanban_start_date = start_date.isoformat()
+                    else:
+                        raise
         elif self.command_line_options.sprintIds:
             self.sprint_ids = self.command_line_options.sprintIds.split(',')
 
