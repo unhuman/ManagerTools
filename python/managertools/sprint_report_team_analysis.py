@@ -154,12 +154,16 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                         start_date_calc = start_date_calc.replace(hour=0, minute=0, second=0, microsecond=0)
                         # Move forward to the start of this cycle
                         start_date_calc += timedelta(weeks=(cycle - 1) * cycle_length)
+                        # If not Monday, move forward to next Monday to align cycle boundaries
+                        days_since_monday = start_date_calc.weekday()
+                        if days_since_monday != 0:
+                            start_date_calc += timedelta(days=7 - days_since_monday)
                     else:
                         start_date_calc = datetime.now() - timedelta(weeks=(cycles - cycle + 1) * cycle_length)
                         start_date_calc = start_date_calc.replace(hour=0, minute=0, second=0, microsecond=0)
-                    days_since_monday = start_date_calc.weekday()
-                    if days_since_monday != 0:
-                        start_date_calc -= timedelta(days=days_since_monday)
+                        days_since_monday = start_date_calc.weekday()
+                        if days_since_monday != 0:
+                            start_date_calc -= timedelta(days=days_since_monday)
                     end_date_calc = start_date_calc + timedelta(days=7 * cycle_length - 1, hours=23, minutes=59, seconds=59)
                     clean_start_date = self.clean_date(start_date_calc.strftime("%d/%b/%y 12:00 AM"))
                     clean_end_date = self.clean_date(end_date_calc.strftime("%d/%b/%y 11:59 PM"))
@@ -194,13 +198,17 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
             # Move forward to the start of this cycle
             start_date += timedelta(weeks=(cycle - 1) * cycle_length)
+            # If not Monday, move forward to next Monday to align cycle boundaries
+            days_since_monday = start_date.weekday()
+            if days_since_monday != 0:
+                start_date += timedelta(days=7 - days_since_monday)
         else:
             start_date = datetime.now() - timedelta(weeks=(cycles - cycle + 1) * cycle_length)
             start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
-        # Move to Monday
-        days_since_monday = start_date.weekday()
-        if days_since_monday != 0:
-            start_date -= timedelta(days=days_since_monday)
+            # Move to Monday
+            days_since_monday = start_date.weekday()
+            if days_since_monday != 0:
+                start_date -= timedelta(days=days_since_monday)
 
         end_date = start_date + timedelta(days=7 * cycle_length - 1, hours=23, minutes=59, seconds=59)
 
