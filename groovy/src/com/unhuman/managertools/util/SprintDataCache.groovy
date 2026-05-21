@@ -11,6 +11,20 @@ class SprintDataCache {
         return (s ?: '').toLowerCase().replaceAll('[^a-z0-9]', '')
     }
 
+    private static boolean isVersionCompatible(String fileVersion) {
+        try {
+            List<String> fileParts = fileVersion.tokenize('.')
+            List<String> ownParts = CACHE_VERSION.tokenize('.')
+            int fileMajor = fileParts[0].toInteger()
+            int fileMinor = fileParts[1].toInteger()
+            int ownMajor = ownParts[0].toInteger()
+            int ownMinor = ownParts[1].toInteger()
+            return fileMajor == ownMajor && fileMinor >= ownMinor
+        } catch (Exception e) {
+            return false
+        }
+    }
+
     /**
      * Generate a human-readable cache key based on sprint parameters.
      * Non-alphanumeric characters (including date separators) are stripped so
@@ -54,7 +68,7 @@ class SprintDataCache {
         // Check if the cache version matches
         try {
             def cachedData = new JsonSlurper().parse(cacheFile)
-            return cachedData.version == CACHE_VERSION
+            return isVersionCompatible(cachedData.version)
         } catch (Exception e) {
             System.err.println("Error reading cache file ${filePath}: ${e.message}")
             return false
@@ -73,8 +87,8 @@ class SprintDataCache {
         File cacheFile = new File(filePath)
         def cachedData = new JsonSlurper().parse(cacheFile)
 
-        if (cachedData.version != CACHE_VERSION) {
-            throw new RuntimeException("Cache version mismatch. Expected ${CACHE_VERSION}, found ${cachedData.version}")
+        if (!isVersionCompatible(cachedData.version)) {
+            throw new RuntimeException("Cache version mismatch. Expected ${CACHE_VERSION} or newer, found ${cachedData.version}")
         }
 
         return cachedData.data as Map

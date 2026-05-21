@@ -14,6 +14,15 @@ class SprintDataCache:
         return re.sub(r'[^a-z0-9]', '', (s or '').lower())
 
     @staticmethod
+    def _is_version_compatible(file_version: str) -> bool:
+        try:
+            file_major, file_minor = map(int, file_version.split('.'))
+            own_major, own_minor = map(int, SprintDataCache.CACHE_VERSION.split('.'))
+            return file_major == own_major and file_minor >= own_minor
+        except (ValueError, AttributeError, IndexError):
+            return False
+
+    @staticmethod
     def generate_cache_key(team_name: str, sprint_name: str, start_date: str, end_date: str) -> str:
         prefix = [p for p in [SprintDataCache._sanitize(team_name), SprintDataCache._sanitize(sprint_name)] if p]
         date_range = f"{SprintDataCache._sanitize(start_date)}-{SprintDataCache._sanitize(end_date)}"
@@ -38,7 +47,7 @@ class SprintDataCache:
         try:
             with open(file_path, 'r') as f:
                 cached_data = json.load(f)
-            return cached_data.get("version") == SprintDataCache.CACHE_VERSION
+            return SprintDataCache._is_version_compatible(cached_data.get("version", ""))
         except Exception as e:
             print(f"Error reading cache file {file_path}: {e}", file=__import__('sys').stderr)
             return False
@@ -54,7 +63,7 @@ class SprintDataCache:
         try:
             with open(file_path, 'r') as f:
                 cached_data = json.load(f)
-            if cached_data.get("version") != SprintDataCache.CACHE_VERSION:
+            if not SprintDataCache._is_version_compatible(cached_data.get("version", "")):
                 return True
             return cached_data.get("complete", True)
         except Exception as e:
@@ -71,8 +80,8 @@ class SprintDataCache:
         with open(file_path, 'r') as f:
             cached_data = json.load(f)
 
-        if cached_data.get("version") != SprintDataCache.CACHE_VERSION:
-            raise RuntimeError(f"Cache version mismatch. Expected {SprintDataCache.CACHE_VERSION}, found {cached_data.get('version')}")
+        if not SprintDataCache._is_version_compatible(cached_data.get("version", "")):
+            raise RuntimeError(f"Cache version mismatch. Expected {SprintDataCache.CACHE_VERSION} or newer, found {cached_data.get('version')}")
 
         return cached_data.get("data", {}), cached_data.get("failed_issues", [])
 
