@@ -132,7 +132,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     self.process_potentially_cached_sprint_data(thread_count, team_name, data.get('sprint', {}), mode, all_issues, is_completed)
 
                     # Track incomplete sprints
-                    if is_completed and not SprintDataCache.is_cache_complete(team_name, sprint_name, start_date, end_date, self.max_commit_size):
+                    if is_completed and not SprintDataCache.is_cache_complete(team_name, sprint_name, start_date, end_date):
                         self.incomplete_sprints.append(sprint_name)
                 except Exception as e:
                     print(f"Error processing sprint {sprint_id}: {e}", file=sys.stderr)
@@ -179,7 +179,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     # Track incomplete cycles
                     cycle_end_datetime = end_date_calc.replace(tzinfo=timezone.utc)
                     is_cycle_complete = cycle_end_datetime.timestamp() * 1000 < datetime.now(timezone.utc).timestamp() * 1000
-                    if is_cycle_complete and not SprintDataCache.is_cache_complete(team_name, "", clean_start_date, clean_end_date, self.max_commit_size):
+                    if is_cycle_complete and not SprintDataCache.is_cache_complete(team_name, "", clean_start_date, clean_end_date):
                         self.incomplete_sprints.append(cycle_name)
                 except Exception as e:
                     print(f"Error processing Kanban cycle {cycle}: {e}", file=sys.stderr)
@@ -231,18 +231,18 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         print(f"   Cycle dates: {clean_start_date} - {clean_end_date}, complete: {is_cycle_complete}")
 
         # Check cache — key on team+dates only (cycle number is display-only and shifts over time)
-        if is_cycle_complete and SprintDataCache.has_cached_data(team_name, "", clean_start_date, clean_end_date, self.max_commit_size):
-            if SprintDataCache.is_cache_complete(team_name, "", clean_start_date, clean_end_date, self.max_commit_size):
+        if is_cycle_complete and SprintDataCache.has_cached_data(team_name, "", clean_start_date, clean_end_date):
+            if SprintDataCache.is_cache_complete(team_name, "", clean_start_date, clean_end_date):
                 # Complete cache: fast path, no network calls needed
                 print(f"   [DEBUG] Found complete cached data for cycle {cycle}, loading from cache...")
-                cached_data, _ = SprintDataCache.load_cached_data(team_name, "", clean_start_date, clean_end_date, self.max_commit_size)
+                cached_data, _ = SprintDataCache.load_cached_data(team_name, "", clean_start_date, clean_end_date)
                 self.load_cached_data_into_database(cached_data)
                 print(f"   [DEBUG] Successfully loaded cycle {cycle} from cache")
                 return
             else:
                 # Incomplete cache: load partial data and retry only failed issues
                 print(f"   [DEBUG] Found incomplete cached data for cycle {cycle}, loading and retrying failed issues...")
-                cached_data, prev_failed = SprintDataCache.load_cached_data(team_name, "", clean_start_date, clean_end_date, self.max_commit_size)
+                cached_data, prev_failed = SprintDataCache.load_cached_data(team_name, "", clean_start_date, clean_end_date)
                 self.load_cached_data_into_database(cached_data)
 
                 # Fetch all issues to filter for retries
@@ -284,7 +284,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     print(f"   [DEBUG] Extracting updated data for cycle {cycle}...")
                     data_to_cache = self.extract_database_data_for_cache(cycle_name)
                     print(f"   [DEBUG] Saving updated cache for cycle {cycle}...")
-                    SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, is_complete, new_failed, self.max_commit_size)
+                    SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, is_complete, new_failed)
                     print(f"   [DEBUG] Cycle {cycle} cache updated")
                 else:
                     print(f"   [DEBUG] No issues to retry in cycle {cycle}, cache remains incomplete")
@@ -329,7 +329,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         if is_cycle_complete:
             print(f"   [DEBUG] Saving cycle {cycle} to cache...")
             data_to_cache = self.extract_database_data_for_cache(cycle_name)
-            SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, is_complete, failed_issues, self.max_commit_size)
+            SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, is_complete, failed_issues)
             print(f"   [DEBUG] Cycle {cycle} saved to cache")
 
     def process_potentially_cached_sprint_data(self, thread_count: int, team_name: str, sprint: Dict[str, Any], mode: Mode, all_issues: List[Any], use_cache: bool):
@@ -379,7 +379,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 print("   [DEBUG] Extracting data for cache...")
                 data_to_cache = self.extract_database_data_for_cache(sprint_name)
                 print("   [DEBUG] Saving to cache...")
-                SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, is_complete, failed_issues, self.max_commit_size)
+                SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, is_complete, failed_issues)
                 print("   [DEBUG] Cache saved successfully")
 
         print(f"   [DEBUG] Completed processing sprint: {sprint_name}")
