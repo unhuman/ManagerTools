@@ -61,7 +61,6 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         self.ignore_filenames = set()
         self.incomplete_sprints = []
         self._counted_pr_activities = set()
-        self._filtered_pr_ids = set()
 
     def add_custom_command_line_options(self, parser):
         parser.add_argument('-i', '--isolateTicket', help='Isolate ticket for processing (debugging)')
@@ -91,7 +90,6 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         self.database = FlexiDB(self.generate_db_signature(), True)
         self.incomplete_sprints = []
         self._counted_pr_activities = set()
-        self._filtered_pr_ids = set()
 
         # Determine thread count
         if self.command_line_options.multithread:
@@ -463,13 +461,19 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         filename = self.command_line_options.outputCSV.replace('.csv', f'-{data_indicator}.csv')
         self.write_results_file(filename, '\n'.join(sb))
 
-    def _should_filter_row_by_pr_id(self, row: FlexiDBRow) -> bool:
-        if not self._filtered_pr_ids:
+    def _should_filter_row_by_pr_title(self, row: FlexiDBRow) -> bool:
+        if not self.ignore_pr_title_patterns:
             return False
-        pr_id = row.get(DBIndexData.PR_ID.name, '')
-        if not pr_id:
+        pr_title = row.get(DBData.PR_TITLE_FOR_FILTER.name, '')
+        if not pr_title:
             return False
-        return pr_id in self._filtered_pr_ids
+        for pattern in self.ignore_pr_title_patterns:
+            try:
+                if re.search(pattern, str(pr_title)):
+                    return True
+            except re.error:
+                print(f"Invalid regex pattern in ignorePRTitleContent: {pattern}", file=sys.stderr)
+        return False
 
     def _should_filter_row_by_commit_message(self, row: FlexiDBRow) -> bool:
         if not self.ignore_commit_message_patterns:
@@ -534,7 +538,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 continue
 
             # Filter out rows by PR title patterns (entire PR is excluded)
-            if self._should_filter_row_by_pr_id(row):
+            if self._should_filter_row_by_pr_title(row):
                 continue
 
             # Filter out rows by commit message patterns
@@ -745,13 +749,17 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 print(f"Skipping processing of PR {ticket} / {pr_id} due to unknown author: {pull_request.get('author')}", file=sys.stderr)
                 return
 
-        # Check if PR title matches ignore patterns
+        # Store PR title in database for filtering
         pr_title = pull_request.get('title', '')
+        if pr_title:
+            title_index = self.create_index_lookup(sprint_name, ticket, pr_id, pr_author, pr_status)
+            self.database.set_value(title_index, DBData.PR_TITLE_FOR_FILTER.name, pr_title)
+
+        # Check if PR title matches ignore patterns
         if self.ignore_pr_title_patterns and pr_title:
             for pattern in self.ignore_pr_title_patterns:
                 try:
                     if re.search(pattern, pr_title):
-                        self._filtered_pr_ids.add(pr_id)
                         print(f"      [DEBUG] PR {ticket}/{pr_id}: Filtered by PR title pattern (title: {pr_title})")
                         return
                 except re.error:

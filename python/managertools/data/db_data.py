@@ -10,6 +10,7 @@ class DBData(Enum):
     OTHERS_COMMENTS = (None, [], 4)
     COMMIT_MESSAGES = (None, [], 5)
     PR_TITLE = (None, None, 6)
+    PR_TITLE_FOR_FILTER = (None, None, 7)
 
     def __init__(self, jira_field: Optional[str], default_value: Any, _unique_id: int):
         self.jira_field = jira_field
