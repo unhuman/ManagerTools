@@ -495,6 +495,13 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             author = row.get(DBData.AUTHOR.name)
             pr_status = row.get(DBIndexData.PR_STATUS.name)
 
+            # Filter out rows where commit size exceeds maxCommitSize threshold
+            commit_added = row.get(UserActivity.COMMIT_ADDED.name, 0) or 0
+            commit_removed = row.get(UserActivity.COMMIT_REMOVED.name, 0) or 0
+            total_commit_size = commit_added + commit_removed
+            if self.max_commit_size and total_commit_size >= self.max_commit_size:
+                continue
+
             output_row = FlexiDBRow(row)
 
             if not (row_user and author and row_user.casefold() == author.casefold()):
