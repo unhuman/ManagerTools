@@ -755,7 +755,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 commit_sha = commit.get('id', '')
                 commit_timestamp = commit.get('committerTimestamp', 0)
 
-                if sprint_start_ms > commit_timestamp or commit_timestamp >= sprint_end_ms:
+                if mode != Mode.KANBAN and (sprint_start_ms > commit_timestamp or commit_timestamp >= sprint_end_ms):
                     continue
 
                 if not self.command_line_options.includeMergeCommits and re.match(self.MERGE_COMMIT_REGEX, commit.get('message', '')):
