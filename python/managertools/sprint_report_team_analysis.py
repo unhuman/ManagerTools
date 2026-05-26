@@ -51,6 +51,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
     SAME_USER_OUTPUT_RULES = [ConvertSelfMetricsEmptyToZeroOutputFilter()]
 
     MERGE_COMMIT_REGEX = r"(?i)(?:^|.*[ :])\s*(down)?merge.*"
+    DEFAULT_MAX_COMMIT_SIZE = 2_000  # lines added + removed
 
     def __init__(self, args: List[str]):
         super().__init__(args)
@@ -75,7 +76,13 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
     def aggregate_data(self, team_name: Optional[str], board_id: Optional[str], mode: Mode, sprint_ids: List[str], cycles: Optional[int], kanban_start_date: Optional[str] = None):
         self.max_file_change_size = self.command_line_helper.get_config_file_manager().get_value("maxFileChangeSize")
-        self.max_commit_size = self.command_line_helper.get_config_file_manager().get_value("maxCommitSize")
+        self.max_commit_size = (
+            self.command_line_helper.get_config_file_manager().get_value("maxCommitSize")
+            or self.DEFAULT_MAX_COMMIT_SIZE
+        )
+        # CLI flag takes precedence over config file / default
+        if self.command_line_options.maxCommitSize is not None:
+            self.max_commit_size = self.command_line_options.maxCommitSize
         self.ignore_filenames = self.command_line_helper.get_config_file_manager().get_value("ignoreFilenames") or set()
 
         self.database = FlexiDB(self.generate_db_signature(), True)
@@ -127,7 +134,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     self.process_potentially_cached_sprint_data(thread_count, team_name, data.get('sprint', {}), mode, all_issues, is_completed)
 
                     # Track incomplete sprints
-                    if is_completed and not SprintDataCache.is_cache_complete(team_name, sprint_name, start_date, end_date):
+                    if is_completed and not SprintDataCache.is_cache_complete(team_name, sprint_name, start_date, end_date, self.max_commit_size):
                         self.incomplete_sprints.append(sprint_name)
                 except Exception as e:
                     print(f"Error processing sprint {sprint_id}: {e}", file=sys.stderr)
@@ -174,7 +181,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     # Track incomplete cycles
                     cycle_end_datetime = end_date_calc.replace(tzinfo=timezone.utc)
                     is_cycle_complete = cycle_end_datetime.timestamp() * 1000 < datetime.now(timezone.utc).timestamp() * 1000
-                    if is_cycle_complete and not SprintDataCache.is_cache_complete(team_name, "", clean_start_date, clean_end_date):
+                    if is_cycle_complete and not SprintDataCache.is_cache_complete(team_name, "", clean_start_date, clean_end_date, self.max_commit_size):
                         self.incomplete_sprints.append(cycle_name)
                 except Exception as e:
                     print(f"Error processing Kanban cycle {cycle}: {e}", file=sys.stderr)
@@ -226,18 +233,18 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         print(f"   Cycle dates: {clean_start_date} - {clean_end_date}, complete: {is_cycle_complete}")
 
         # Check cache — key on team+dates only (cycle number is display-only and shifts over time)
-        if is_cycle_complete and SprintDataCache.has_cached_data(team_name, "", clean_start_date, clean_end_date):
-            if SprintDataCache.is_cache_complete(team_name, "", clean_start_date, clean_end_date):
+        if is_cycle_complete and SprintDataCache.has_cached_data(team_name, "", clean_start_date, clean_end_date, self.max_commit_size):
+            if SprintDataCache.is_cache_complete(team_name, "", clean_start_date, clean_end_date, self.max_commit_size):
                 # Complete cache: fast path, no network calls needed
                 print(f"   [DEBUG] Found complete cached data for cycle {cycle}, loading from cache...")
-                cached_data, _ = SprintDataCache.load_cached_data(team_name, "", clean_start_date, clean_end_date)
+                cached_data, _ = SprintDataCache.load_cached_data(team_name, "", clean_start_date, clean_end_date, self.max_commit_size)
                 self.load_cached_data_into_database(cached_data)
                 print(f"   [DEBUG] Successfully loaded cycle {cycle} from cache")
                 return
             else:
                 # Incomplete cache: load partial data and retry only failed issues
                 print(f"   [DEBUG] Found incomplete cached data for cycle {cycle}, loading and retrying failed issues...")
-                cached_data, prev_failed = SprintDataCache.load_cached_data(team_name, "", clean_start_date, clean_end_date)
+                cached_data, prev_failed = SprintDataCache.load_cached_data(team_name, "", clean_start_date, clean_end_date, self.max_commit_size)
                 self.load_cached_data_into_database(cached_data)
 
                 # Fetch all issues to filter for retries
@@ -279,7 +286,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     print(f"   [DEBUG] Extracting updated data for cycle {cycle}...")
                     data_to_cache = self.extract_database_data_for_cache(cycle_name)
                     print(f"   [DEBUG] Saving updated cache for cycle {cycle}...")
-                    SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, is_complete, new_failed)
+                    SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, is_complete, new_failed, self.max_commit_size)
                     print(f"   [DEBUG] Cycle {cycle} cache updated")
                 else:
                     print(f"   [DEBUG] No issues to retry in cycle {cycle}, cache remains incomplete")
@@ -324,7 +331,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         if is_cycle_complete:
             print(f"   [DEBUG] Saving cycle {cycle} to cache...")
             data_to_cache = self.extract_database_data_for_cache(cycle_name)
-            SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, is_complete, failed_issues)
+            SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, is_complete, failed_issues, self.max_commit_size)
             print(f"   [DEBUG] Cycle {cycle} saved to cache")
 
     def process_potentially_cached_sprint_data(self, thread_count: int, team_name: str, sprint: Dict[str, Any], mode: Mode, all_issues: List[Any], use_cache: bool):
@@ -334,18 +341,18 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
         print(f"   [DEBUG] Processing sprint: {sprint_name}, useCache: {use_cache}")
 
-        if use_cache and SprintDataCache.has_cached_data(team_name, sprint_name, start_date, end_date):
-            if SprintDataCache.is_cache_complete(team_name, sprint_name, start_date, end_date):
+        if use_cache and SprintDataCache.has_cached_data(team_name, sprint_name, start_date, end_date, self.max_commit_size):
+            if SprintDataCache.is_cache_complete(team_name, sprint_name, start_date, end_date, self.max_commit_size):
                 # Complete cache: fast path, no network calls needed
                 print("   [DEBUG] Loading from complete cache...")
-                cached_data, _ = SprintDataCache.load_cached_data(team_name, sprint_name, start_date, end_date)
+                cached_data, _ = SprintDataCache.load_cached_data(team_name, sprint_name, start_date, end_date, self.max_commit_size)
                 print("   [DEBUG] Cache loaded, loading into database...")
                 self.load_cached_data_into_database(cached_data)
                 print("   [DEBUG] Cache data loaded into database successfully")
             else:
                 # Incomplete cache: load partial data and retry only failed issues
                 print("   [DEBUG] Loading from incomplete cache...")
-                cached_data, prev_failed = SprintDataCache.load_cached_data(team_name, sprint_name, start_date, end_date)
+                cached_data, prev_failed = SprintDataCache.load_cached_data(team_name, sprint_name, start_date, end_date, self.max_commit_size)
                 print("   [DEBUG] Cache loaded, loading partial data into database...")
                 self.load_cached_data_into_database(cached_data)
 
@@ -359,7 +366,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     print("   [DEBUG] Extracting updated data for cache...")
                     data_to_cache = self.extract_database_data_for_cache(sprint_name)
                     print("   [DEBUG] Saving updated cache...")
-                    SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, is_complete, new_failed)
+                    SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, is_complete, new_failed, self.max_commit_size)
                     print("   [DEBUG] Cache updated successfully")
                 else:
                     print("   [DEBUG] No issues to retry, cache remains incomplete")
@@ -374,7 +381,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 print("   [DEBUG] Extracting data for cache...")
                 data_to_cache = self.extract_database_data_for_cache(sprint_name)
                 print("   [DEBUG] Saving to cache...")
-                SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, is_complete, failed_issues)
+                SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, is_complete, failed_issues, self.max_commit_size)
                 print("   [DEBUG] Cache saved successfully")
 
         print(f"   [DEBUG] Completed processing sprint: {sprint_name}")
@@ -819,7 +826,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
         if additions is not None or deletions is not None:
             total = (additions or 0) + (deletions or 0)
-            if self.command_line_options.maxCommitSize and total >= self.command_line_options.maxCommitSize:
+            if self.max_commit_size and total >= self.max_commit_size:
                 return
 
             self.increment_counter(index_lookup, UserActivity[prefix + "ADDED"], additions or 0)
@@ -842,7 +849,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                         removed_calculated += len(segment.get('lines', []))
 
         total = added_calculated + removed_calculated
-        if self.command_line_options.maxCommitSize and total >= self.command_line_options.maxCommitSize:
+        if self.max_commit_size and total >= self.max_commit_size:
             return
 
         self.increment_counter(index_lookup, UserActivity[prefix + "ADDED"], added_calculated)
