@@ -44,7 +44,7 @@ bd close <id>         # Complete work
    ```
 
 **RULES:**
-- Do NOT automatically push commits - let the user decide when to push
+- **Do NOT push commits** — Stage and commit only. The developer decides when to push.
 - Always commit code changes so they're not lost
 - Provide clear commit messages
 - Clean up stashes and branches as needed
