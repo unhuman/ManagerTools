@@ -23,10 +23,10 @@ class SprintDataCache:
             return False
 
     @staticmethod
-    def generate_cache_key(team_name: str, sprint_name: str, start_date: str, end_date: str, max_commit_size: int = 2000) -> str:
+    def generate_cache_key(team_name: str, sprint_name: str, start_date: str, end_date: str) -> str:
         prefix = [p for p in [SprintDataCache._sanitize(team_name), SprintDataCache._sanitize(sprint_name)] if p]
         date_range = f"{SprintDataCache._sanitize(start_date)}-{SprintDataCache._sanitize(end_date)}"
-        return '_'.join(prefix + [date_range, f"max{max_commit_size}"])
+        return '_'.join(prefix + [date_range])
 
     @staticmethod
     def get_cache_file_path(cache_key: str) -> str:
@@ -37,8 +37,8 @@ class SprintDataCache:
         Path(SprintDataCache.CACHE_DIR).mkdir(exist_ok=True)
 
     @staticmethod
-    def has_cached_data(team_name: str, sprint_name: str, start_date: str, end_date: str, max_commit_size: int = 2000) -> bool:
-        cache_key = SprintDataCache.generate_cache_key(team_name, sprint_name, start_date, end_date, max_commit_size)
+    def has_cached_data(team_name: str, sprint_name: str, start_date: str, end_date: str) -> bool:
+        cache_key = SprintDataCache.generate_cache_key(team_name, sprint_name, start_date, end_date)
         file_path = SprintDataCache.get_cache_file_path(cache_key)
 
         if not os.path.exists(file_path):
@@ -57,8 +57,8 @@ class SprintDataCache:
             return False
 
     @staticmethod
-    def is_cache_complete(team_name: str, sprint_name: str, start_date: str, end_date: str, max_commit_size: int = 2000) -> bool:
-        cache_key = SprintDataCache.generate_cache_key(team_name, sprint_name, start_date, end_date, max_commit_size)
+    def is_cache_complete(team_name: str, sprint_name: str, start_date: str, end_date: str) -> bool:
+        cache_key = SprintDataCache.generate_cache_key(team_name, sprint_name, start_date, end_date)
         file_path = SprintDataCache.get_cache_file_path(cache_key)
 
         if not os.path.exists(file_path):
@@ -75,8 +75,8 @@ class SprintDataCache:
             return True
 
     @staticmethod
-    def load_cached_data(team_name: str, sprint_name: str, start_date: str, end_date: str, max_commit_size: int = 2000) -> tuple[Dict[str, Any], list[str]]:
-        cache_key = SprintDataCache.generate_cache_key(team_name, sprint_name, start_date, end_date, max_commit_size)
+    def load_cached_data(team_name: str, sprint_name: str, start_date: str, end_date: str) -> tuple[Dict[str, Any], list[str]]:
+        cache_key = SprintDataCache.generate_cache_key(team_name, sprint_name, start_date, end_date)
         file_path = SprintDataCache.get_cache_file_path(cache_key)
 
         print(f"Loading cached data from: {file_path}")
@@ -90,13 +90,13 @@ class SprintDataCache:
         return cached_data.get("data", {}), cached_data.get("failed_issues", [])
 
     @staticmethod
-    def save_to_cache(team_name: str, sprint_name: str, start_date: str, end_date: str, data: Dict[str, Any], is_complete: bool = True, failed_issues: Optional[list] = None, max_commit_size: int = 2000) -> None:
+    def save_to_cache(team_name: str, sprint_name: str, start_date: str, end_date: str, data: Dict[str, Any], is_complete: bool = True, failed_issues: Optional[list] = None) -> None:
         if failed_issues is None:
             failed_issues = []
 
         SprintDataCache.ensure_cache_directory_exists()
 
-        cache_key = SprintDataCache.generate_cache_key(team_name, sprint_name, start_date, end_date, max_commit_size)
+        cache_key = SprintDataCache.generate_cache_key(team_name, sprint_name, start_date, end_date)
         file_path = SprintDataCache.get_cache_file_path(cache_key)
 
         import time
@@ -108,7 +108,6 @@ class SprintDataCache:
             "sprintName": sprint_name,
             "startDate": start_date,
             "endDate": end_date,
-            "maxCommitSize": max_commit_size,
             "timestamp": int(time.time() * 1000),
             "data": data
         }

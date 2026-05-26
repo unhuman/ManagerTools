@@ -339,18 +339,18 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
         print(f"   [DEBUG] Processing sprint: {sprint_name}, useCache: {use_cache}")
 
-        if use_cache and SprintDataCache.has_cached_data(team_name, sprint_name, start_date, end_date, self.max_commit_size):
-            if SprintDataCache.is_cache_complete(team_name, sprint_name, start_date, end_date, self.max_commit_size):
+        if use_cache and SprintDataCache.has_cached_data(team_name, sprint_name, start_date, end_date):
+            if SprintDataCache.is_cache_complete(team_name, sprint_name, start_date, end_date):
                 # Complete cache: fast path, no network calls needed
                 print("   [DEBUG] Loading from complete cache...")
-                cached_data, _ = SprintDataCache.load_cached_data(team_name, sprint_name, start_date, end_date, self.max_commit_size)
+                cached_data, _ = SprintDataCache.load_cached_data(team_name, sprint_name, start_date, end_date)
                 print("   [DEBUG] Cache loaded, loading into database...")
                 self.load_cached_data_into_database(cached_data)
                 print("   [DEBUG] Cache data loaded into database successfully")
             else:
                 # Incomplete cache: load partial data and retry only failed issues
                 print("   [DEBUG] Loading from incomplete cache...")
-                cached_data, prev_failed = SprintDataCache.load_cached_data(team_name, sprint_name, start_date, end_date, self.max_commit_size)
+                cached_data, prev_failed = SprintDataCache.load_cached_data(team_name, sprint_name, start_date, end_date)
                 print("   [DEBUG] Cache loaded, loading partial data into database...")
                 self.load_cached_data_into_database(cached_data)
 
@@ -364,7 +364,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     print("   [DEBUG] Extracting updated data for cache...")
                     data_to_cache = self.extract_database_data_for_cache(sprint_name)
                     print("   [DEBUG] Saving updated cache...")
-                    SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, is_complete, new_failed, self.max_commit_size)
+                    SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, is_complete, new_failed)
                     print("   [DEBUG] Cache updated successfully")
                 else:
                     print("   [DEBUG] No issues to retry, cache remains incomplete")
