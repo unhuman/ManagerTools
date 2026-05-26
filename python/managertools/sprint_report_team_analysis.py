@@ -475,21 +475,15 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 print(f"Invalid regex pattern in ignorePRTitleContent: {pattern}", file=sys.stderr)
         return False
 
-    def _should_filter_row_by_commit_message(self, row: FlexiDBRow) -> bool:
-        if not self.ignore_commit_message_patterns:
+    def _commit_message_matches_filter(self, message: str) -> bool:
+        if not self.ignore_commit_message_patterns or not message:
             return False
-        commit_messages = row.get(DBData.COMMIT_MESSAGES.name, [])
-        if not commit_messages:
-            return False
-        for message in commit_messages:
-            if not message:
-                continue
-            for pattern in self.ignore_commit_message_patterns:
-                try:
-                    if re.search(pattern, str(message)):
-                        return True
-                except re.error:
-                    print(f"Invalid regex pattern in ignoreCommitMessageContent: {pattern}", file=sys.stderr)
+        for pattern in self.ignore_commit_message_patterns:
+            try:
+                if re.search(pattern, message):
+                    return True
+            except re.error:
+                print(f"Invalid regex pattern in ignoreCommitMessageContent: {pattern}", file=sys.stderr)
         return False
 
     def find_rows_and_append_csv_data(self, rows_filter: List[FlexiDBQueryColumn], sb: list, overall_totals_row: FlexiDBRow):
@@ -539,10 +533,6 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
             # Filter out rows by PR title patterns (entire PR is excluded)
             if self._should_filter_row_by_pr_title(row):
-                continue
-
-            # Filter out rows by commit message patterns
-            if self._should_filter_row_by_commit_message(row):
                 continue
 
             output_row = FlexiDBRow(row)
@@ -840,13 +830,15 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 index_lookup = self.create_index_lookup(sprint_name, ticket, pr_id, user_name, pr_status)
                 self.populate_baseline_db_info(index_lookup, start_date, end_date, pr_author)
 
-                commit_url = commit.get('url') or pr_url
-                diffs_response = self._retry_rest_call(lambda: source_control_rest.get_commit_diffs(commit_url, commit_sha))
-
-                if diffs_response:
-                    self.process_diffs(self.COMMIT_PREFIX, diffs_response, index_lookup)
-
                 commit_message = re.sub(r'(\r|\n)?\n', '  ', commit.get('message', '').strip())
+                commit_filtered = self._commit_message_matches_filter(commit_message)
+
+                commit_url = commit.get('url') or pr_url
+                if not commit_filtered:
+                    diffs_response = self._retry_rest_call(lambda: source_control_rest.get_commit_diffs(commit_url, commit_sha))
+                    if diffs_response:
+                        self.process_diffs(self.COMMIT_PREFIX, diffs_response, index_lookup)
+
                 self.database.increment_field(index_lookup, UserActivity.COMMITS.name)
                 self.database.append(index_lookup, DBData.COMMIT_MESSAGES.name, commit_message, True)
 

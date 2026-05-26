@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 
 class SprintDataCache:
     CACHE_DIR = "cacheData"
-    CACHE_VERSION = "1.2"
+    CACHE_VERSION = "1.3"
 
     @staticmethod
     def _sanitize(s: str) -> str:
