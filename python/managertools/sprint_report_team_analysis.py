@@ -76,13 +76,11 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
     def aggregate_data(self, team_name: Optional[str], board_id: Optional[str], mode: Mode, sprint_ids: List[str], cycles: Optional[int], kanban_start_date: Optional[str] = None):
         self.max_file_change_size = self.command_line_helper.get_config_file_manager().get_value("maxFileChangeSize")
-        self.max_commit_size = (
-            self.command_line_helper.get_config_file_manager().get_value("maxCommitSize")
-            or self.DEFAULT_MAX_COMMIT_SIZE
-        )
+        config_value = self.command_line_helper.get_config_file_manager().get_value("maxCommitSize")
+        self.max_commit_size = int(config_value) if config_value else self.DEFAULT_MAX_COMMIT_SIZE
         # CLI flag takes precedence over config file / default
         if self.command_line_options.maxCommitSize is not None:
-            self.max_commit_size = self.command_line_options.maxCommitSize
+            self.max_commit_size = int(self.command_line_options.maxCommitSize)
         self.ignore_filenames = self.command_line_helper.get_config_file_manager().get_value("ignoreFilenames") or set()
 
         self.database = FlexiDB(self.generate_db_signature(), True)
