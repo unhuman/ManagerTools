@@ -61,6 +61,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         self.ignore_filenames = set()
         self.incomplete_sprints = []
         self._counted_pr_activities = set()
+        self._filtered_pr_ids = set()
 
     def add_custom_command_line_options(self, parser):
         parser.add_argument('-i', '--isolateTicket', help='Isolate ticket for processing (debugging)')
@@ -83,9 +84,14 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             self.max_commit_size = int(self.command_line_options.maxCommitSize)
         self.ignore_filenames = self.command_line_helper.get_config_file_manager().get_value("ignoreFilenames") or set()
 
+        # Load PR title and commit message filters
+        self.ignore_pr_title_patterns = self.command_line_helper.get_config_file_manager().get_value("ignorePRTitleContent") or []
+        self.ignore_commit_message_patterns = self.command_line_helper.get_config_file_manager().get_value("ignoreCommitMessageContent") or []
+
         self.database = FlexiDB(self.generate_db_signature(), True)
         self.incomplete_sprints = []
         self._counted_pr_activities = set()
+        self._filtered_pr_ids = set()
 
         # Determine thread count
         if self.command_line_options.multithread:
@@ -457,6 +463,31 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         filename = self.command_line_options.outputCSV.replace('.csv', f'-{data_indicator}.csv')
         self.write_results_file(filename, '\n'.join(sb))
 
+    def _should_filter_row_by_pr_id(self, row: FlexiDBRow) -> bool:
+        if not self._filtered_pr_ids:
+            return False
+        pr_id = row.get(DBIndexData.PR_ID.name, '')
+        if not pr_id:
+            return False
+        return pr_id in self._filtered_pr_ids
+
+    def _should_filter_row_by_commit_message(self, row: FlexiDBRow) -> bool:
+        if not self.ignore_commit_message_patterns:
+            return False
+        commit_messages = row.get(DBData.COMMIT_MESSAGES.name, [])
+        if not commit_messages:
+            return False
+        for message in commit_messages:
+            if not message:
+                continue
+            for pattern in self.ignore_commit_message_patterns:
+                try:
+                    if re.search(pattern, str(message)):
+                        return True
+                except re.error:
+                    print(f"Invalid regex pattern in ignoreCommitMessageContent: {pattern}", file=sys.stderr)
+        return False
+
     def find_rows_and_append_csv_data(self, rows_filter: List[FlexiDBQueryColumn], sb: list, overall_totals_row: FlexiDBRow):
         rows = self.database.find_rows(rows_filter, True)
 
@@ -500,6 +531,14 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             commit_removed = row.get(UserActivity.COMMIT_REMOVED.name, 0) or 0
             total_commit_size = commit_added + commit_removed
             if self.max_commit_size and total_commit_size >= self.max_commit_size:
+                continue
+
+            # Filter out rows by PR title patterns (entire PR is excluded)
+            if self._should_filter_row_by_pr_id(row):
+                continue
+
+            # Filter out rows by commit message patterns
+            if self._should_filter_row_by_commit_message(row):
                 continue
 
             output_row = FlexiDBRow(row)
@@ -705,6 +744,18 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             if pr_author is None:
                 print(f"Skipping processing of PR {ticket} / {pr_id} due to unknown author: {pull_request.get('author')}", file=sys.stderr)
                 return
+
+        # Check if PR title matches ignore patterns
+        pr_title = pull_request.get('title', '')
+        if self.ignore_pr_title_patterns and pr_title:
+            for pattern in self.ignore_pr_title_patterns:
+                try:
+                    if re.search(pattern, pr_title):
+                        self._filtered_pr_ids.add(pr_id)
+                        print(f"      [DEBUG] PR {ticket}/{pr_id}: Filtered by PR title pattern (title: {pr_title})")
+                        return
+                except re.error:
+                    print(f"Invalid regex pattern in ignorePRTitleContent: {pattern}", file=sys.stderr)
 
         # Increment OPENED if the PR was created within the sprint/cycle window
         pr_created_ms = self._retry_rest_call(lambda: source_control_rest.get_pr_created_ms(pr_url))

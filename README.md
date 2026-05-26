@@ -87,6 +87,60 @@ GitHub integration requires a Personal Access Token. To create one, go to Accoun
    groovy -Dgroovy.grape.report.downloads=true ../tests/com/unhuman/flexidb/FlexiDBTests.groovy
    ```
 
+### Configuration
+
+Configuration is stored in `~/.managerTools.cfg` as a JSON file. The following options are supported:
+
+#### Code Metrics Filtering
+
+- **`maxCommitSize`** — Exclude commits larger than this line threshold (additions + removals) from metrics. Defaults to 2000 if not specified. Helps filter out large auto-generated changes and downmerges.
+  ```json
+  "maxCommitSize": 2000
+  ```
+
+- **`maxFileChangeSize`** — Exclude individual file changes larger than this line threshold from metrics.
+  ```json
+  "maxFileChangeSize": 5000
+  ```
+
+#### Content-Based Filtering
+
+- **`ignoreFilenames`** — Array of glob patterns to exclude files from metrics. Useful for excluding generated code or configuration files.
+  ```json
+  "ignoreFilenames": ["*.generated.js", "**/dist/**"]
+  ```
+
+- **`ignorePRTitleContent`** — Array of regex patterns. If a PR title matches any pattern, the entire PR and all its commits are excluded from metrics.
+  ```json
+  "ignorePRTitleContent": ["(?i)automated|downmerge", "(?i)^WIP"]
+  ```
+
+- **`ignoreCommitMessageContent`** — Array of regex patterns. If a commit message matches any pattern, that individual commit is excluded from metrics.
+  ```json
+  "ignoreCommitMessageContent": ["(?i)merge|revert", "^bump version"]
+  ```
+
+#### Precedence
+
+When the same setting is provided in both the configuration file and CLI flags:
+- CLI flags take highest priority (e.g., `--maxCommitSize N`)
+- Configuration file values are used if no CLI flag is provided
+- Built-in defaults are used if neither is specified
+
+#### Example Configuration File
+
+```json
+{
+  "jiraServer": "https://jira.company.com",
+  "bitbucketServer": "https://bitbucket.company.com",
+  "maxCommitSize": 2000,
+  "maxFileChangeSize": 5000,
+  "ignoreFilenames": ["*.min.js", "*.bundle.js"],
+  "ignorePRTitleContent": ["(?i)automated", "(?i)downmerge"],
+  "ignoreCommitMessageContent": ["(?i)bump version"]
+}
+```
+
 ### Developer Notes
 - Data is stored in `~/.managerTools.cfg`
 - There was difficulty getting long input from the terminal, so for that input, `zsh/vared` is used to accept input
