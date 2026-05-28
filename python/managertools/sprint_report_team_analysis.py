@@ -675,7 +675,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         if processing_errors:
             print(f"Warning: Encountered {len(processing_errors)} errors during issue processing. First error: {processing_errors[0]}", file=sys.stderr)
 
-        is_complete = len(failed_issue_keys) == 0
+        is_complete = len(failed_issue_keys) == 0 and len(processing_errors) == 0
         return is_complete, failed_issue_keys
 
     def _retry_rest_call(self, func, max_retries: int = 3, retry_delay: int = 2):

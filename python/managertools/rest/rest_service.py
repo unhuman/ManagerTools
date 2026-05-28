@@ -37,10 +37,15 @@ class RestService(ABC):
     def put_request(self, uri: str, content: str, **params) -> Any:
         return self._execute_request("PUT", uri, content, params)
 
+    _TRANSIENT_5XX = frozenset({502, 503, 504})
+
     def _execute_request(self, method: str, uri: str, content: Optional[str], params: Dict) -> Any:
         timeout_retries = 0
         max_timeout_retries = 3
         timeout_backoff = 5  # seconds
+        transient_retries = 0
+        max_transient_retries = 3
+        transient_backoff = 5  # seconds; doubles each attempt: 5s, 10s, 20s
 
         while True:
             request_start_time = time.time()
@@ -115,6 +120,27 @@ class RestService(ABC):
                         jira_msg = " For Jira: You may need to log in via browser or refresh your PAT token."
 
                     raise RESTException(response.status_code, f"Forbidden{sso_msg}{jira_msg}: {dict(response.headers)}", uri)
+
+                # Retry transient server errors (502/503/504) with backoff
+                if response.status_code in self._TRANSIENT_5XX:
+                    transient_retries += 1
+                    if content:
+                        try:
+                            parsed = json.loads(content)
+                            debug_info = json.dumps(parsed.get("variables", parsed), indent=2)
+                        except Exception:
+                            debug_info = content[:500]
+                        sys.stderr.write(f"Request body (on {response.status_code}): {debug_info}\n")
+                    elif params:
+                        sys.stderr.write(f"Request params (on {response.status_code}): {params}\n")
+                    if transient_retries <= max_transient_retries:
+                        wait = transient_backoff * (2 ** (transient_retries - 1))
+                        sys.stderr.write(
+                            f"Transient {response.status_code} (attempt {transient_retries}/"
+                            f"{max_transient_retries}), retrying in {wait}s: {uri}\n"
+                        )
+                        time.sleep(wait)
+                        continue
 
                 # Handle other HTTP errors
                 if not (200 <= response.status_code <= 299):
