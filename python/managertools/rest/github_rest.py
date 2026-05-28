@@ -2,12 +2,19 @@ import re
 import sys
 from datetime import datetime
 from http import HTTPStatus
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from .source_control_rest import SourceControlREST
 from .auth_info import AuthInfo, AuthType
 from .exceptions import RESTException
+from .github_graphql_client import GithubGraphQLClient
 from ..data.user_activity import UserActivity
+
+
+def _iso_to_ms(iso_str: Optional[str]) -> int:
+    if not iso_str:
+        return 0
+    return int(datetime.fromisoformat(iso_str.replace('Z', '+00:00')).timestamp() * 1000)
 
 
 class GithubREST(SourceControlREST):
@@ -15,8 +22,14 @@ class GithubREST(SourceControlREST):
     PAGE_SIZE_LIMIT = "100"
     JIRA_NAME_PATTERN = re.compile(r'\w.*')
 
+    _ALLOWED_ASSOCIATIONS = frozenset({
+        'CONTRIBUTOR', 'COLLABORATOR', 'FIRST_TIMER',
+        'FIRST_TIME_CONTRIBUTOR', 'MEMBER', 'OWNER',
+    })
+
     def __init__(self, bearer_token: str):
         super().__init__(AuthInfo(AuthType.Bearer, bearer_token))
+        self._graphql_client = GithubGraphQLClient(bearer_token)
 
     def api_convert(self, pr_url: str) -> str:
         return (pr_url
@@ -226,6 +239,93 @@ class GithubREST(SourceControlREST):
             sys.stderr.write(f"Unable to retrieve commit diffs {str(re)}\n")
             return None
 
+
+    def get_pull_request_full(self, pr_url: str) -> Dict[str, Any]:
+        """Fetch all PR data via a single paginated GraphQL query.
+
+        Returns a dict with keys:
+          - commits: list of normalized commit dicts (keys: id, committerTimestamp, message,
+                     committer.name, url, additions, deletions, changedFilesIfAvailable)
+          - activities: list of normalized activity dicts (keys: user.name, action,
+                        comment.text, createdDate)
+          - created_ms: PR created-at as int milliseconds
+          - merged_ms:  PR merged-at as int milliseconds (0 if not merged)
+        """
+        m = re.search(r'/repos/([^/]+)/([^/]+)/pulls/(\d+)', pr_url)
+        if not m:
+            raise ValueError(f"Cannot parse owner/repo/number from PR URL: {pr_url}")
+        owner, repo, pr_number = m.group(1), m.group(2), int(m.group(3))
+
+        raw = self._graphql_client.get_pull_request_data(owner, repo, pr_number)
+        pr_meta = raw["pr"]
+
+        # PR timestamps
+        created_ms = _iso_to_ms(pr_meta.get("createdAt"))
+        merged_ms = _iso_to_ms(pr_meta.get("mergedAt"))
+
+        # Normalize commits (GraphQL returns newest-first; reverse to match get_commits())
+        commit_base = f"https://api.github.com/repos/{owner}/{repo}/commits"
+        commits = []
+        for c in reversed(raw["commits"]):
+            sha = c.get("oid", "")
+            committer_login = ((c.get("committer") or {}).get("user") or {}).get("login")
+            author_login = ((c.get("author") or {}).get("user") or {}).get("login")
+            user_name = (self.map_user_to_jira_name({"login": committer_login}) if committer_login else None
+                         or self.map_user_to_jira_name({"login": author_login}) if author_login else None
+                         or (c.get("author") or {}).get("name"))
+            commits.append({
+                "id": sha,
+                "committerTimestamp": _iso_to_ms(c.get("committedDate")),
+                "message": c.get("message", ""),
+                "committer": {"name": user_name},
+                "url": f"{commit_base}/{sha}",
+                "additions": c.get("additions", 0),
+                "deletions": c.get("deletions", 0),
+                "changedFilesIfAvailable": c.get("changedFilesIfAvailable", 0),
+            })
+
+        # Normalize activities: general comments + inline review-thread comments + reviews
+        activities = []
+
+        for node in raw["comments"] + raw["review_thread_comments"]:
+            if node.get("body") is None:
+                continue
+            if node.get("authorAssociation", "") not in self._ALLOWED_ASSOCIATIONS:
+                continue
+            login = (node.get("author") or {}).get("login")
+            jira_name = self.map_user_to_jira_name({"login": login}) if login else None
+            activities.append({
+                "user": {"name": jira_name or "unknown"},
+                "action": UserActivity.COMMENTED.name,
+                "comment": {"text": node.get("body", "")},
+                "createdDate": _iso_to_ms(node.get("createdAt")),
+            })
+
+        for review in pr_meta.get("reviews", []):
+            state = review.get("state", "")
+            if state not in ("APPROVED", "DISMISSED"):
+                continue
+            if review.get("submittedAt") is None or review.get("body") is None:
+                continue
+            if review.get("authorAssociation", "") not in self._ALLOWED_ASSOCIATIONS:
+                continue
+            login = (review.get("author") or {}).get("login")
+            jira_name = self.map_user_to_jira_name({"login": login}) if login else None
+            activities.append({
+                "user": {"name": jira_name or "unknown"},
+                "action": "APPROVED" if state == "APPROVED" else UserActivity.DECLINED.name,
+                "createdDate": _iso_to_ms(review.get("submittedAt")),
+            })
+
+        # Sort most-recent-first to match the ordering returned by get_activities() REST
+        activities.sort(key=lambda a: a.get("createdDate", 0), reverse=True)
+
+        return {
+            "commits": commits,
+            "activities": activities,
+            "created_ms": created_ms,
+            "merged_ms": merged_ms,
+        }
 
     def get_pr_created_ms(self, pr_url: str) -> int:
         try:

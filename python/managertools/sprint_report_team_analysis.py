@@ -723,8 +723,18 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         pr_status = pull_request.get('status', '')
         pr_author = source_control_rest.map_user_to_jira_name(pull_request.get('author', ''))
 
-        # Get commits with retry logic
-        pr_commits = self._retry_rest_call(lambda: source_control_rest.get_commits(pr_url))
+        # For GitHub, fetch all PR data in one GraphQL call; Bitbucket uses REST
+        if is_github:
+            pr_full = self._retry_rest_call(lambda: source_control_rest.get_pull_request_full(pr_url))
+            pr_commits = pr_full.get("commits", []) if pr_full else None
+            _github_created_ms = pr_full.get("created_ms", 0) if pr_full else 0
+            _github_merged_ms = pr_full.get("merged_ms", 0) if pr_full else 0
+            _github_activities = pr_full.get("activities") if pr_full else None
+        else:
+            pr_commits = self._retry_rest_call(lambda: source_control_rest.get_commits(pr_url))
+            _github_created_ms = None
+            _github_merged_ms = None
+            _github_activities = None
         print(f"      [DEBUG] PR {ticket}/{pr_id}: Got {len(pr_commits) if pr_commits else 0} commits")
 
         if pr_author is None:
@@ -756,16 +766,17 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     print(f"Invalid regex pattern in ignorePRTitleContent: {pattern}", file=sys.stderr)
 
         # Increment OPENED if the PR was created within the sprint/cycle window
-        pr_created_ms = self._retry_rest_call(lambda: source_control_rest.get_pr_created_ms(pr_url))
+        pr_created_ms = (_github_created_ms if is_github
+                         else self._retry_rest_call(lambda: source_control_rest.get_pr_created_ms(pr_url)))
         if pr_created_ms and (mode == Mode.KANBAN or sprint_start_ms <= pr_created_ms < sprint_end_ms):
             print(f"      [DEBUG] PR {ticket}/{pr_id}: OPENED for {pr_author}")
             open_index = self.create_index_lookup(sprint_name, ticket, pr_id, pr_author, pr_status)
             self.populate_baseline_db_info(open_index, start_date, end_date, pr_author)
             self.increment_counter(open_index, UserActivity.OPENED)
 
-        # For GitHub PRs, MERGED doesn't come from activities — fetch merge timestamp directly
+        # For GitHub PRs, MERGED doesn't come from activities — use pre-fetched GraphQL timestamp
         if is_github and pr_status == 'MERGED':
-            pr_merged_ms = self._retry_rest_call(lambda: source_control_rest.get_pr_merged_ms(pr_url))
+            pr_merged_ms = _github_merged_ms
             if pr_merged_ms and (mode == Mode.KANBAN or sprint_start_ms <= pr_merged_ms < sprint_end_ms):
                 print(f"      [DEBUG] PR {ticket}/{pr_id}: MERGED for {pr_author}")
                 merged_index = self.create_index_lookup(sprint_name, ticket, pr_id, pr_author, pr_status)
@@ -778,8 +789,10 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             pr_activities = None
         else:
             self._counted_pr_activities.add(activity_key)
-            # Get activities with retry logic
-            pr_activities = self._retry_rest_call(lambda: source_control_rest.get_activities(pr_url))
+            if is_github and _github_activities is not None:
+                pr_activities = _github_activities
+            else:
+                pr_activities = self._retry_rest_call(lambda: source_control_rest.get_activities(pr_url))
         print(f"      [DEBUG] PR {ticket}/{pr_id}: Got {len(pr_activities) if pr_activities else 0} activities")
 
         comment_blockers = []
@@ -835,9 +848,20 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
                 commit_url = commit.get('url') or pr_url
                 if not commit_filtered:
-                    diffs_response = self._retry_rest_call(lambda: source_control_rest.get_commit_diffs(commit_url, commit_sha))
-                    if diffs_response:
-                        self.process_diffs(self.COMMIT_PREFIX, diffs_response, index_lookup)
+                    if is_github and ("additions" in commit or "deletions" in commit):
+                        c_add = commit.get("additions", 0)
+                        c_del = commit.get("deletions", 0)
+                        if c_add > 0 or c_del > 0:
+                            self.process_diffs(self.COMMIT_PREFIX, {"additions": c_add, "deletions": c_del}, index_lookup)
+                        elif commit.get("changedFilesIfAvailable", 0) > 0:
+                            # Large-repo fallback: GraphQL returned 0/0 but files changed
+                            diffs_response = self._retry_rest_call(lambda: source_control_rest.get_commit_diffs(commit_url, commit_sha))
+                            if diffs_response:
+                                self.process_diffs(self.COMMIT_PREFIX, diffs_response, index_lookup)
+                    else:
+                        diffs_response = self._retry_rest_call(lambda: source_control_rest.get_commit_diffs(commit_url, commit_sha))
+                        if diffs_response:
+                            self.process_diffs(self.COMMIT_PREFIX, diffs_response, index_lookup)
 
                 self.database.increment_field(index_lookup, UserActivity.COMMITS.name)
                 self.database.append(index_lookup, DBData.COMMIT_MESSAGES.name, commit_message, True)
