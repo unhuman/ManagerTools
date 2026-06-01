@@ -14,7 +14,6 @@ class GithubGraphQLClient(RestService):
     _max_transient_retries = 0  # 502s handled via commit page-size reduction below
     _COMMIT_PAGE_SIZES = [20, 10, 5, 2]
     _page_size_reductions: Dict[str, int] = {}  # pr_key -> page size that succeeded
-    _PROACTIVE_REMAINING_THRESHOLD = 5
 
     _QUERY = """
     query GetPRData(
@@ -80,8 +79,9 @@ class GithubGraphQLClient(RestService):
     }
     """
 
-    def __init__(self, bearer_token: str):
+    def __init__(self, bearer_token: str, graph_points_reserved: int = 5):
         super().__init__(AuthInfo(AuthType.Bearer, bearer_token))
+        self._graph_points_reserved = graph_points_reserved
 
     def get_pull_request_data(self, owner: str, repo: str, pr_number: int) -> Dict[str, Any]:
         """
@@ -125,7 +125,12 @@ class GithubGraphQLClient(RestService):
                 raise
 
             if "errors" in response:
-                raise RuntimeError(f"GraphQL errors for {owner}/{repo}#{pr_number}: {response['errors']}")
+                if response.get("data") is None:
+                    raise RuntimeError(f"GraphQL errors for {owner}/{repo}#{pr_number}: {response['errors']}")
+                sys.stderr.write(
+                    f"GraphQL partial errors for {owner}/{repo}#{pr_number} "
+                    f"(continuing with available data): {response['errors']}\n"
+                )
 
             data = response.get("data", {})
             rate_limit = data.get("rateLimit", {})
@@ -182,10 +187,10 @@ class GithubGraphQLClient(RestService):
                 break
 
             if (remaining is not None
-                    and remaining <= self._PROACTIVE_REMAINING_THRESHOLD
+                    and remaining <= self._graph_points_reserved
                     and seconds_until_reset is not None):
                 sys.stderr.write(
-                    f"GraphQL remaining={remaining} ≤ {self._PROACTIVE_REMAINING_THRESHOLD}, "
+                    f"GraphQL remaining={remaining} ≤ {self._graph_points_reserved} (graphPointsReserved), "
                     f"pausing {seconds_until_reset + 2}s until reset\n"
                 )
                 self._wait_with_countdown(seconds_until_reset + 2, "Proactive rate limit")

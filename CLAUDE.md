@@ -103,6 +103,24 @@ _Add a brief overview of your project architecture_
 
 ## Conventions & Patterns
 
+### Documentation
+
+**Whenever a configuration value is added, removed, or changed**, update the `### Configuration` section of `README.md` to reflect:
+- The key name (camelCase, matching `~/.managerTools.cfg`)
+- What it controls
+- Its default value
+- A one-line JSON example
+
+Also update the **Example Configuration File** block in that same section.
+
+This applies to values loaded via `ConfigFileManager.get_value(...)` anywhere in the codebase.
+
+**Important:** `ConfigFileManager.get_value()` raises `RuntimeError` for missing keys — always guard optional config values with `contains_key()` before calling `get_value()`:
+```python
+config_mgr = self.command_line_helper.get_config_file_manager()
+value = int(config_mgr.get_value("myKey")) if config_mgr.contains_key("myKey") else default_value
+```
+
 ### Cache Versioning
 
 `SprintDataCache.CACHE_VERSION` is defined in `python/managertools/util/sprint_data_cache.py`.

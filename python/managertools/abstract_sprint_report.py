@@ -209,7 +209,10 @@ class AbstractSprintReport(ABC):
             raise RuntimeError(f"Invalid auth method: {auth_method}")
 
         github_token = self.command_line_helper.get_github_token()
-        self.github_rest = (GithubREST(github_token)
+        config_mgr = self.command_line_helper.get_config_file_manager()
+        graph_points_reserved = (int(config_mgr.get_value("graphPointsReserved"))
+                                 if config_mgr.contains_key("graphPointsReserved") else 5)
+        self.github_rest = (GithubREST(github_token, graph_points_reserved)
                            if github_token else NullREST("github"))
 
         self.team_name = self.command_line_options.teamName or None

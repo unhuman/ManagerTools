@@ -120,6 +120,13 @@ Configuration is stored in `~/.managerTools.cfg` as a JSON file. The following o
   "ignoreCommitMessageContent": ["(?i)merge|revert", "^bump version"]
   ```
 
+#### GitHub API Rate Limiting
+
+- **`graphPointsReserved`** — Number of GraphQL rate-limit points to keep in reserve. When the remaining point count drops to or below this value, processing pauses (with a countdown display) until the rate-limit window resets. Increase this value when running multiple simultaneous processes that share the same GitHub token. Default: `5`.
+  ```json
+  "graphPointsReserved": 100
+  ```
+
 #### Precedence
 
 When the same setting is provided in both the configuration file and CLI flags:
@@ -135,6 +142,7 @@ When the same setting is provided in both the configuration file and CLI flags:
   "bitbucketServer": "https://bitbucket.company.com",
   "maxCommitSize": 2000,
   "maxFileChangeSize": 5000,
+  "graphPointsReserved": 5,
   "ignoreFilenames": ["*.min.js", "*.bundle.js"],
   "ignorePRTitleContent": ["(?i)automated", "(?i)downmerge"],
   "ignoreCommitMessageContent": ["(?i)bump version"]
