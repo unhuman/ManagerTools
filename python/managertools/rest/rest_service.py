@@ -44,7 +44,7 @@ class RestService(ABC):
         max_timeout_retries = 3
         timeout_backoff = 5  # seconds
         transient_retries = 0
-        max_transient_retries = 3
+        max_transient_retries = getattr(self, '_max_transient_retries', 3)
         transient_backoff = 5  # seconds; doubles each attempt: 5s, 10s, 20s
 
         while True:

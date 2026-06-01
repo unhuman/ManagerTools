@@ -308,15 +308,13 @@ def generate_individual_png(user, df, team_name, output_dir):
     if aggregated.empty:
         return None
 
-    # Sort sprints chronologically by their earliest date in the data
-    user_data = df[df['AUTHOR'].str.lower() == user.lower()]
+    # Build sprint→date lookup from all rows (START_DATE is the same for every row in a sprint)
     sprint_dates = {}
-    for sprint in aggregated.index:
-        sprint_data = user_data[user_data['SPRINT'] == sprint]
-        if not sprint_data.empty and 'startDate' in sprint_data.columns:
-            sprint_dates[sprint] = pd.to_datetime(sprint_data['startDate'].iloc[0])
-        else:
-            sprint_dates[sprint] = pd.Timestamp.max
+    if 'START_DATE' in df.columns:
+        for sprint, group in df.groupby('SPRINT'):
+            val = group['START_DATE'].dropna().iloc[0] if not group['START_DATE'].dropna().empty else None
+            if val is not None:
+                sprint_dates[sprint] = pd.to_datetime(val)
 
     sprint_names = sorted(aggregated.index.tolist(), key=lambda s: sprint_dates.get(s, pd.Timestamp.max))
     aggregated = aggregated.loc[sprint_names]

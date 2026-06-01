@@ -245,9 +245,8 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 return
             else:
                 # Incomplete cache: load partial data and retry only failed issues
-                print(f"   [DEBUG] Found incomplete cached data for cycle {cycle}, loading and retrying failed issues...")
                 cached_data, prev_failed = SprintDataCache.load_cached_data(team_name, "", clean_start_date, clean_end_date)
-                self.load_cached_data_into_database(cached_data)
+                print(f"   [DEBUG] Found incomplete cached data for cycle {cycle}, failed issues: {', '.join(prev_failed) if prev_failed else 'none (processing errors)'}")
 
                 # Fetch all issues to filter for retries
                 data = None
@@ -273,25 +272,35 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     print(f"   [ERROR] Failed to fetch cycle {cycle} - data is None, keeping incomplete cache", file=sys.stderr)
                     return
 
+                sprint_simulation = {
+                    'name': cycle_name,
+                    'startDate': data.get('startDate'),
+                    'endDate': data.get('endDate')
+                }
                 all_issues = data.get('issues', [])
                 failed_set = set(prev_failed)
                 retry_issues = [i for i in all_issues if i.get('key') in failed_set]
                 print(f"   [DEBUG] Retrying {len(retry_issues)} previously failed issues in cycle {cycle}...")
 
                 if retry_issues:
-                    sprint_simulation = {
-                        'name': cycle_name,
-                        'startDate': data.get('startDate'),
-                        'endDate': data.get('endDate')
-                    }
+                    self.load_cached_data_into_database(cached_data)
                     is_complete, new_failed = self.get_issue_category_information(thread_count, sprint_simulation, mode, retry_issues)
                     print(f"   [DEBUG] Extracting updated data for cycle {cycle}...")
                     data_to_cache = self.extract_database_data_for_cache(cycle_name)
                     print(f"   [DEBUG] Saving updated cache for cycle {cycle}...")
                     SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, is_complete, new_failed)
                     print(f"   [DEBUG] Cycle {cycle} cache updated")
+                elif not prev_failed:
+                    # No tracked failures: incompleteness was from processing_errors; re-process all fresh
+                    print(f"   [DEBUG] No tracked failures for cycle {cycle}, re-processing all {len(all_issues)} issues...")
+                    is_complete, new_failed = self.get_issue_category_information(thread_count, sprint_simulation, mode, all_issues)
+                    data_to_cache = self.extract_database_data_for_cache(cycle_name)
+                    SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, is_complete, new_failed)
+                    print(f"   [DEBUG] Cycle {cycle} cache updated")
                 else:
-                    print(f"   [DEBUG] No issues to retry in cycle {cycle}, cache remains incomplete")
+                    # Had tracked failures but they're no longer present in Jira
+                    self.load_cached_data_into_database(cached_data)
+                    print(f"   [DEBUG] No issues to retry in cycle {cycle} (previously-failed keys no longer in Jira), cache remains incomplete")
                 return
 
         print(f"   [DEBUG] No cache for cycle {cycle}, fetching from Jira...")
@@ -353,10 +362,8 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 print("   [DEBUG] Cache data loaded into database successfully")
             else:
                 # Incomplete cache: load partial data and retry only failed issues
-                print("   [DEBUG] Loading from incomplete cache...")
                 cached_data, prev_failed = SprintDataCache.load_cached_data(team_name, sprint_name, start_date, end_date)
-                print("   [DEBUG] Cache loaded, loading partial data into database...")
-                self.load_cached_data_into_database(cached_data)
+                print(f"   [DEBUG] Found incomplete cached data for {sprint_name}, failed issues: {', '.join(prev_failed) if prev_failed else 'none (processing errors)'}")
 
                 # Filter to only retry the previously failed issues
                 failed_set = set(prev_failed)
@@ -364,14 +371,26 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 print(f"   [DEBUG] Retrying {len(retry_issues)} previously failed issues...")
 
                 if retry_issues:
+                    print("   [DEBUG] Cache loaded, loading partial data into database...")
+                    self.load_cached_data_into_database(cached_data)
                     is_complete, new_failed = self.get_issue_category_information(thread_count, sprint, mode, retry_issues)
                     print("   [DEBUG] Extracting updated data for cache...")
                     data_to_cache = self.extract_database_data_for_cache(sprint_name)
                     print("   [DEBUG] Saving updated cache...")
                     SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, is_complete, new_failed)
                     print("   [DEBUG] Cache updated successfully")
+                elif not prev_failed:
+                    # No tracked failures: incompleteness was from processing_errors; re-process all fresh
+                    print(f"   [DEBUG] No tracked failures for sprint, re-processing all {len(all_issues)} issues...")
+                    is_complete, new_failed = self.get_issue_category_information(thread_count, sprint, mode, all_issues)
+                    data_to_cache = self.extract_database_data_for_cache(sprint_name)
+                    SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, is_complete, new_failed)
+                    print("   [DEBUG] Cache updated successfully")
                 else:
-                    print("   [DEBUG] No issues to retry, cache remains incomplete")
+                    # Had tracked failures but they're no longer present in Jira
+                    print("   [DEBUG] Cache loaded, loading partial data into database...")
+                    self.load_cached_data_into_database(cached_data)
+                    print("   [DEBUG] No issues to retry (previously-failed keys no longer in Jira), cache remains incomplete")
         else:
             # No cache: process all issues
             print("   [DEBUG] Processing fresh data (no cache or cache disabled)...")
@@ -663,6 +682,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             except Exception as e:
                 with lock:
                     processing_errors.append(e)
+                    failed_issue_keys.append(issue.get('key'))
                 print(f"Error processing issue: {e}", file=sys.stderr)
                 traceback.print_exc(file=sys.stderr)
 

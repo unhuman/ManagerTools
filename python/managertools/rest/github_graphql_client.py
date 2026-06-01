@@ -5,14 +5,19 @@ from typing import Any, Dict, List, Optional
 
 from .rest_service import RestService
 from .auth_info import AuthInfo, AuthType
+from .exceptions import RESTException
 
 
 class GithubGraphQLClient(RestService):
     ENDPOINT = "https://api.github.com/graphql"
+    _max_transient_retries = 0  # 502s handled via commit page-size reduction below
+    _COMMIT_PAGE_SIZES = [20, 15, 10, 5]
+    _page_size_reductions: Dict[str, int] = {}  # pr_key -> page size that succeeded
 
     _QUERY = """
     query GetPRData(
         $owner: String!, $repo: String!, $number: Int!,
+        $commitPageSize: Int!,
         $commitCursor: String, $commentCursor: String, $reviewThreadCursor: String
     ) {
       rateLimit { cost remaining }
@@ -22,7 +27,7 @@ class GithubGraphQLClient(RestService):
           deletions
           createdAt
           mergedAt
-          commits(first: 100, after: $commitCursor) {
+          commits(first: $commitPageSize, after: $commitCursor) {
             pageInfo { hasNextPage endCursor }
             nodes {
               commit {
@@ -92,19 +97,30 @@ class GithubGraphQLClient(RestService):
         commit_cursor: Optional[str] = None
         comment_cursor: Optional[str] = None
         rt_cursor: Optional[str] = None
+        commit_page_size = self._COMMIT_PAGE_SIZES[0]
+        commit_page_size_idx = 0
 
         while True:
             variables = {
                 "owner": owner,
                 "repo": repo,
                 "number": pr_number,
+                "commitPageSize": commit_page_size,
                 "commitCursor": None if commits_done else commit_cursor,
                 "commentCursor": None if comments_done else comment_cursor,
                 "reviewThreadCursor": None if rt_done else rt_cursor,
             }
 
             body = json.dumps({"query": self._QUERY, "variables": variables})
-            response = self._execute_request("POST", self.ENDPOINT, body, {})
+            try:
+                response = self._execute_request("POST", self.ENDPOINT, body, {})
+            except RESTException as e:
+                if e.status_code == 502 and commit_page_size_idx < len(self._COMMIT_PAGE_SIZES) - 1:
+                    commit_page_size_idx += 1
+                    commit_page_size = self._COMMIT_PAGE_SIZES[commit_page_size_idx]
+                    sys.stderr.write(f"502 fetching {owner}/{repo}#{pr_number}, reducing commit page size to {commit_page_size}\n")
+                    continue
+                raise
 
             if "errors" in response:
                 raise RuntimeError(f"GraphQL errors for {owner}/{repo}#{pr_number}: {response['errors']}")
@@ -154,6 +170,16 @@ class GithubGraphQLClient(RestService):
 
             if commits_done and comments_done and rt_done:
                 break
+
+        if commit_page_size != self._COMMIT_PAGE_SIZES[0]:
+            pr_key = f"{owner}/{repo}#{pr_number}"
+            GithubGraphQLClient._page_size_reductions[pr_key] = commit_page_size
+            sys.stderr.write(
+                f"Commit page size reduction summary: {owner}/{repo}#{pr_number} "
+                f"required page size {commit_page_size} "
+                f"(default {self._COMMIT_PAGE_SIZES[0]}). "
+                f"All reductions this run: {GithubGraphQLClient._page_size_reductions}\n"
+            )
 
         return {
             "pr": pr_meta,
