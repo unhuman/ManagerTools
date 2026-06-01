@@ -27,9 +27,9 @@ class GithubREST(SourceControlREST):
         'FIRST_TIME_CONTRIBUTOR', 'MEMBER', 'OWNER',
     })
 
-    def __init__(self, bearer_token: str, graph_points_reserved: int = 5):
+    def __init__(self, bearer_token: str, graphql_points_reserved: int = 5):
         super().__init__(AuthInfo(AuthType.Bearer, bearer_token))
-        self._graphql_client = GithubGraphQLClient(bearer_token, graph_points_reserved)
+        self._graphql_client = GithubGraphQLClient(bearer_token, graphql_points_reserved)
 
     def api_convert(self, pr_url: str) -> str:
         return (pr_url

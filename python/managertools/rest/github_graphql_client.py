@@ -79,9 +79,9 @@ class GithubGraphQLClient(RestService):
     }
     """
 
-    def __init__(self, bearer_token: str, graph_points_reserved: int = 5):
+    def __init__(self, bearer_token: str, graphql_points_reserved: int = 5):
         super().__init__(AuthInfo(AuthType.Bearer, bearer_token))
-        self._graph_points_reserved = graph_points_reserved
+        self._graphql_points_reserved = graphql_points_reserved
 
     def get_pull_request_data(self, owner: str, repo: str, pr_number: int) -> Dict[str, Any]:
         """
@@ -187,10 +187,10 @@ class GithubGraphQLClient(RestService):
                 break
 
             if (remaining is not None
-                    and remaining <= self._graph_points_reserved
+                    and remaining <= self._graphql_points_reserved
                     and seconds_until_reset is not None):
                 sys.stderr.write(
-                    f"GraphQL remaining={remaining} ≤ {self._graph_points_reserved} (graphPointsReserved), "
+                    f"GraphQL remaining={remaining} ≤ {self._graphql_points_reserved} (graphqlPointsReserved), "
                     f"pausing {seconds_until_reset + 2}s until reset\n"
                 )
                 self._wait_with_countdown(seconds_until_reset + 2, "Proactive rate limit")
