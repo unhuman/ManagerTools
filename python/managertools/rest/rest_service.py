@@ -175,10 +175,10 @@ class RestService(ABC):
                         return body
                     sys.stderr.write(f"Primary rate limit exceeded (remaining=0, no data in response): {body}\n")
                     x_reset = response.headers.get('X-RateLimit-Reset')
-                    retry_after = 1
+                    retry_after = 2
                     if x_reset:
                         try:
-                            retry_after = max(1, int(x_reset) - int(time.time()) + 1)
+                            retry_after = max(1, int(x_reset) - int(time.time()) + 2)
                         except ValueError:
                             pass
                     raise NeedsRetryException(response.status_code, response.text, uri, retry_after)
