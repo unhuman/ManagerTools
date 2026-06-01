@@ -11,7 +11,7 @@ from .exceptions import RESTException
 class GithubGraphQLClient(RestService):
     ENDPOINT = "https://api.github.com/graphql"
     _max_transient_retries = 0  # 502s handled via commit page-size reduction below
-    _COMMIT_PAGE_SIZES = [20, 15, 10, 5]
+    _COMMIT_PAGE_SIZES = [20, 10, 5, 2]
     _page_size_reductions: Dict[str, int] = {}  # pr_key -> page size that succeeded
 
     _QUERY = """
