@@ -1,5 +1,6 @@
 import json
 import sys
+import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -13,6 +14,7 @@ class GithubGraphQLClient(RestService):
     _max_transient_retries = 0  # 502s handled via commit page-size reduction below
     _COMMIT_PAGE_SIZES = [20, 10, 5, 2]
     _page_size_reductions: Dict[str, int] = {}  # pr_key -> page size that succeeded
+    _PROACTIVE_REMAINING_THRESHOLD = 5
 
     _QUERY = """
     query GetPRData(
@@ -20,7 +22,7 @@ class GithubGraphQLClient(RestService):
         $commitPageSize: Int!,
         $commitCursor: String, $commentCursor: String, $reviewThreadCursor: String
     ) {
-      rateLimit { cost remaining }
+      rateLimit { cost remaining limit resetAt }
       repository(owner: $owner, name: $repo) {
         pullRequest(number: $number) {
           additions
@@ -127,7 +129,15 @@ class GithubGraphQLClient(RestService):
 
             data = response.get("data", {})
             rate_limit = data.get("rateLimit", {})
-            print(f"      [DEBUG] GraphQL: cost={rate_limit.get('cost', '?')}, remaining={rate_limit.get('remaining', '?')}")
+            remaining = rate_limit.get('remaining')
+            reset_at_str = rate_limit.get('resetAt')
+            reset_dt = datetime.fromisoformat(reset_at_str.replace('Z', '+00:00')) if reset_at_str else None
+            seconds_until_reset = max(0, int(reset_dt.timestamp() - time.time())) if reset_dt else None
+            print(
+                f"      [DEBUG] GraphQL: cost={rate_limit.get('cost', '?')}, "
+                f"remaining={remaining}/{rate_limit.get('limit', '?')}, "
+                f"reset_in={seconds_until_reset}s"
+            )
 
             pr = data.get("repository", {}).get("pullRequest") or {}
 
@@ -170,6 +180,15 @@ class GithubGraphQLClient(RestService):
 
             if commits_done and comments_done and rt_done:
                 break
+
+            if (remaining is not None
+                    and remaining <= self._PROACTIVE_REMAINING_THRESHOLD
+                    and seconds_until_reset is not None):
+                sys.stderr.write(
+                    f"GraphQL remaining={remaining} ≤ {self._PROACTIVE_REMAINING_THRESHOLD}, "
+                    f"pausing {seconds_until_reset + 2}s until reset\n"
+                )
+                self._wait_with_countdown(seconds_until_reset + 2, "Proactive rate limit")
 
         if commit_page_size != self._COMMIT_PAGE_SIZES[0]:
             pr_key = f"{owner}/{repo}#{pr_number}"

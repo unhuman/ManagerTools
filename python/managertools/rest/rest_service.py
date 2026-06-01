@@ -39,6 +39,22 @@ class RestService(ABC):
 
     _TRANSIENT_5XX = frozenset({502, 503, 504})
 
+    def _wait_with_countdown(self, seconds: int, reason: str = "Rate limit") -> None:
+        reset_timestamp = time.time() + seconds
+        sys.stderr.write(f"{reason} — waiting {seconds}s until reset...\n")
+        while True:
+            remaining_seconds = int(reset_timestamp - time.time())
+            if remaining_seconds <= 0:
+                sys.stderr.write("\r" + " " * 100 + "\r")
+                sys.stderr.write(f"{reason} wait complete. Resuming...\n")
+                break
+            h = remaining_seconds // 3600
+            m = (remaining_seconds % 3600) // 60
+            s = remaining_seconds % 60
+            sys.stderr.write(f"\r{reason}... Time remaining: {h:02d}:{m:02d}:{s:02d}")
+            sys.stderr.flush()
+            time.sleep(1)
+
     def _execute_request(self, method: str, uri: str, content: Optional[str], params: Dict) -> Any:
         timeout_retries = 0
         max_timeout_retries = 3
@@ -188,23 +204,7 @@ class RestService(ABC):
 
             except NeedsRetryException as nre:
                 sys.stderr.write(f"Rate limit exceeded. Details: {str(nre)}\n")
-                reset_timestamp = time.time() + nre.get_retry_after()
-
-                while True:
-                    current_time = time.time()
-                    remaining_seconds = int(reset_timestamp - current_time)
-
-                    if remaining_seconds <= 0:
-                        sys.stderr.write("\r" + " " * 100 + "\r")
-                        sys.stderr.write("Rate limit reset. Resuming requests...\n")
-                        break
-
-                    hours = remaining_seconds // 3600
-                    minutes = (remaining_seconds % 3600) // 60
-                    seconds = remaining_seconds % 60
-                    sys.stderr.write(f"\rWaiting for rate limit reset... Time remaining: {hours:02d}:{minutes:02d}:{seconds:02d}")
-                    sys.stderr.flush()
-                    time.sleep(1)
+                self._wait_with_countdown(nre.get_retry_after(), "Rate limit exceeded")
 
             except (SocketTimeoutException, requests.exceptions.Timeout) as ste:
                 request_duration = (time.time() - request_start_time) * 1000
