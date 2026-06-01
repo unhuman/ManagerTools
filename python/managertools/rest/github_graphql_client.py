@@ -158,7 +158,10 @@ class GithubGraphQLClient(RestService):
             if not commits_done:
                 commits_page = pr.get("commits", {})
                 for node in commits_page.get("nodes", []):
-                    all_commits.append(node.get("commit", {}))
+                    if node is not None:
+                        commit = node.get("commit")
+                        if commit is not None:
+                            all_commits.append(commit)
                 page_info = commits_page.get("pageInfo", {})
                 commits_done = not page_info.get("hasNextPage", False)
                 if not commits_done:
@@ -167,7 +170,8 @@ class GithubGraphQLClient(RestService):
             if not comments_done:
                 comments_page = pr.get("comments", {})
                 for node in comments_page.get("nodes", []):
-                    all_comments.append(node)
+                    if node is not None:
+                        all_comments.append(node)
                 page_info = comments_page.get("pageInfo", {})
                 comments_done = not page_info.get("hasNextPage", False)
                 if not comments_done:
@@ -176,8 +180,11 @@ class GithubGraphQLClient(RestService):
             if not rt_done:
                 rt_page = pr.get("reviewThreads", {})
                 for thread in rt_page.get("nodes", []):
+                    if thread is None:
+                        continue
                     for comment in thread.get("comments", {}).get("nodes", []):
-                        all_rt_comments.append(comment)
+                        if comment is not None:
+                            all_rt_comments.append(comment)
                 page_info = rt_page.get("pageInfo", {})
                 rt_done = not page_info.get("hasNextPage", False)
                 if not rt_done:
