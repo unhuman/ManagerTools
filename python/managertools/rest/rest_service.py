@@ -92,8 +92,16 @@ class RestService(ABC):
                     raise NeedsRetryException(response.status_code, response.text, uri, retry_after)
 
                 elif response.status_code == 403:
-                    # 403 Forbidden might be rate limit or permission error
-                    # Only treat as rate limit if X-RateLimit-Remaining shows we're out
+                    # Secondary rate limit: GitHub returns 403 + Retry-After (no X-RateLimit-Remaining)
+                    retry_after_hdr = response.headers.get('Retry-After')
+                    if retry_after_hdr:
+                        try:
+                            retry_after = max(1, int(retry_after_hdr))
+                        except ValueError:
+                            retry_after = 60
+                        raise NeedsRetryException(response.status_code, response.text, uri, retry_after)
+
+                    # Primary rate limit: X-RateLimit-Remaining == 0
                     x_remaining = response.headers.get('X-RateLimit-Remaining')
                     is_rate_limited = False
                     if x_remaining:
