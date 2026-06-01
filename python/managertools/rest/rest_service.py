@@ -168,6 +168,21 @@ class RestService(ABC):
                     if cookies:
                         self.auth_info.update_cookies(cookies)
 
+                # Primary rate limit exceeded: GitHub GraphQL returns 200 with no data
+                if response.headers.get('X-RateLimit-Remaining') == '0':
+                    body = response.json()
+                    if body.get('data') is not None:
+                        return body
+                    sys.stderr.write(f"Primary rate limit exceeded (remaining=0, no data in response): {body}\n")
+                    x_reset = response.headers.get('X-RateLimit-Reset')
+                    retry_after = 1
+                    if x_reset:
+                        try:
+                            retry_after = max(1, int(x_reset) - int(time.time()) + 1)
+                        except ValueError:
+                            pass
+                    raise NeedsRetryException(response.status_code, response.text, uri, retry_after)
+
                 # Parse and return JSON response
                 return response.json()
 
