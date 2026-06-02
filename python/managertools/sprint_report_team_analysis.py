@@ -1010,6 +1010,10 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             self.increment_counter(current_user_lookup, UserActivity.COMMENTED_ON_SELF)
         else:
             self.increment_counter(current_user_lookup, UserActivity.COMMENTED_ON_OTHERS)
+            self.populate_baseline_db_info(pr_author_lookup,
+                                          self.database.get_value(original_index_lookup, DBData.START_DATE.name),
+                                          self.database.get_value(original_index_lookup, DBData.END_DATE.name),
+                                          pr_author)
             self.increment_counter(pr_author_lookup, UserActivity.OTHERS_COMMENTED)
             self.database.append(pr_author_lookup, DBData.OTHERS_COMMENTS.name, f"({user_name}) {comment_text}", True)
 
