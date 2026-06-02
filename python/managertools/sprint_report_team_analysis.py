@@ -59,7 +59,6 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         self.max_file_change_size = None
         self.max_commit_size = None
         self.ignore_filenames = set()
-        self.incomplete_sprints = []
         self._counted_pr_activities = set()
 
     def add_custom_command_line_options(self, parser):
@@ -202,14 +201,6 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     cycle_name = f"{team_name} Cycle {cycle}"
                     self.incomplete_sprints.append(cycle_name)
                     continue
-
-        # Print end-of-run summary for incomplete sprints/cycles
-        if self.incomplete_sprints:
-            print("\n*** WARNING: The following sprints/cycles have incomplete cached data ***", file=sys.stderr)
-            for name in self.incomplete_sprints:
-                print(f"   - {name}", file=sys.stderr)
-            print("Re-run the same command to retry fetching the missing issues.", file=sys.stderr)
-            print("Only the previously-failed issues will be re-fetched.", file=sys.stderr)
 
     def process_kanban_cycle(self, thread_count: int, team_name: str, cycle: int, cycles: int, cycle_length: int, mode: Mode, kanban_start_date: Optional[str] = None):
         # Calculate cycle dates

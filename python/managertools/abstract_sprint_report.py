@@ -49,6 +49,7 @@ class AbstractSprintReport(ABC):
         self.sprint_ids = []
         self.weeks = None
         self.kanban_start_date = None
+        self.incomplete_sprints = []
 
     @abstractmethod
     def aggregate_data(self, team_name: Optional[str], board_id: Optional[str], mode: Mode, sprint_ids: List[str], weeks: Optional[int], kanban_start_date: Optional[str] = None):
@@ -89,6 +90,13 @@ class AbstractSprintReport(ABC):
 
         self.aggregate_data(self.team_name, self.board_id, self.mode, self.sprint_ids, self.weeks, self.kanban_start_date)
         self.generate_output()
+
+        if self.incomplete_sprints:
+            print("\n*** WARNING: The following sprints/cycles have incomplete cached data ***", file=sys.stderr)
+            for name in self.incomplete_sprints:
+                print(f"   - {name}", file=sys.stderr)
+            print("Re-run the same command to retry fetching the missing issues.", file=sys.stderr)
+            print("Only the previously-failed issues will be re-fetched.", file=sys.stderr)
 
         elapsed_seconds = int(time.time() - start_time)
         hours = elapsed_seconds // 3600
