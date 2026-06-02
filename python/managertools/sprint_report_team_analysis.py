@@ -60,6 +60,8 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         self.max_commit_size = None
         self.ignore_filenames = set()
         self._counted_pr_activities = set()
+        self._pr_primary_ticket = {}
+        self._ticket_pr_data = {}
 
     def add_custom_command_line_options(self, parser):
         parser.add_argument('-i', '--isolateTicket', help='Isolate ticket for processing (debugging)')
@@ -89,6 +91,8 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         self.database = FlexiDB(self.generate_db_signature(), True)
         self.incomplete_sprints = []
         self._counted_pr_activities = set()
+        self._pr_primary_ticket = {}
+        self._ticket_pr_data = {}
 
         # Determine thread count
         if self.command_line_options.multithread:
@@ -631,6 +635,32 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         processing_errors = []  # Track errors to prevent cache on failure
         failed_issue_keys = []  # Track ticket keys that failed to process
 
+        # Pre-pass: fetch all PR data in parallel to build the primary-ticket map for activity attribution.
+        # A PR linked to multiple tickets is attributed to the ticket whose key appears in the PR title
+        # (by convention e.g. "AI-164: ..."); falls back to first-found when no title match exists.
+        def prefetch_prs(issue):
+            t = issue.get('key')
+            if isolated_ticket and t != isolated_ticket:
+                return
+            try:
+                prs = self.jira_rest.get_ticket_pull_request_info(str(issue.get('id')))
+                self._ticket_pr_data[t] = prs
+            except Exception:
+                pass  # main pass will retry with full backoff logic
+
+        with ThreadPoolExecutor(max_workers=thread_count) as pre_executor:
+            list(pre_executor.map(prefetch_prs, issue_list))
+
+        for ticket_key, prs in self._ticket_pr_data.items():
+            for pr in prs:
+                pr_id = str(pr.get('id', ''))
+                pr_title = pr.get('title', '')
+                if pr_id and pr_title:
+                    activity_key = (sprint_name, pr_id)
+                    if activity_key not in self._pr_primary_ticket:
+                        if re.search(rf'\b{re.escape(ticket_key)}\b', pr_title, re.IGNORECASE):
+                            self._pr_primary_ticket[activity_key] = ticket_key
+
         print(f"      [DEBUG] Starting thread pool with {thread_count} threads for {len(issue_list)} issues")
 
         def process_issue(issue):
@@ -646,38 +676,40 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
                 issue_id = issue.get('id')
 
-                pull_requests = []
+                pull_requests = self._ticket_pr_data.get(ticket)
                 last_error = None
 
-                for attempt in range(1, max_retries + 1):
-                    try:
-                        pull_requests = self.jira_rest.get_ticket_pull_request_info(str(issue_id))
-                        last_error = None
-                        break
-                    except (RemoteDisconnected, RequestsConnectionError, BrokenPipeError, EOFError) as ce:
-                        last_error = ce
-                        if attempt < max_retries:
-                            # Calculate exponential backoff with jitter
-                            backoff = retry_delay * (2 ** (attempt - 1))
-                            jitter = random.uniform(0, backoff * 0.1)
-                            wait_time = backoff + jitter
+                if pull_requests is None:
+                    pull_requests = []
+                    for attempt in range(1, max_retries + 1):
+                        try:
+                            pull_requests = self.jira_rest.get_ticket_pull_request_info(str(issue_id))
+                            last_error = None
+                            break
+                        except (RemoteDisconnected, RequestsConnectionError, BrokenPipeError, EOFError) as ce:
+                            last_error = ce
+                            if attempt < max_retries:
+                                # Calculate exponential backoff with jitter
+                                backoff = retry_delay * (2 ** (attempt - 1))
+                                jitter = random.uniform(0, backoff * 0.1)
+                                wait_time = backoff + jitter
+                                with lock:
+                                    print(f"   {ticket}: Connection error (attempt {attempt}/{max_retries}): {type(ce).__name__}. "
+                                          f"Retrying in {wait_time:.1f}s...", file=sys.stderr)
+                                time.sleep(wait_time)
+                            else:
+                                with lock:
+                                    print(f"   {ticket}: Connection error after {max_retries} attempts: {ce}", file=sys.stderr)
+                                    failed_issue_keys.append(ticket)
+                        except RESTException as re:
+                            if re.status_code not in [403, 404]:  # FORBIDDEN, NOT_FOUND
+                                return
                             with lock:
-                                print(f"   {ticket}: Connection error (attempt {attempt}/{max_retries}): {type(ce).__name__}. "
-                                      f"Retrying in {wait_time:.1f}s...", file=sys.stderr)
-                            time.sleep(wait_time)
-                        else:
-                            with lock:
-                                print(f"   {ticket}: Connection error after {max_retries} attempts: {ce}", file=sys.stderr)
                                 failed_issue_keys.append(ticket)
-                    except RESTException as re:
-                        if re.status_code not in [403, 404]:  # FORBIDDEN, NOT_FOUND
-                            return
-                        with lock:
-                            failed_issue_keys.append(ticket)
-                        break
+                            break
 
-                if last_error:
-                    raise last_error
+                    if last_error:
+                        raise last_error
 
                 with lock:
                     counter[0] += 1
@@ -809,16 +841,24 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 self.populate_baseline_db_info(merged_index, start_date, end_date, pr_author)
                 self.increment_counter(merged_index, UserActivity.MERGED)
 
-        # Skip activity counting if this PR in this sprint was already processed
+        # Determine whether this ticket should process activities for this PR.
+        # If the PR title contains this ticket's key (by convention), it is the primary ticket.
+        # Otherwise fall back to first-found deduplication to avoid double-counting.
         activity_key = (sprint_name, pr_id)
-        if activity_key in self._counted_pr_activities:
-            pr_activities = None
+        primary_ticket = self._pr_primary_ticket.get(activity_key)
+        if primary_ticket is not None:
+            should_process_activities = (ticket == primary_ticket)
         else:
-            self._counted_pr_activities.add(activity_key)
-            if is_github and _github_activities is not None:
-                pr_activities = _github_activities
-            else:
-                pr_activities = self._retry_rest_call(lambda: source_control_rest.get_activities(pr_url))
+            should_process_activities = activity_key not in self._counted_pr_activities
+            if should_process_activities:
+                self._counted_pr_activities.add(activity_key)
+
+        if not should_process_activities:
+            pr_activities = None
+        elif is_github and _github_activities is not None:
+            pr_activities = _github_activities
+        else:
+            pr_activities = self._retry_rest_call(lambda: source_control_rest.get_activities(pr_url))
         print(f"      [DEBUG] PR {ticket}/{pr_id}: Got {len(pr_activities) if pr_activities else 0} activities")
 
         comment_blockers = []
