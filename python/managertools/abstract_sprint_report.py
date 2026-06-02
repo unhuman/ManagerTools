@@ -108,7 +108,7 @@ class AbstractSprintReport(ABC):
         parser.add_argument('-q', '--quietMode', action='store_true', help='Quiet mode (use default/stored values)')
         parser.add_argument('-l', '--limit', type=_sprint_limit_type, help='Recent sprints to process: a count, "ytd", "year", or a 4-digit year (e.g. "2025")')
         parser.add_argument('-s', '--sprintIds', help='Sprint Id Numbers (comma separated)')
-        parser.add_argument('-ia', '--includeActive', action='store_true', help='Include current active sprint')
+        parser.add_argument('-ia', '--includeActive', action='store_true', help='Include current active sprint/cycle')
 
         self.add_custom_command_line_options(parser)
 

@@ -178,11 +178,16 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     clean_end_date = self.clean_date(end_date_calc.strftime("%d/%b/%y 11:59 PM"))
                     cycle_name = f"{team_name} Cycle {cycle}"
 
-                    self.process_kanban_cycle(thread_count, team_name, cycle, cycles, cycle_length, mode, kanban_start_date)
-
-                    # Track incomplete cycles
+                    # Skip incomplete (active) cycle unless --includeActive
                     cycle_end_datetime = end_date_calc.replace(tzinfo=timezone.utc)
                     is_cycle_complete = cycle_end_datetime.timestamp() * 1000 < datetime.now(timezone.utc).timestamp() * 1000
+                    if not is_cycle_complete and not self.command_line_options.includeActive:
+                        print(f"   Skipping incomplete cycle {cycle} (use --includeActive to include)")
+                        continue
+
+                    self.process_kanban_cycle(thread_count, team_name, cycle, cycles, cycle_length, mode, kanban_start_date)
+
+                    # Track complete cycles whose cache is still incomplete
                     if is_cycle_complete and not SprintDataCache.is_cache_complete(team_name, "", clean_start_date, clean_end_date):
                         self.incomplete_sprints.append(cycle_name)
                 except Exception as e:
