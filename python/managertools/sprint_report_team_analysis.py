@@ -148,27 +148,38 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             if not team_name:
                 raise RuntimeError("Team name is required for Kanban mode")
 
+            from datetime import datetime
             cycle_length = (int(CommandLineHelper.prompt_number("Kanban cycle length, in weeks"))
                            if self.command_line_options.prompt
                            else self.command_line_options.kanbanCycleLength)
 
-            print(f"Processing Kanban {cycles} cycles...")
-            for cycle in range(1, cycles + 1):
-                print(f"Kanban Cycle: {cycle} / {cycles}")
+            # Trim count upfront if the last cycle is still in progress and --includeActive not set
+            effective_cycles = cycles
+            if not self.command_line_options.includeActive and kanban_start_date:
+                last_start = datetime.fromisoformat(kanban_start_date).replace(hour=0, minute=0, second=0, microsecond=0)
+                last_start += timedelta(weeks=(cycles - 1) * cycle_length)
+                dsm = last_start.weekday()
+                if dsm != 0:
+                    last_start += timedelta(days=7 - dsm)
+                last_end = last_start + timedelta(days=7 * cycle_length - 1, hours=23, minutes=59, seconds=59)
+                if last_end.replace(tzinfo=timezone.utc).timestamp() * 1000 >= datetime.now(timezone.utc).timestamp() * 1000:
+                    effective_cycles = cycles - 1
+                    print(f"   Cycle {cycles} is still in progress; processing {effective_cycles} complete cycles (use --includeActive to include cycle {cycles})")
+
+            print(f"Processing Kanban {effective_cycles} cycles...")
+            for cycle in range(1, effective_cycles + 1):
+                print(f"Kanban Cycle: {cycle} / {effective_cycles}")
                 try:
-                    # Calculate cycle dates for tracking incomplete cycles
-                    from datetime import datetime
+                    # Calculate cycle dates
                     if kanban_start_date:
                         start_date_calc = datetime.fromisoformat(kanban_start_date)
                         start_date_calc = start_date_calc.replace(hour=0, minute=0, second=0, microsecond=0)
-                        # Move forward to the start of this cycle
                         start_date_calc += timedelta(weeks=(cycle - 1) * cycle_length)
-                        # If not Monday, move forward to next Monday to align cycle boundaries
                         days_since_monday = start_date_calc.weekday()
                         if days_since_monday != 0:
                             start_date_calc += timedelta(days=7 - days_since_monday)
                     else:
-                        start_date_calc = datetime.now() - timedelta(weeks=(cycles - cycle + 1) * cycle_length)
+                        start_date_calc = datetime.now() - timedelta(weeks=(effective_cycles - cycle + 1) * cycle_length)
                         start_date_calc = start_date_calc.replace(hour=0, minute=0, second=0, microsecond=0)
                         days_since_monday = start_date_calc.weekday()
                         if days_since_monday != 0:
@@ -178,14 +189,10 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     clean_end_date = self.clean_date(end_date_calc.strftime("%d/%b/%y 11:59 PM"))
                     cycle_name = f"{team_name} Cycle {cycle}"
 
-                    # Skip incomplete (active) cycle unless --includeActive
                     cycle_end_datetime = end_date_calc.replace(tzinfo=timezone.utc)
                     is_cycle_complete = cycle_end_datetime.timestamp() * 1000 < datetime.now(timezone.utc).timestamp() * 1000
-                    if not is_cycle_complete and not self.command_line_options.includeActive:
-                        print(f"   Skipping incomplete cycle {cycle} (use --includeActive to include)")
-                        continue
 
-                    self.process_kanban_cycle(thread_count, team_name, cycle, cycles, cycle_length, mode, kanban_start_date)
+                    self.process_kanban_cycle(thread_count, team_name, cycle, effective_cycles, cycle_length, mode, kanban_start_date)
 
                     # Track complete cycles whose cache is still incomplete
                     if is_cycle_complete and not SprintDataCache.is_cache_complete(team_name, "", clean_start_date, clean_end_date):
