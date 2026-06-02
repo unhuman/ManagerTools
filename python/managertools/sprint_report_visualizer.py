@@ -312,7 +312,7 @@ def generate_individual_png(user, df, team_name, output_dir):
     sprint_dates = {}
     if 'START_DATE' in df.columns:
         for sprint, group in df.groupby('SPRINT'):
-            vals = group['START_DATE'].replace('', pd.NA).dropna()
+            vals = group['START_DATE'].str.strip().replace('', pd.NA).dropna()
             val = vals.iloc[0] if not vals.empty else None
             if val is not None:
                 sprint_dates[sprint] = pd.to_datetime(val)
