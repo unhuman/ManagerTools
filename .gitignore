@@ -29,3 +29,5 @@ build/
 .dolt/
 *.db
 .beads-credential-key
+
+python3/

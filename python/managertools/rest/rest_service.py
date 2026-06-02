@@ -108,9 +108,10 @@ class RestService(ABC):
                     raise NeedsRetryException(response.status_code, response.text, uri, retry_after)
 
                 elif response.status_code == 403:
-                    # Secondary rate limit: GitHub returns 403 + Retry-After (no X-RateLimit-Remaining)
+                    # Secondary rate limit: GitHub-only (403 + Retry-After, no X-RateLimit-Remaining)
+                    # Jira also sends Retry-After on permission errors — only treat this as a rate limit for GitHub
                     retry_after_hdr = response.headers.get('Retry-After')
-                    if retry_after_hdr:
+                    if retry_after_hdr and 'api.github.com' in uri:
                         try:
                             retry_after = max(1, int(retry_after_hdr))
                         except ValueError:
