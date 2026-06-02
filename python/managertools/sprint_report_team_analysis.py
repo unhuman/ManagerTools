@@ -298,9 +298,11 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, is_complete, new_failed)
                     print(f"   [DEBUG] Cycle {cycle} cache updated")
                 else:
-                    # Had tracked failures but they're no longer present in Jira
+                    # Had tracked failures but they're no longer in this cycle; clear and mark complete
                     self.load_cached_data_into_database(cached_data)
-                    print(f"   [DEBUG] No issues to retry in cycle {cycle} (previously-failed keys no longer in Jira), cache remains incomplete")
+                    data_to_cache = self.extract_database_data_for_cache(cycle_name)
+                    SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, True, [])
+                    print(f"   [DEBUG] Previously-failed issues {sorted(failed_set)} no longer in cycle {cycle}, cleared from cache")
                 return
 
         print(f"   [DEBUG] No cache for cycle {cycle}, fetching from Jira...")
@@ -387,10 +389,11 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, is_complete, new_failed)
                     print("   [DEBUG] Cache updated successfully")
                 else:
-                    # Had tracked failures but they're no longer present in Jira
-                    print("   [DEBUG] Cache loaded, loading partial data into database...")
+                    # Had tracked failures but they're no longer in this sprint; clear and mark complete
                     self.load_cached_data_into_database(cached_data)
-                    print("   [DEBUG] No issues to retry (previously-failed keys no longer in Jira), cache remains incomplete")
+                    data_to_cache = self.extract_database_data_for_cache(sprint_name)
+                    SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, True, [])
+                    print(f"   [DEBUG] Previously-failed issues {sorted(failed_set)} no longer in sprint {sprint_name}, cleared from cache")
         else:
             # No cache: process all issues
             print("   [DEBUG] Processing fresh data (no cache or cache disabled)...")
