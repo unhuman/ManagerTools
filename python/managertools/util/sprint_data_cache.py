@@ -42,15 +42,15 @@ class SprintDataCache:
         file_path = SprintDataCache.get_cache_file_path(cache_key)
 
         if not os.path.exists(file_path):
-            print(f"   [DEBUG] Cache file not found: {file_path}")
+            print(f"\033[90m   [DEBUG] Cache file not found: {file_path}\033[0m")
             return False
 
-        print(f"   [DEBUG] Cache file found: {file_path}")
+        print(f"\033[90m   [DEBUG] Cache file found: {file_path}\033[0m")
         try:
             with open(file_path, 'r') as f:
                 cached_data = json.load(f)
             is_compatible = SprintDataCache._is_version_compatible(cached_data.get("version", ""))
-            print(f"   [DEBUG] Cache version compatible: {is_compatible} (file version: {cached_data.get('version')})")
+            print(f"\033[90m   [DEBUG] Cache version compatible: {is_compatible} (file version: {cached_data.get('version')})\033[0m")
             return is_compatible
         except Exception as e:
             print(f"Error reading cache file {file_path}: {e}", file=__import__('sys').stderr)
@@ -79,7 +79,7 @@ class SprintDataCache:
         cache_key = SprintDataCache.generate_cache_key(team_name, sprint_name, start_date, end_date)
         file_path = SprintDataCache.get_cache_file_path(cache_key)
 
-        print(f"Loading cached data from: {file_path}")
+        print(f"\033[90m[DEBUG] Loading cached data from: {file_path}\033[0m")
 
         with open(file_path, 'r') as f:
             cached_data = json.load(f)
@@ -115,4 +115,4 @@ class SprintDataCache:
         with open(file_path, 'w') as f:
             json.dump(cache_data, f, indent=2)
 
-        print(f"Saved data to cache: {file_path}")
+        print(f"\033[90m[DEBUG] Saved data to cache: {file_path}\033[0m")
