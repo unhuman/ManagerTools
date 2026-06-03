@@ -139,9 +139,9 @@ class GithubGraphQLClient(RestService):
             reset_dt = datetime.fromisoformat(reset_at_str.replace('Z', '+00:00')) if reset_at_str else None
             seconds_until_reset = max(0, int(reset_dt.timestamp() - time.time())) if reset_dt else None
             print(
-                f"      [DEBUG] GraphQL: cost={rate_limit.get('cost', '?')}, "
+                f"\033[90m      [DEBUG] GraphQL: cost={rate_limit.get('cost', '?')}, "
                 f"remaining={remaining}/{rate_limit.get('limit', '?')}, "
-                f"reset_in={seconds_until_reset}s"
+                f"reset_in={seconds_until_reset}s\033[0m"
             )
 
             pr = data.get("repository", {}).get("pullRequest") or {}
