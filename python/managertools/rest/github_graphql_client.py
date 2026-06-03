@@ -120,7 +120,7 @@ class GithubGraphQLClient(RestService):
                 if e.status_code == 502 and commit_page_size_idx < len(self._COMMIT_PAGE_SIZES) - 1:
                     commit_page_size_idx += 1
                     commit_page_size = self._COMMIT_PAGE_SIZES[commit_page_size_idx]
-                    sys.stderr.write(f"502 fetching {owner}/{repo}#{pr_number}, reducing commit page size to {commit_page_size}\n")
+                    sys.stderr.write(f"\033[91m502 fetching {owner}/{repo}#{pr_number}, reducing commit page size to {commit_page_size}\033[0m\n")
                     continue
                 raise
 

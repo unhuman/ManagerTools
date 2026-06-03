@@ -204,7 +204,7 @@ class RestService(ABC):
                 return response.json()
 
             except NeedsRetryException as nre:
-                sys.stderr.write(f"Rate limit exceeded. Details: {str(nre)}\n")
+                sys.stderr.write(f"\033[91mRate limit exceeded. Details: {str(nre)}\033[0m\n")
                 self._wait_with_countdown(nre.get_retry_after(), "Rate limit exceeded")
 
             except (SocketTimeoutException, requests.exceptions.Timeout) as ste:
@@ -225,5 +225,5 @@ class RestService(ABC):
                 timeout_backoff *= 2
 
             except Exception as e:
-                sys.stderr.write(f"Request Error: {str(e)}\n")
+                sys.stderr.write(f"\033[91mRequest Error: {str(e)}\033[0m\n")
                 raise
