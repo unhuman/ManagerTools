@@ -25,6 +25,7 @@ from managertools.output.convert_self_metrics_empty_to_zero_output_filter import
 from managertools.rest.source_control_rest import SourceControlREST
 from managertools.rest.exceptions import RESTException, NeedsRetryException
 from managertools.util.command_line_helper import CommandLineHelper
+from managertools.util.log_util import debug_print
 from managertools.util.sprint_data_cache import SprintDataCache
 
 
@@ -249,15 +250,15 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         if is_cycle_complete and SprintDataCache.has_cached_data(team_name, "", clean_start_date, clean_end_date):
             if SprintDataCache.is_cache_complete(team_name, "", clean_start_date, clean_end_date):
                 # Complete cache: fast path, no network calls needed
-                print(f"   [DEBUG] Found complete cached data for cycle {cycle}, loading from cache...")
+                debug_print(f"Found complete cached data for cycle {cycle}, loading from cache...")
                 cached_data, _ = SprintDataCache.load_cached_data(team_name, "", clean_start_date, clean_end_date)
                 self.load_cached_data_into_database(cached_data)
-                print(f"   [DEBUG] Successfully loaded cycle {cycle} from cache")
+                debug_print(f"Successfully loaded cycle {cycle} from cache")
                 return
             else:
                 # Incomplete cache: load partial data and retry only failed issues
                 cached_data, prev_failed = SprintDataCache.load_cached_data(team_name, "", clean_start_date, clean_end_date)
-                print(f"   [DEBUG] Found incomplete cached data for cycle {cycle}, failed issues: {', '.join(prev_failed) if prev_failed else 'none (processing errors)'}")
+                debug_print(f"Found incomplete cached data for cycle {cycle}, failed issues: {', '.join(prev_failed) if prev_failed else 'none (processing errors)'}")
 
                 # Fetch all issues to filter for retries
                 data = None
@@ -267,7 +268,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 for attempt in range(1, max_retries + 1):
                     try:
                         data = self.jira_rest.get_kanban_cycle(team_name, cycle, cycles, cycle_length)
-                        print(f"   [DEBUG] Successfully fetched cycle {cycle} data from Jira")
+                        debug_print(f"Successfully fetched cycle {cycle} data from Jira")
                         break
                     except Exception as e:
                         print(f"   [ERROR] Attempt {attempt}/{max_retries} failed for cycle {cycle}: {e}", file=sys.stderr)
@@ -291,32 +292,32 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 all_issues = data.get('issues', [])
                 failed_set = set(prev_failed)
                 retry_issues = [i for i in all_issues if i.get('key') in failed_set]
-                print(f"   [DEBUG] Retrying {len(retry_issues)} previously failed issues in cycle {cycle}...")
+                debug_print(f"Retrying {len(retry_issues)} previously failed issues in cycle {cycle}...")
 
                 if retry_issues:
                     self.load_cached_data_into_database(cached_data)
                     is_complete, new_failed = self.get_issue_category_information(thread_count, sprint_simulation, mode, retry_issues)
-                    print(f"   [DEBUG] Extracting updated data for cycle {cycle}...")
+                    debug_print(f"Extracting updated data for cycle {cycle}...")
                     data_to_cache = self.extract_database_data_for_cache(cycle_name)
-                    print(f"   [DEBUG] Saving updated cache for cycle {cycle}...")
+                    debug_print(f"Saving updated cache for cycle {cycle}...")
                     SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, is_complete, new_failed)
-                    print(f"   [DEBUG] Cycle {cycle} cache updated")
+                    debug_print(f"Cycle {cycle} cache updated")
                 elif not prev_failed:
                     # No tracked failures: incompleteness was from processing_errors; re-process all fresh
-                    print(f"   [DEBUG] No tracked failures for cycle {cycle}, re-processing all {len(all_issues)} issues...")
+                    debug_print(f"No tracked failures for cycle {cycle}, re-processing all {len(all_issues)} issues...")
                     is_complete, new_failed = self.get_issue_category_information(thread_count, sprint_simulation, mode, all_issues)
                     data_to_cache = self.extract_database_data_for_cache(cycle_name)
                     SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, is_complete, new_failed)
-                    print(f"   [DEBUG] Cycle {cycle} cache updated")
+                    debug_print(f"Cycle {cycle} cache updated")
                 else:
                     # Had tracked failures but they're no longer in this cycle; clear and mark complete
                     self.load_cached_data_into_database(cached_data)
                     data_to_cache = self.extract_database_data_for_cache(cycle_name)
                     SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, True, [])
-                    print(f"   [DEBUG] Previously-failed issues {sorted(failed_set)} no longer in cycle {cycle}, cleared from cache")
+                    debug_print(f"Previously-failed issues {sorted(failed_set)} no longer in cycle {cycle}, cleared from cache")
                 return
 
-        print(f"   [DEBUG] No cache for cycle {cycle}, fetching from Jira...")
+        debug_print(f"No cache for cycle {cycle}, fetching from Jira...")
 
         data = None
         max_retries = 3
@@ -325,7 +326,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         for attempt in range(1, max_retries + 1):
             try:
                 data = self.jira_rest.get_kanban_cycle(team_name, cycle, cycles, cycle_length)
-                print(f"   [DEBUG] Successfully fetched cycle {cycle} data from Jira")
+                debug_print(f"Successfully fetched cycle {cycle} data from Jira")
                 break
             except Exception as e:
                 print(f"   [ERROR] Attempt {attempt}/{max_retries} failed for cycle {cycle}: {e}", file=sys.stderr)
@@ -348,78 +349,78 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             'endDate': data.get('endDate')
         }
 
-        print(f"   [DEBUG] Processing fresh data for cycle {cycle}...")
+        debug_print(f"Processing fresh data for cycle {cycle}...")
         is_complete, failed_issues = self.get_issue_category_information(thread_count, sprint_simulation, mode, all_issues)
-        print(f"   [DEBUG] Finished processing cycle {cycle}")
+        debug_print(f"Finished processing cycle {cycle}")
 
         if is_cycle_complete:
-            print(f"   [DEBUG] Saving cycle {cycle} to cache...")
+            debug_print(f"Saving cycle {cycle} to cache...")
             data_to_cache = self.extract_database_data_for_cache(cycle_name)
             SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, is_complete, failed_issues)
-            print(f"   [DEBUG] Cycle {cycle} saved to cache")
+            debug_print(f"Cycle {cycle} saved to cache")
 
     def process_potentially_cached_sprint_data(self, thread_count: int, team_name: str, sprint: Dict[str, Any], mode: Mode, all_issues: List[Any], use_cache: bool):
         sprint_name = sprint.get('name', '')
         start_date = self.clean_date(sprint.get('startDate', ''))
         end_date = self.clean_date(sprint.get('endDate', ''))
 
-        print(f"   [DEBUG] Processing sprint: {sprint_name}, useCache: {use_cache}")
+        debug_print(f"Processing sprint: {sprint_name}, useCache: {use_cache}")
 
         if use_cache and SprintDataCache.has_cached_data(team_name, sprint_name, start_date, end_date):
             if SprintDataCache.is_cache_complete(team_name, sprint_name, start_date, end_date):
                 # Complete cache: fast path, no network calls needed
-                print("   [DEBUG] Loading from complete cache...")
+                debug_print("Loading from complete cache...")
                 cached_data, _ = SprintDataCache.load_cached_data(team_name, sprint_name, start_date, end_date)
-                print("   [DEBUG] Cache loaded, loading into database...")
+                debug_print("Cache loaded, loading into database...")
                 self.load_cached_data_into_database(cached_data)
-                print("   [DEBUG] Cache data loaded into database successfully")
+                debug_print("Cache data loaded into database successfully")
             else:
                 # Incomplete cache: load partial data and retry only failed issues
                 cached_data, prev_failed = SprintDataCache.load_cached_data(team_name, sprint_name, start_date, end_date)
-                print(f"   [DEBUG] Found incomplete cached data for {sprint_name}, failed issues: {', '.join(prev_failed) if prev_failed else 'none (processing errors)'}")
+                debug_print(f"Found incomplete cached data for {sprint_name}, failed issues: {', '.join(prev_failed) if prev_failed else 'none (processing errors)'}")
 
                 # Filter to only retry the previously failed issues
                 failed_set = set(prev_failed)
                 retry_issues = [i for i in all_issues if i.get('key') in failed_set]
-                print(f"   [DEBUG] Retrying {len(retry_issues)} previously failed issues...")
+                debug_print(f"Retrying {len(retry_issues)} previously failed issues...")
 
                 if retry_issues:
-                    print("   [DEBUG] Cache loaded, loading partial data into database...")
+                    debug_print("Cache loaded, loading partial data into database...")
                     self.load_cached_data_into_database(cached_data)
                     is_complete, new_failed = self.get_issue_category_information(thread_count, sprint, mode, retry_issues)
-                    print("   [DEBUG] Extracting updated data for cache...")
+                    debug_print("Extracting updated data for cache...")
                     data_to_cache = self.extract_database_data_for_cache(sprint_name)
-                    print("   [DEBUG] Saving updated cache...")
+                    debug_print("Saving updated cache...")
                     SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, is_complete, new_failed)
-                    print("   [DEBUG] Cache updated successfully")
+                    debug_print("Cache updated successfully")
                 elif not prev_failed:
                     # No tracked failures: incompleteness was from processing_errors; re-process all fresh
-                    print(f"   [DEBUG] No tracked failures for sprint, re-processing all {len(all_issues)} issues...")
+                    debug_print(f"No tracked failures for sprint, re-processing all {len(all_issues)} issues...")
                     is_complete, new_failed = self.get_issue_category_information(thread_count, sprint, mode, all_issues)
                     data_to_cache = self.extract_database_data_for_cache(sprint_name)
                     SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, is_complete, new_failed)
-                    print("   [DEBUG] Cache updated successfully")
+                    debug_print("Cache updated successfully")
                 else:
                     # Had tracked failures but they're no longer in this sprint; clear and mark complete
                     self.load_cached_data_into_database(cached_data)
                     data_to_cache = self.extract_database_data_for_cache(sprint_name)
                     SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, True, [])
-                    print(f"   [DEBUG] Previously-failed issues {sorted(failed_set)} no longer in sprint {sprint_name}, cleared from cache")
+                    debug_print(f"Previously-failed issues {sorted(failed_set)} no longer in sprint {sprint_name}, cleared from cache")
         else:
             # No cache: process all issues
-            print("   [DEBUG] Processing fresh data (no cache or cache disabled)...")
-            print(f"   [DEBUG] Starting getIssueCategoryInformation with {len(all_issues)} issues...")
+            debug_print("Processing fresh data (no cache or cache disabled)...")
+            debug_print(f"Starting getIssueCategoryInformation with {len(all_issues)} issues...")
             is_complete, failed_issues = self.get_issue_category_information(thread_count, sprint, mode, all_issues)
-            print("   [DEBUG] Finished getIssueCategoryInformation")
+            debug_print("Finished getIssueCategoryInformation")
 
             if use_cache:
-                print("   [DEBUG] Extracting data for cache...")
+                debug_print("Extracting data for cache...")
                 data_to_cache = self.extract_database_data_for_cache(sprint_name)
-                print("   [DEBUG] Saving to cache...")
+                debug_print("Saving to cache...")
                 SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, is_complete, failed_issues)
-                print("   [DEBUG] Cache saved successfully")
+                debug_print("Cache saved successfully")
 
-        print(f"   [DEBUG] Completed processing sprint: {sprint_name}")
+        debug_print(f"Completed processing sprint: {sprint_name}")
 
     def extract_database_data_for_cache(self, sprint_name: str) -> Dict[str, Any]:
         sprint_filter = [FlexiDBQueryColumn(DBIndexData.SPRINT.name, sprint_name)]
@@ -624,7 +625,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         start_date = self.clean_date(sprint.get('startDate', ''))
         end_date = self.clean_date(sprint.get('endDate', ''))
 
-        print(f"      [DEBUG] getIssueCategoryInformation started for sprint: {sprint_name}")
+        debug_print(f"getIssueCategoryInformation started for sprint: {sprint_name}")
 
         # Parse sprint times
         sprint_start_time = datetime.strptime(sprint.get('startDate', ''), "%d/%b/%y %I:%M %p").replace(tzinfo=timezone.utc)
@@ -665,7 +666,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                         if re.search(rf'\b{re.escape(ticket_key)}\b', pr_title, re.IGNORECASE):
                             self._pr_primary_ticket[activity_key] = ticket_key
 
-        print(f"      [DEBUG] Starting thread pool with {thread_count} threads for {len(issue_list)} issues")
+        debug_print(f"Starting thread pool with {thread_count} threads for {len(issue_list)} issues")
 
         def process_issue(issue):
             import traceback
@@ -733,8 +734,8 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         with ThreadPoolExecutor(max_workers=thread_count) as executor:
             list(executor.map(process_issue, issue_list))
 
-        print(f"      [DEBUG] Parallel processing completed for {len(issue_list)} issues")
-        print(f"      [DEBUG] getIssueCategoryInformation finished for sprint: {sprint_name}")
+        debug_print(f"Parallel processing completed for {len(issue_list)} issues")
+        debug_print(f"getIssueCategoryInformation finished for sprint: {sprint_name}")
 
         if processing_errors:
             print(f"\033[93mWarning: Encountered {len(processing_errors)} errors during issue processing. First error: {processing_errors[0]}\033[0m", file=sys.stderr)
@@ -774,10 +775,10 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                             end_date: str, sprint_start_ms: float, sprint_end_ms: float, mode: Mode):
         pr_id = pull_request.get('id', 'UNKNOWN')
         pr_url = pull_request.get('url', '')
-        print(f"      [DEBUG] Processing PR: {ticket}/{pr_id}")
+        debug_print(f"Processing PR: {ticket}/{pr_id}")
         if not pr_url:
-            print(f"      [DEBUG] PR {ticket}/{pr_id}: WARNING - No URL in pull_request data. Keys: {list(pull_request.keys())}")
-        print(f"      [DEBUG] PR {ticket}/{pr_id}: url={pr_url}, keys={list(pull_request.keys())}")
+            debug_print(f"PR {ticket}/{pr_id}: WARNING - No URL in pull_request data. Keys: {list(pull_request.keys())}")
+        debug_print(f"PR {ticket}/{pr_id}: url={pr_url}, keys={list(pull_request.keys())}")
 
         is_github = 'github.com/' in pr_url.lower()
         source_control_rest = self.github_rest if is_github else self.bitbucket_rest
@@ -799,7 +800,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             _github_created_ms = None
             _github_merged_ms = None
             _github_activities = None
-        print(f"      [DEBUG] PR {ticket}/{pr_id}: Got {len(pr_commits) if pr_commits else 0} commits")
+        debug_print(f"PR {ticket}/{pr_id}: Got {len(pr_commits) if pr_commits else 0} commits")
 
         if pr_author is None:
             if pr_commits:
@@ -824,7 +825,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             for pattern in self.ignore_pr_title_patterns:
                 try:
                     if re.search(pattern, pr_title):
-                        print(f"      [DEBUG] PR {ticket}/{pr_id}: Filtered by PR title pattern (title: {pr_title})")
+                        debug_print(f"PR {ticket}/{pr_id}: Filtered by PR title pattern (title: {pr_title})")
                         return
                 except re.error:
                     print(f"Invalid regex pattern in ignorePRTitleContent: {pattern}", file=sys.stderr)
@@ -833,7 +834,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         pr_created_ms = (_github_created_ms if is_github
                          else self._retry_rest_call(lambda: source_control_rest.get_pr_created_ms(pr_url)))
         if pr_created_ms and (mode == Mode.KANBAN or sprint_start_ms <= pr_created_ms < sprint_end_ms):
-            print(f"      [DEBUG] PR {ticket}/{pr_id}: OPENED for {pr_author}")
+            debug_print(f"PR {ticket}/{pr_id}: OPENED for {pr_author}")
             open_index = self.create_index_lookup(sprint_name, ticket, pr_id, pr_author, pr_status)
             self.populate_baseline_db_info(open_index, start_date, end_date, pr_author)
             self.increment_counter(open_index, UserActivity.OPENED)
@@ -842,7 +843,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         if is_github and pr_status == 'MERGED':
             pr_merged_ms = _github_merged_ms
             if pr_merged_ms and (mode == Mode.KANBAN or sprint_start_ms <= pr_merged_ms < sprint_end_ms):
-                print(f"      [DEBUG] PR {ticket}/{pr_id}: MERGED for {pr_author}")
+                debug_print(f"PR {ticket}/{pr_id}: MERGED for {pr_author}")
                 merged_index = self.create_index_lookup(sprint_name, ticket, pr_id, pr_author, pr_status)
                 self.populate_baseline_db_info(merged_index, start_date, end_date, pr_author)
                 self.increment_counter(merged_index, UserActivity.MERGED)
@@ -865,7 +866,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             pr_activities = _github_activities
         else:
             pr_activities = self._retry_rest_call(lambda: source_control_rest.get_activities(pr_url))
-        print(f"      [DEBUG] PR {ticket}/{pr_id}: Got {len(pr_activities) if pr_activities else 0} activities")
+        debug_print(f"PR {ticket}/{pr_id}: Got {len(pr_activities) if pr_activities else 0} activities")
 
         comment_blockers = []
 
