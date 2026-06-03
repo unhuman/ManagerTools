@@ -731,7 +731,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         print(f"      [DEBUG] getIssueCategoryInformation finished for sprint: {sprint_name}")
 
         if processing_errors:
-            print(f"Warning: Encountered {len(processing_errors)} errors during issue processing. First error: {processing_errors[0]}", file=sys.stderr)
+            print(f"\033[93mWarning: Encountered {len(processing_errors)} errors during issue processing. First error: {processing_errors[0]}\033[0m", file=sys.stderr)
 
         is_complete = len(failed_issue_keys) == 0 and len(processing_errors) == 0
         return is_complete, failed_issue_keys

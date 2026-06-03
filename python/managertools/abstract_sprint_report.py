@@ -92,11 +92,13 @@ class AbstractSprintReport(ABC):
         self.generate_output()
 
         if self.incomplete_sprints:
-            print("\n*** WARNING: The following sprints/cycles have incomplete cached data ***", file=sys.stderr)
+            _Y = "\033[93m"
+            _R = "\033[0m"
+            print(f"\n{_Y}*** WARNING: The following sprints/cycles have incomplete cached data ***{_R}", file=sys.stderr)
             for name in self.incomplete_sprints:
-                print(f"   - {name}", file=sys.stderr)
-            print("Re-run the same command to retry fetching the missing issues.", file=sys.stderr)
-            print("Only the previously-failed issues will be re-fetched.", file=sys.stderr)
+                print(f"{_Y}   - {name}{_R}", file=sys.stderr)
+            print(f"{_Y}Re-run the same command to retry fetching the missing issues.{_R}", file=sys.stderr)
+            print(f"{_Y}Only the previously-failed issues will be re-fetched.{_R}", file=sys.stderr)
 
         elapsed_seconds = int(time.time() - start_time)
         hours = elapsed_seconds // 3600
