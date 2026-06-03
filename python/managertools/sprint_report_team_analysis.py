@@ -131,10 +131,12 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     start_date = self.clean_date(data.get('sprint', {}).get('startDate', ''))
                     end_date = self.clean_date(data.get('sprint', {}).get('endDate', ''))
 
-                    print(f"{i + 1} / {len(sprint_ids)}: {team_name}: {sprint_name} "
+                    _G = "\033[92m"
+                    _R = "\033[0m"
+                    print(f"{_G}{i + 1} / {len(sprint_ids)}: {team_name}: {sprint_name} "
                           f"(id: {sprint_id}, issues: {len(all_issues)} "
                           f"[{len(completed)} done, {len(incomplete)} incomplete, {len(punted)} punted], "
-                          f"dates: {start_date} - {end_date})")
+                          f"dates: {start_date} - {end_date}){_R}")
 
                     self.process_potentially_cached_sprint_data(thread_count, team_name, data.get('sprint', {}), mode, all_issues, is_completed)
 
@@ -169,9 +171,11 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     effective_cycles = cycles - 1
                     print(f"   Cycle {cycles} is still in progress; processing {effective_cycles} complete cycles (use --includeActive to include cycle {cycles})")
 
-            print(f"Processing Kanban {effective_cycles} cycles...")
+            _G = "\033[92m"
+            _R = "\033[0m"
+            print(f"{_G}Processing Kanban {effective_cycles} cycles...{_R}")
             for cycle in range(1, effective_cycles + 1):
-                print(f"Kanban Cycle: {cycle} / {effective_cycles}")
+                print(f"{_G}Kanban Cycle: {cycle} / {effective_cycles}{_R}")
                 try:
                     # Calculate cycle dates
                     if kanban_start_date:
@@ -713,7 +717,9 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
                 with lock:
                     counter[0] += 1
-                    print(f"   {counter[0]}/{len(issue_list)}: {ticket} / Issue {issue_id} has {len(pull_requests)} PRs")
+                    _B = "\033[94m"
+                    _R = "\033[0m"
+                    print(f"   {_B}{counter[0]}/{len(issue_list)}: {ticket} / Issue {issue_id} has {len(pull_requests)} PRs{_R}")
 
                 for pull_request in pull_requests:
                     self.process_pull_request(ticket, pull_request, sprint_name, start_date, end_date, sprint_start_ms, sprint_end_ms, mode)
