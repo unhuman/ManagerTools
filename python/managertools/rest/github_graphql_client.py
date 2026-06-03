@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 from .rest_service import RestService
 from .auth_info import AuthInfo, AuthType
 from .exceptions import RESTException
+from ..util.log_util import debug_print
 
 
 class GithubGraphQLClient(RestService):
@@ -138,10 +139,10 @@ class GithubGraphQLClient(RestService):
             reset_at_str = rate_limit.get('resetAt')
             reset_dt = datetime.fromisoformat(reset_at_str.replace('Z', '+00:00')) if reset_at_str else None
             seconds_until_reset = max(0, int(reset_dt.timestamp() - time.time())) if reset_dt else None
-            print(
-                f"\033[90m      [DEBUG] GraphQL: cost={rate_limit.get('cost', '?')}, "
+            debug_print(
+                f"GraphQL: cost={rate_limit.get('cost', '?')}, "
                 f"remaining={remaining}/{rate_limit.get('limit', '?')}, "
-                f"reset_in={seconds_until_reset}s\033[0m"
+                f"reset_in={seconds_until_reset}s"
             )
 
             pr = data.get("repository", {}).get("pullRequest") or {}
