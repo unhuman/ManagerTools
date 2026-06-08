@@ -22,11 +22,6 @@ class GithubREST(SourceControlREST):
     PAGE_SIZE_LIMIT = "100"
     JIRA_NAME_PATTERN = re.compile(r'\w.*')
 
-    _ALLOWED_ASSOCIATIONS = frozenset({
-        'CONTRIBUTOR', 'COLLABORATOR', 'FIRST_TIMER',
-        'FIRST_TIME_CONTRIBUTOR', 'MEMBER', 'OWNER',
-    })
-
     def __init__(self, bearer_token: str, graphql_points_reserved: int = 5):
         super().__init__(AuthInfo(AuthType.Bearer, bearer_token))
         self._graphql_client = GithubGraphQLClient(bearer_token, graphql_points_reserved)
@@ -96,10 +91,7 @@ class GithubREST(SourceControlREST):
             if created_at:
                 activity['createdDate'] = int(datetime.fromisoformat(created_at.replace('Z', '+00:00')).timestamp() * 1000)
 
-            author_association = activity.get('author_association', '')
-            if (author_association in ['CONTRIBUTOR', 'COLLABORATOR', 'FIRST_TIMER',
-                                       'FIRST_TIME_CONTRIBUTOR', 'MEMBER', 'OWNER']
-                    and activity.get('body') is not None):
+            if activity.get('body') is not None:
                 activity['action'] = UserActivity.COMMENTED.name
                 activity['comment'] = {'text': activity['body']}
                 comments.append(activity)
@@ -146,10 +138,7 @@ class GithubREST(SourceControlREST):
             if submitted_at:
                 activity['createdDate'] = int(datetime.fromisoformat(submitted_at.replace('Z', '+00:00')).timestamp() * 1000)
 
-            author_association = activity.get('author_association', '')
-            if (author_association in ['CONTRIBUTOR', 'COLLABORATOR', 'FIRST_TIMER',
-                                       'FIRST_TIME_CONTRIBUTOR', 'MEMBER', 'OWNER']
-                    and activity.get('body') is not None):
+            if activity.get('body') is not None:
                 state = activity.get('state', '')
                 if state in ['APPROVED', 'DISMISSED']:
                     activity['action'] = UserActivity.DECLINED.name if state == 'DISMISSED' else state
@@ -290,8 +279,6 @@ class GithubREST(SourceControlREST):
         for node in raw["comments"] + raw["review_thread_comments"]:
             if node.get("body") is None:
                 continue
-            if node.get("authorAssociation", "") not in self._ALLOWED_ASSOCIATIONS:
-                continue
             login = (node.get("author") or {}).get("login")
             jira_name = self.map_user_to_jira_name({"login": login}) if login else None
             activities.append({
@@ -306,8 +293,6 @@ class GithubREST(SourceControlREST):
             if state not in ("APPROVED", "DISMISSED"):
                 continue
             if review.get("submittedAt") is None or review.get("body") is None:
-                continue
-            if review.get("authorAssociation", "") not in self._ALLOWED_ASSOCIATIONS:
                 continue
             login = (review.get("author") or {}).get("login")
             jira_name = self.map_user_to_jira_name({"login": login}) if login else None

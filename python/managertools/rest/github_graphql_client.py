@@ -56,7 +56,7 @@ class GithubGraphQLClient(RestService):
           reviewThreads(first: 50, after: $reviewThreadCursor) {
             pageInfo { hasNextPage endCursor }
             nodes {
-              comments(first: 20) {
+              comments(first: 100) {
                 nodes {
                   author { login }
                   authorAssociation
