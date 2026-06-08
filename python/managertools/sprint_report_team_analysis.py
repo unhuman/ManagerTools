@@ -36,7 +36,7 @@ class CommentBlocker:
 
 
 class SprintReportTeamAnalysis(AbstractSprintReport):
-    IGNORE_USERS = ["codeowners", "deployman", "sa-sre-jencim"]
+    IGNORE_USERS = ["codeowners", "deployman", "sa-sre-jencim", "Jenkins"]
     IGNORE_COMMENTS = ["Tasks to Complete Before Merging Pull Request"]
 
     SELF_PREFIX = "SELF_"
