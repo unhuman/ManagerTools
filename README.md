@@ -93,12 +93,12 @@ Configuration is stored in `~/.managerTools.cfg` as a JSON file. The following o
 
 #### Code Metrics Filtering
 
-- **`maxCommitSize`** — Exclude commits larger than this line threshold (additions + removals) from metrics. Defaults to 2000 if not specified. Helps filter out large auto-generated changes and downmerges.
+- **`maxCommitSize`** — Exclude commits larger than this line threshold (additions + removals) from metrics. Defaults to 2000 if not specified. Helps filter out large auto-generated changes and downmerges. Commits exceeding this threshold will not contribute to `COMMIT_ADDED`/`COMMIT_REMOVED` line counts, though the row still appears in reports showing `OPENED`/`MERGED`/review activity.
   ```json
   "maxCommitSize": 2000
   ```
 
-- **`maxFileChangeSize`** — Exclude individual file changes larger than this line threshold from metrics.
+- **`maxFileChangeSize`** — ⚠️ Documented for future use; not yet implemented. Intended to exclude individual file changes larger than this line threshold from metrics.
   ```json
   "maxFileChangeSize": 5000
   ```
