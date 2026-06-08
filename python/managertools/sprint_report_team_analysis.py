@@ -558,18 +558,20 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             author = row.get(DBData.AUTHOR.name)
             pr_status = row.get(DBIndexData.PR_STATUS.name)
 
-            # Filter out rows where commit size exceeds maxCommitSize threshold
-            commit_added = row.get(UserActivity.COMMIT_ADDED.name, 0) or 0
-            commit_removed = row.get(UserActivity.COMMIT_REMOVED.name, 0) or 0
-            total_commit_size = commit_added + commit_removed
-            if self.max_commit_size and total_commit_size >= self.max_commit_size:
-                continue
-
             # Filter out rows by PR title patterns (entire PR is excluded)
             if self._should_filter_row_by_pr_title(row):
                 continue
 
             output_row = FlexiDBRow(row)
+
+            # Suppress commit line counts if aggregate exceeds maxCommitSize, but keep the row
+            # (preserves OPENED/MERGED/review activity for large commits)
+            commit_added = output_row.get(UserActivity.COMMIT_ADDED.name, 0) or 0
+            commit_removed = output_row.get(UserActivity.COMMIT_REMOVED.name, 0) or 0
+            total_commit_size = commit_added + commit_removed
+            if self.max_commit_size and total_commit_size >= self.max_commit_size:
+                output_row[UserActivity.COMMIT_ADDED.name] = None
+                output_row[UserActivity.COMMIT_REMOVED.name] = None
 
             if not (row_user and author and row_user.casefold() == author.casefold()):
                 output_row[DBIndexData.PR_STATUS.name] = ""
@@ -978,10 +980,6 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             deletions = diffs_response['stats'].get('deletions')
 
         if additions is not None or deletions is not None:
-            total = (additions or 0) + (deletions or 0)
-            if self.max_commit_size and total >= self.max_commit_size:
-                return
-
             self.increment_counter(index_lookup, UserActivity[prefix + "ADDED"], additions or 0)
             self.increment_counter(index_lookup, UserActivity[prefix + "REMOVED"], deletions or 0)
             return
@@ -1000,10 +998,6 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                         added_calculated += len(segment.get('lines', []))
                     elif segment.get('type') == 'REMOVED':
                         removed_calculated += len(segment.get('lines', []))
-
-        total = added_calculated + removed_calculated
-        if self.max_commit_size and total >= self.max_commit_size:
-            return
 
         self.increment_counter(index_lookup, UserActivity[prefix + "ADDED"], added_calculated)
         self.increment_counter(index_lookup, UserActivity[prefix + "REMOVED"], removed_calculated)
