@@ -27,6 +27,7 @@ from managertools.rest.exceptions import RESTException, NeedsRetryException
 from managertools.util.command_line_helper import CommandLineHelper
 from managertools.util.log_util import debug_print
 from managertools.util.sprint_data_cache import SprintDataCache
+from managertools.util.pr_data_cache import PRDataCache
 
 
 class CommentBlocker:
@@ -63,6 +64,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         self._counted_pr_activities = set()
         self._pr_primary_ticket = {}
         self._ticket_pr_data = {}
+        self._pr_mem_cache: Dict[str, Any] = {}
 
     def add_custom_command_line_options(self, parser):
         parser.add_argument('-i', '--isolateTicket', help='Isolate ticket for processing (debugging)')
@@ -94,6 +96,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         self._counted_pr_activities = set()
         self._pr_primary_ticket = {}
         self._ticket_pr_data = {}
+        self._pr_mem_cache: Dict[str, Any] = {}
 
         # Determine thread count
         if self.command_line_options.multithread:
@@ -140,6 +143,9 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                           f"dates: {start_date} - {end_date}){_R}")
 
                     self.process_potentially_cached_sprint_data(thread_count, team_name, data.get('sprint', {}), mode, all_issues, is_completed)
+
+                    # Evict PR cache entries not referenced by any ticket in this sprint
+                    self._evict_stale_pr_cache_entries()
 
                     # Track incomplete sprints
                     if is_completed and not SprintDataCache.is_cache_complete(team_name, sprint_name, start_date, end_date):
@@ -201,6 +207,9 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     is_cycle_complete = cycle_end_datetime.timestamp() * 1000 < datetime.now(timezone.utc).timestamp() * 1000
 
                     self.process_kanban_cycle(thread_count, team_name, cycle, effective_cycles, cycle_length, mode, kanban_start_date)
+
+                    # Evict PR cache entries not referenced by any ticket in this cycle
+                    self._evict_stale_pr_cache_entries()
 
                     # Track complete cycles whose cache is still incomplete
                     if is_cycle_complete and not SprintDataCache.is_cache_complete(team_name, "", clean_start_date, clean_end_date):
@@ -358,6 +367,19 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             data_to_cache = self.extract_database_data_for_cache(cycle_name)
             SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, is_complete, failed_issues)
             debug_print(f"Cycle {cycle} saved to cache")
+
+    def _evict_stale_pr_cache_entries(self) -> None:
+        """Evict PR cache entries not referenced by any ticket in current sprint."""
+        active_pr_urls = {
+            url
+            for pr_list in self._ticket_pr_data.values()
+            for url in pr_list
+        }
+        stale = [url for url in self._pr_mem_cache if url not in active_pr_urls]
+        for url in stale:
+            del self._pr_mem_cache[url]
+        if stale:
+            debug_print(f"Evicted {len(stale)} stale PR cache entries")
 
     def process_potentially_cached_sprint_data(self, thread_count: int, team_name: str, sprint: Dict[str, Any], mode: Mode, all_issues: List[Any], use_cache: bool):
         sprint_name = sprint.get('name', '')
@@ -792,7 +814,22 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
         # For GitHub, fetch all PR data in one GraphQL call; Bitbucket uses REST
         if is_github:
-            pr_full = self._retry_rest_call(lambda: source_control_rest.get_pull_request_full(pr_url))
+            # Two-tier cache: check memory first, then disk (merged PRs), then fetch from GitHub
+            pr_full = self._pr_mem_cache.get(pr_url)
+
+            if pr_full is None:
+                pr_full = PRDataCache.load(pr_url)
+                if pr_full is not None:
+                    debug_print(f"PR {ticket}/{pr_id}: disk cache hit")
+
+            if pr_full is None:
+                pr_full = self._retry_rest_call(lambda: source_control_rest.get_pull_request_full(pr_url))
+                if pr_full is not None and pr_full.get("merged_ms", 0) > 0:
+                    PRDataCache.save(pr_url, pr_full)
+
+            if pr_full is not None:
+                self._pr_mem_cache[pr_url] = pr_full
+
             pr_commits = pr_full.get("commits", []) if pr_full else None
             _github_created_ms = pr_full.get("created_ms", 0) if pr_full else 0
             _github_merged_ms = pr_full.get("merged_ms", 0) if pr_full else 0
