@@ -376,9 +376,10 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
     def _evict_stale_pr_cache_entries(self) -> None:
         """Evict PR cache entries not referenced by any ticket in current sprint."""
         active_pr_urls = {
-            url
+            pr.get('url')
             for pr_list in self._ticket_pr_data.values()
-            for url in pr_list
+            for pr in pr_list
+            if pr.get('url')
         }
         stale = [url for url in self._pr_mem_cache if url not in active_pr_urls]
         for url in stale:
