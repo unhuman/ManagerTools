@@ -88,8 +88,14 @@ class AbstractSprintReport(ABC):
         import time
         start_time = time.time()
 
-        self.aggregate_data(self.team_name, self.board_id, self.mode, self.sprint_ids, self.weeks, self.kanban_start_date)
-        self.generate_output()
+        try:
+            self.aggregate_data(self.team_name, self.board_id, self.mode, self.sprint_ids, self.weeks, self.kanban_start_date)
+            self.generate_output()
+        except RuntimeError as e:
+            _Y = "\033[93m"
+            _R = "\033[0m"
+            print(f"\n{_Y}Caught: RuntimeError: {e}{_R}", file=sys.stderr)
+            return
 
         if self.incomplete_sprints:
             _Y = "\033[93m"
