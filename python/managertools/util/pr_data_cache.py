@@ -1,8 +1,9 @@
 import json
 import os
 import re
+import shutil
 from pathlib import Path
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Optional
 
 from .log_util import debug_print
 
@@ -12,15 +13,24 @@ class PRDataCache:
     CACHE_VERSION = "1.0"
 
     def __init__(self, team_name: str, cache_base_dir: str = "cacheData"):
-        """Initialize cache with team-namespaced directory.
+        """Initialize cache with team-namespaced directory as a run lock.
 
         Args:
             team_name: The team name (will be sanitized to create directory)
             cache_base_dir: Base cache directory (default: cacheData)
+
+        Raises:
+            RuntimeError: If the team cache directory already exists (another run in progress)
         """
         safe = re.sub(r'[^a-z0-9]', '_', team_name.lower()).strip('_')
         self._cache_dir = os.path.join(cache_base_dir, "pr", safe)
-        self._accessed: Set[str] = set()
+
+        if os.path.isdir(self._cache_dir):
+            raise RuntimeError(
+                f"Team '{team_name}' appears to already be running. "
+                f"If this is an error, delete: {self._cache_dir}"
+            )
+        os.makedirs(self._cache_dir)
 
     @staticmethod
     def _make_key(ticket: str, pr_id: str) -> str:
@@ -48,7 +58,6 @@ class PRDataCache:
                 debug_print(f"PR cache version mismatch for {ticket}/{pr_id}: expected {PRDataCache.CACHE_VERSION}, got {data.get('version')}")
                 return None
 
-            self._accessed.add(key)
             return data.get("pr_full")
         except Exception as e:
             debug_print(f"Error loading PR cache for {ticket}/{pr_id}: {e}")
@@ -64,8 +73,6 @@ class PRDataCache:
             return
 
         try:
-            Path(self._cache_dir).mkdir(parents=True, exist_ok=True)
-
             key = self._make_key(ticket, pr_id)
             path = os.path.join(self._cache_dir, f"{key}.json")
 
@@ -78,21 +85,12 @@ class PRDataCache:
             with open(path, 'w') as f:
                 json.dump(cache_data, f, indent=2)
 
-            self._accessed.add(key)
             debug_print(f"Cached merged PR data: {ticket}/{pr_id}")
         except Exception as e:
             debug_print(f"Error saving PR cache for {ticket}/{pr_id}: {e}")
 
-    def cleanup(self) -> None:
-        """Remove disk entries not accessed during this run."""
-        if not os.path.isdir(self._cache_dir):
-            return
-        removed = 0
-        for fname in os.listdir(self._cache_dir):
-            if fname.endswith(".json"):
-                key = fname[:-5]
-                if key not in self._accessed:
-                    os.remove(os.path.join(self._cache_dir, fname))
-                    removed += 1
-        if removed:
-            debug_print(f"PR cache cleanup: removed {removed} stale entries")
+    def release(self) -> None:
+        """Delete the team cache directory, releasing the run lock."""
+        if os.path.isdir(self._cache_dir):
+            shutil.rmtree(self._cache_dir)
+            debug_print(f"PR cache released: {self._cache_dir}")

@@ -100,130 +100,130 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         self._pr_mem_cache: Dict[str, Any] = {}
         self._pr_data_cache = PRDataCache(self.team_name)
 
-        # Determine thread count
-        if self.command_line_options.multithread:
-            if self.command_line_options.multithread == "*":
-                import os
-                thread_count = os.cpu_count() or 1
+        try:
+            # Determine thread count
+            if self.command_line_options.multithread:
+                if self.command_line_options.multithread == "*":
+                    import os
+                    thread_count = os.cpu_count() or 1
+                else:
+                    thread_count = int(self.command_line_options.multithread)
             else:
-                thread_count = int(self.command_line_options.multithread)
-        else:
-            thread_count = 1
+                thread_count = 1
 
-        print(f"Using {thread_count} threads")
+            print(f"Using {thread_count} threads")
 
-        if mode == Mode.SCRUM:
-            print(f"Processing Scrum: {len(sprint_ids)} sprints...")
-            for i, sprint_id in enumerate(sprint_ids):
-                try:
-                    data = self.jira_rest.get_sprint_report(board_id, sprint_id)
+            if mode == Mode.SCRUM:
+                print(f"Processing Scrum: {len(sprint_ids)} sprints...")
+                for i, sprint_id in enumerate(sprint_ids):
+                    try:
+                        data = self.jira_rest.get_sprint_report(board_id, sprint_id)
 
-                    contents = data.get('contents', {})
-                    completed = contents.get('completedIssues', [])
-                    incomplete = contents.get('issuesNotCompletedInCurrentSprint', [])
-                    punted = contents.get('puntedIssues', [])
+                        contents = data.get('contents', {})
+                        completed = contents.get('completedIssues', [])
+                        incomplete = contents.get('issuesNotCompletedInCurrentSprint', [])
+                        punted = contents.get('puntedIssues', [])
 
-                    seen_ids = set()
-                    all_issues = []
-                    for issue in completed + incomplete + punted:
-                        issue_id_key = issue.get('id') or issue.get('key')
-                        if issue_id_key not in seen_ids:
-                            seen_ids.add(issue_id_key)
-                            all_issues.append(issue)
+                        seen_ids = set()
+                        all_issues = []
+                        for issue in completed + incomplete + punted:
+                            issue_id_key = issue.get('id') or issue.get('key')
+                            if issue_id_key not in seen_ids:
+                                seen_ids.add(issue_id_key)
+                                all_issues.append(issue)
 
-                    sprint_name = data.get('sprint', {}).get('name', '')
-                    sprint_state = data.get('sprint', {}).get('state', '').lower()
-                    is_completed = sprint_state == 'closed'
-                    start_date = self.clean_date(data.get('sprint', {}).get('startDate', ''))
-                    end_date = self.clean_date(data.get('sprint', {}).get('endDate', ''))
+                        sprint_name = data.get('sprint', {}).get('name', '')
+                        sprint_state = data.get('sprint', {}).get('state', '').lower()
+                        is_completed = sprint_state == 'closed'
+                        start_date = self.clean_date(data.get('sprint', {}).get('startDate', ''))
+                        end_date = self.clean_date(data.get('sprint', {}).get('endDate', ''))
 
-                    _G = "\033[92m"
-                    _R = "\033[0m"
-                    print(f"{_G}{i + 1} / {len(sprint_ids)}: {team_name}: {sprint_name} "
-                          f"(id: {sprint_id}, issues: {len(all_issues)} "
-                          f"[{len(completed)} done, {len(incomplete)} incomplete, {len(punted)} punted], "
-                          f"dates: {start_date} - {end_date}){_R}")
+                        _G = "\033[92m"
+                        _R = "\033[0m"
+                        print(f"{_G}{i + 1} / {len(sprint_ids)}: {team_name}: {sprint_name} "
+                              f"(id: {sprint_id}, issues: {len(all_issues)} "
+                              f"[{len(completed)} done, {len(incomplete)} incomplete, {len(punted)} punted], "
+                              f"dates: {start_date} - {end_date}){_R}")
 
-                    self.process_potentially_cached_sprint_data(thread_count, team_name, data.get('sprint', {}), mode, all_issues, is_completed)
+                        self.process_potentially_cached_sprint_data(thread_count, team_name, data.get('sprint', {}), mode, all_issues, is_completed)
 
-                    # Evict PR cache entries not referenced by any ticket in this sprint
-                    self._evict_stale_pr_cache_entries()
+                        # Evict PR cache entries not referenced by any ticket in this sprint
+                        self._evict_stale_pr_cache_entries()
 
-                    # Track incomplete sprints
-                    if is_completed and not SprintDataCache.is_cache_complete(team_name, sprint_name, start_date, end_date):
-                        self.incomplete_sprints.append(sprint_name)
-                except Exception as e:
-                    print(f"Error processing sprint {sprint_id}: {e}", file=sys.stderr)
-                    import traceback
-                    traceback.print_exc(file=sys.stderr)
-                    continue
+                        # Track incomplete sprints
+                        if is_completed and not SprintDataCache.is_cache_complete(team_name, sprint_name, start_date, end_date):
+                            self.incomplete_sprints.append(sprint_name)
+                    except Exception as e:
+                        print(f"Error processing sprint {sprint_id}: {e}", file=sys.stderr)
+                        import traceback
+                        traceback.print_exc(file=sys.stderr)
+                        continue
 
-        elif mode == Mode.KANBAN:
-            if not team_name:
-                raise RuntimeError("Team name is required for Kanban mode")
+            elif mode == Mode.KANBAN:
+                if not team_name:
+                    raise RuntimeError("Team name is required for Kanban mode")
 
-            from datetime import datetime
-            cycle_length = (int(CommandLineHelper.prompt_number("Kanban cycle length, in weeks"))
-                           if self.command_line_options.prompt
-                           else self.command_line_options.kanbanCycleLength)
+                from datetime import datetime
+                cycle_length = (int(CommandLineHelper.prompt_number("Kanban cycle length, in weeks"))
+                               if self.command_line_options.prompt
+                               else self.command_line_options.kanbanCycleLength)
 
-            # Trim count upfront if the last cycle is still in progress and --includeActive not set
-            effective_cycles = cycles
-            if not self.command_line_options.includeActive and kanban_start_date:
-                last_start = datetime.fromisoformat(kanban_start_date).replace(hour=0, minute=0, second=0, microsecond=0)
-                last_start += timedelta(weeks=(cycles - 1) * cycle_length)
-                dsm = last_start.weekday()
-                if dsm != 0:
-                    last_start += timedelta(days=7 - dsm)
-                last_end = last_start + timedelta(days=7 * cycle_length - 1, hours=23, minutes=59, seconds=59)
-                if last_end.replace(tzinfo=timezone.utc).timestamp() * 1000 >= datetime.now(timezone.utc).timestamp() * 1000:
-                    effective_cycles = cycles - 1
-                    print(f"   Cycle {cycles} is still in progress; processing {effective_cycles} complete cycles (use --includeActive to include cycle {cycles})")
+                # Trim count upfront if the last cycle is still in progress and --includeActive not set
+                effective_cycles = cycles
+                if not self.command_line_options.includeActive and kanban_start_date:
+                    last_start = datetime.fromisoformat(kanban_start_date).replace(hour=0, minute=0, second=0, microsecond=0)
+                    last_start += timedelta(weeks=(cycles - 1) * cycle_length)
+                    dsm = last_start.weekday()
+                    if dsm != 0:
+                        last_start += timedelta(days=7 - dsm)
+                    last_end = last_start + timedelta(days=7 * cycle_length - 1, hours=23, minutes=59, seconds=59)
+                    if last_end.replace(tzinfo=timezone.utc).timestamp() * 1000 >= datetime.now(timezone.utc).timestamp() * 1000:
+                        effective_cycles = cycles - 1
+                        print(f"   Cycle {cycles} is still in progress; processing {effective_cycles} complete cycles (use --includeActive to include cycle {cycles})")
 
-            _G = "\033[92m"
-            _R = "\033[0m"
-            print(f"{_G}Processing Kanban {effective_cycles} cycles...{_R}")
-            for cycle in range(1, effective_cycles + 1):
-                print(f"{_G}Kanban Cycle: {cycle} / {effective_cycles}{_R}")
-                try:
-                    # Calculate cycle dates
-                    if kanban_start_date:
-                        start_date_calc = datetime.fromisoformat(kanban_start_date)
-                        start_date_calc = start_date_calc.replace(hour=0, minute=0, second=0, microsecond=0)
-                        start_date_calc += timedelta(weeks=(cycle - 1) * cycle_length)
-                        days_since_monday = start_date_calc.weekday()
-                        if days_since_monday != 0:
-                            start_date_calc += timedelta(days=7 - days_since_monday)
-                    else:
-                        start_date_calc = datetime.now() - timedelta(weeks=(effective_cycles - cycle + 1) * cycle_length)
-                        start_date_calc = start_date_calc.replace(hour=0, minute=0, second=0, microsecond=0)
-                        days_since_monday = start_date_calc.weekday()
-                        if days_since_monday != 0:
-                            start_date_calc -= timedelta(days=days_since_monday)
-                    end_date_calc = start_date_calc + timedelta(days=7 * cycle_length - 1, hours=23, minutes=59, seconds=59)
-                    clean_start_date = self.clean_date(start_date_calc.strftime("%d/%b/%y 12:00 AM"))
-                    clean_end_date = self.clean_date(end_date_calc.strftime("%d/%b/%y 11:59 PM"))
-                    cycle_name = f"{team_name} Cycle {cycle}"
+                _G = "\033[92m"
+                _R = "\033[0m"
+                print(f"{_G}Processing Kanban {effective_cycles} cycles...{_R}")
+                for cycle in range(1, effective_cycles + 1):
+                    print(f"{_G}Kanban Cycle: {cycle} / {effective_cycles}{_R}")
+                    try:
+                        # Calculate cycle dates
+                        if kanban_start_date:
+                            start_date_calc = datetime.fromisoformat(kanban_start_date)
+                            start_date_calc = start_date_calc.replace(hour=0, minute=0, second=0, microsecond=0)
+                            start_date_calc += timedelta(weeks=(cycle - 1) * cycle_length)
+                            days_since_monday = start_date_calc.weekday()
+                            if days_since_monday != 0:
+                                start_date_calc += timedelta(days=7 - days_since_monday)
+                        else:
+                            start_date_calc = datetime.now() - timedelta(weeks=(effective_cycles - cycle + 1) * cycle_length)
+                            start_date_calc = start_date_calc.replace(hour=0, minute=0, second=0, microsecond=0)
+                            days_since_monday = start_date_calc.weekday()
+                            if days_since_monday != 0:
+                                start_date_calc -= timedelta(days=days_since_monday)
+                        end_date_calc = start_date_calc + timedelta(days=7 * cycle_length - 1, hours=23, minutes=59, seconds=59)
+                        clean_start_date = self.clean_date(start_date_calc.strftime("%d/%b/%y 12:00 AM"))
+                        clean_end_date = self.clean_date(end_date_calc.strftime("%d/%b/%y 11:59 PM"))
+                        cycle_name = f"{team_name} Cycle {cycle}"
 
-                    cycle_end_datetime = end_date_calc.replace(tzinfo=timezone.utc)
-                    is_cycle_complete = cycle_end_datetime.timestamp() * 1000 < datetime.now(timezone.utc).timestamp() * 1000
+                        cycle_end_datetime = end_date_calc.replace(tzinfo=timezone.utc)
+                        is_cycle_complete = cycle_end_datetime.timestamp() * 1000 < datetime.now(timezone.utc).timestamp() * 1000
 
-                    self.process_kanban_cycle(thread_count, team_name, cycle, effective_cycles, cycle_length, mode, kanban_start_date)
+                        self.process_kanban_cycle(thread_count, team_name, cycle, effective_cycles, cycle_length, mode, kanban_start_date)
 
-                    # Evict PR cache entries not referenced by any ticket in this cycle
-                    self._evict_stale_pr_cache_entries()
+                        # Evict PR cache entries not referenced by any ticket in this cycle
+                        self._evict_stale_pr_cache_entries()
 
-                    # Track complete cycles whose cache is still incomplete
-                    if is_cycle_complete and not SprintDataCache.is_cache_complete(team_name, "", clean_start_date, clean_end_date):
+                        # Track complete cycles whose cache is still incomplete
+                        if is_cycle_complete and not SprintDataCache.is_cache_complete(team_name, "", clean_start_date, clean_end_date):
+                            self.incomplete_sprints.append(cycle_name)
+                    except Exception as e:
+                        print(f"Error processing Kanban cycle {cycle}: {e}", file=sys.stderr)
+                        cycle_name = f"{team_name} Cycle {cycle}"
                         self.incomplete_sprints.append(cycle_name)
-                except Exception as e:
-                    print(f"Error processing Kanban cycle {cycle}: {e}", file=sys.stderr)
-                    cycle_name = f"{team_name} Cycle {cycle}"
-                    self.incomplete_sprints.append(cycle_name)
-                    continue
-
-        if self._pr_data_cache:
-            self._pr_data_cache.cleanup()
+                        continue
+        finally:
+            self._pr_data_cache.release()
 
     def process_kanban_cycle(self, thread_count: int, team_name: str, cycle: int, cycles: int, cycle_length: int, mode: Mode, kanban_start_date: Optional[str] = None):
         # Calculate cycle dates
