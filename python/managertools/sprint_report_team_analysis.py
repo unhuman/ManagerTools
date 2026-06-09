@@ -119,7 +119,24 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 print(f"Processing Scrum: {len(sprint_ids)} sprints...")
                 for i, sprint_id in enumerate(sprint_ids):
                     try:
-                        data = self.jira_rest.get_sprint_report(board_id, sprint_id)
+                        # Retry get_sprint_report up to 3 times on transient failures
+                        max_retries = 3
+                        retry_delay = 5
+                        data = None
+                        for attempt in range(1, max_retries + 1):
+                            try:
+                                data = self.jira_rest.get_sprint_report(board_id, sprint_id)
+                                break
+                            except Exception as e:
+                                print(f"   [ERROR] Attempt {attempt}/{max_retries} failed for sprint {sprint_id}: {e}", file=sys.stderr)
+                                if attempt < max_retries:
+                                    print(f"   [INFO] Retrying in {retry_delay} seconds...", file=sys.stderr)
+                                    time.sleep(retry_delay)
+                                    retry_delay *= 2
+                                else:
+                                    print(f"   [ERROR] Failed to fetch sprint {sprint_id} after {max_retries} attempts, skipping", file=sys.stderr)
+                        if data is None:
+                            continue
 
                         contents = data.get('contents', {})
                         completed = contents.get('completedIssues', [])
