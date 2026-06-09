@@ -30,6 +30,7 @@ class GithubGraphQLClient(RestService):
           createdAt
           mergedAt
           commits(first: $commitPageSize, after: $commitCursor) {
+            totalCount
             pageInfo { hasNextPage endCursor }
             nodes {
               commit {
@@ -45,6 +46,7 @@ class GithubGraphQLClient(RestService):
             }
           }
           comments(first: 100, after: $commentCursor) {
+            totalCount
             pageInfo { hasNextPage endCursor }
             nodes {
               author { login }
@@ -54,6 +56,7 @@ class GithubGraphQLClient(RestService):
             }
           }
           reviewThreads(first: 50, after: $reviewThreadCursor) {
+            totalCount
             pageInfo { hasNextPage endCursor }
             nodes {
               comments(first: 100) {
@@ -83,6 +86,13 @@ class GithubGraphQLClient(RestService):
     def __init__(self, bearer_token: str, graphql_points_reserved: int = 5):
         super().__init__(AuthInfo(AuthType.Bearer, bearer_token))
         self._graphql_points_reserved = graphql_points_reserved
+        self._pr_progress_index: int = 0
+        self._pr_progress_total: int = 0
+
+    def set_pr_progress(self, index: int, total: int) -> None:
+        """Set current PR progress for debug logging."""
+        self._pr_progress_index = index
+        self._pr_progress_total = total
 
     def get_pull_request_data(self, owner: str, repo: str, pr_number: int) -> Dict[str, Any]:
         """
@@ -102,6 +112,13 @@ class GithubGraphQLClient(RestService):
         rt_cursor: Optional[str] = None
         commit_page_size = self._COMMIT_PAGE_SIZES[0]
         commit_page_size_idx = 0
+
+        # For progress tracking
+        import math
+        call_num = 0
+        commits_total: Optional[int] = None
+        comments_total: Optional[int] = None
+        rt_total: Optional[int] = None
 
         while True:
             variables = {
@@ -139,13 +156,33 @@ class GithubGraphQLClient(RestService):
             reset_at_str = rate_limit.get('resetAt')
             reset_dt = datetime.fromisoformat(reset_at_str.replace('Z', '+00:00')) if reset_at_str else None
             seconds_until_reset = max(0, int(reset_dt.timestamp() - time.time())) if reset_dt else None
+
+            pr = data.get("repository", {}).get("pullRequest") or {}
+
+            # Track call number and capture total counts for progress estimation
+            call_num += 1
+            if commits_total is None:
+                commits_total = pr.get("commits", {}).get("totalCount")
+            if comments_total is None:
+                comments_total = pr.get("comments", {}).get("totalCount")
+            if rt_total is None:
+                rt_total = pr.get("reviewThreads", {}).get("totalCount")
+
+            # Estimate total pages needed for this PR
+            est = max(
+                math.ceil((commits_total or 0) / commit_page_size) if commits_total else 1,
+                math.ceil((comments_total or 0) / 100) if comments_total else 1,
+                math.ceil((rt_total or 0) / 50) if rt_total else 1,
+                1
+            )
+
+            # Log progress
+            pr_prog = f"PR {self._pr_progress_index}/{self._pr_progress_total}" if self._pr_progress_total else "PR ?/?"
             debug_print(
-                f"GraphQL: cost={rate_limit.get('cost', '?')}, "
+                f"GraphQL ({pr_prog}, call {call_num}/~{est}): cost={rate_limit.get('cost', '?')}, "
                 f"remaining={remaining}/{rate_limit.get('limit', '?')}, "
                 f"reset_in={seconds_until_reset}s"
             )
-
-            pr = data.get("repository", {}).get("pullRequest") or {}
 
             if pr_meta is None:
                 pr_meta = {

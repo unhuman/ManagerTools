@@ -26,6 +26,10 @@ class GithubREST(SourceControlREST):
         super().__init__(AuthInfo(AuthType.Bearer, bearer_token))
         self._graphql_client = GithubGraphQLClient(bearer_token, graphql_points_reserved)
 
+    def set_pr_progress(self, index: int, total: int) -> None:
+        """Set current PR progress for debug logging."""
+        self._graphql_client.set_pr_progress(index, total)
+
     def api_convert(self, pr_url: str) -> str:
         return (pr_url
                 .replace("://github.com/", "://api.github.com/repos/")

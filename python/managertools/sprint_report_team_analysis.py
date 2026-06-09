@@ -66,6 +66,8 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         self._ticket_pr_data = {}
         self._pr_mem_cache: Dict[str, Any] = {}
         self._pr_data_cache: Optional[PRDataCache] = None
+        self._github_pr_fetch_index: int = 0
+        self._github_pr_fetch_total: int = 0
 
     def add_custom_command_line_options(self, parser):
         parser.add_argument('-i', '--isolateTicket', help='Isolate ticket for processing (debugging)')
@@ -686,6 +688,14 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         with ThreadPoolExecutor(max_workers=thread_count) as pre_executor:
             list(pre_executor.map(prefetch_prs, issue_list))
 
+        # Count total GitHub PRs to fetch for progress tracking
+        self._github_pr_fetch_index = 0
+        self._github_pr_fetch_total = sum(
+            1 for prs in self._ticket_pr_data.values()
+            for pr in prs
+            if 'github.com/' in (pr.get('url') or '').lower()
+        )
+
         for ticket_key, prs in self._ticket_pr_data.items():
             for pr in prs:
                 pr_id = str(pr.get('id', ''))
@@ -829,6 +839,8 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     debug_print(f"PR {ticket}/{pr_id}: disk cache hit")
 
             if pr_full is None:
+                self._github_pr_fetch_index += 1
+                source_control_rest.set_pr_progress(self._github_pr_fetch_index, self._github_pr_fetch_total)
                 pr_full = self._retry_rest_call(lambda: source_control_rest.get_pull_request_full(pr_url))
                 if pr_full is not None and pr_full.get("merged_ms", 0) > 0:
                     self._pr_data_cache.save(ticket, pr_id, pr_url, pr_full)
