@@ -65,6 +65,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         self._pr_primary_ticket = {}
         self._ticket_pr_data = {}
         self._pr_mem_cache: Dict[str, Any] = {}
+        self._pr_data_cache: Optional[PRDataCache] = None
 
     def add_custom_command_line_options(self, parser):
         parser.add_argument('-i', '--isolateTicket', help='Isolate ticket for processing (debugging)')
@@ -97,6 +98,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         self._pr_primary_ticket = {}
         self._ticket_pr_data = {}
         self._pr_mem_cache: Dict[str, Any] = {}
+        self._pr_data_cache = PRDataCache(self.team_name)
 
         # Determine thread count
         if self.command_line_options.multithread:
@@ -219,6 +221,9 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     cycle_name = f"{team_name} Cycle {cycle}"
                     self.incomplete_sprints.append(cycle_name)
                     continue
+
+        if self._pr_data_cache:
+            self._pr_data_cache.cleanup()
 
     def process_kanban_cycle(self, thread_count: int, team_name: str, cycle: int, cycles: int, cycle_length: int, mode: Mode, kanban_start_date: Optional[str] = None):
         # Calculate cycle dates
@@ -818,14 +823,14 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             pr_full = self._pr_mem_cache.get(pr_url)
 
             if pr_full is None:
-                pr_full = PRDataCache.load(pr_url)
+                pr_full = self._pr_data_cache.load(ticket, pr_id)
                 if pr_full is not None:
                     debug_print(f"PR {ticket}/{pr_id}: disk cache hit")
 
             if pr_full is None:
                 pr_full = self._retry_rest_call(lambda: source_control_rest.get_pull_request_full(pr_url))
                 if pr_full is not None and pr_full.get("merged_ms", 0) > 0:
-                    PRDataCache.save(pr_url, pr_full)
+                    self._pr_data_cache.save(ticket, pr_id, pr_url, pr_full)
 
             if pr_full is not None:
                 self._pr_mem_cache[pr_url] = pr_full
