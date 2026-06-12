@@ -276,8 +276,10 @@ class GithubREST(SourceControlREST):
                 "message": c.get("message", ""),
                 "committer": {"name": user_name},
                 "url": f"{commit_base}/{sha}",
-                "additions": c.get("additions", 0),
-                "deletions": c.get("deletions", 0),
+                # GraphQL may return additions/deletions as null (SERVICE_UNAVAILABLE for large
+                # commits); `or 0` coerces both explicit null and missing keys to 0.
+                "additions": c.get("additions") or 0,
+                "deletions": c.get("deletions") or 0,
                 "changedFilesIfAvailable": c.get("changedFilesIfAvailable", 0),
             })
 

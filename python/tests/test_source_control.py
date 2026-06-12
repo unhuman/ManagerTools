@@ -302,3 +302,47 @@ class TestGithubGraphQLCommitPageSize:
         github.set_commit_page_size_retry_mode(True)
         github.set_commit_page_size_retry_mode(False)
         assert github._graphql_client._commit_page_sizes == [20, 10, 5, 2, 1]
+
+
+class TestGithubCommitAdditionsNormalization:
+    PR_URL = "https://api.github.com/repos/owner/repo/pulls/123"
+
+    def _raw(self, commits):
+        return {
+            "pr": {"additions": 0, "deletions": 0, "createdAt": None, "mergedAt": None, "reviews": []},
+            "commits": commits,
+            "comments": [],
+            "review_thread_comments": [],
+        }
+
+    def test_null_additions_coerced_to_zero(self):
+        github = GithubREST("test_token")
+        # GraphQL returned additions: null (SERVICE_UNAVAILABLE); deletions present.
+        commit = {"oid": "abc", "message": "big", "additions": None, "deletions": 5,
+                  "committedDate": None, "changedFilesIfAvailable": 0}
+        with patch.object(github._graphql_client, 'get_pull_request_data',
+                          return_value=self._raw([commit])):
+            result = github.get_pull_request_full(self.PR_URL)
+        c = result["commits"][0]
+        assert c["additions"] == 0
+        assert c["deletions"] == 5
+
+    def test_missing_additions_key_defaults_to_zero(self):
+        github = GithubREST("test_token")
+        commit = {"oid": "def", "message": "m", "committedDate": None, "changedFilesIfAvailable": 0}
+        with patch.object(github._graphql_client, 'get_pull_request_data',
+                          return_value=self._raw([commit])):
+            result = github.get_pull_request_full(self.PR_URL)
+        c = result["commits"][0]
+        assert c["additions"] == 0
+        assert c["deletions"] == 0
+
+    def test_normalized_additions_safe_for_comparison(self):
+        # Regression guard: the commit-loop guard `c_add > 0` must not raise.
+        github = GithubREST("test_token")
+        commit = {"oid": "ghi", "message": "m", "additions": None, "deletions": None,
+                  "committedDate": None, "changedFilesIfAvailable": 0}
+        with patch.object(github._graphql_client, 'get_pull_request_data',
+                          return_value=self._raw([commit])):
+            c = github.get_pull_request_full(self.PR_URL)["commits"][0]
+        assert (c["additions"] > 0 or c["deletions"] > 0) is False
