@@ -7,7 +7,7 @@ import time
 import random
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from http.client import RemoteDisconnected
 from requests.exceptions import ConnectionError as RequestsConnectionError
 
@@ -22,6 +22,7 @@ from managertools.flexidb.output.convert_zeros_to_empty_output_filter import Con
 from managertools.flexidb.output.output_filter import OutputFilter
 from managertools.data import DBData, DBIndexData, UserActivity
 from managertools.output.convert_self_metrics_empty_to_zero_output_filter import ConvertSelfMetricsEmptyToZeroOutputFilter
+from managertools.output.format_commit_data_output_filter import FormatCommitDataOutputFilter
 from managertools.rest.source_control_rest import SourceControlREST
 from managertools.rest.exceptions import RESTException, NeedsRetryException
 from managertools.util.command_line_helper import CommandLineHelper
@@ -49,7 +50,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
     TOTAL_PRS = "TOTAL_PRS"
     NON_DECLINED_PRS = "NON_DECLINED_PRS"
 
-    STANDARD_OUTPUT_RULES = [ConvertZerosToEmptyOutputFilter()]
+    STANDARD_OUTPUT_RULES = [ConvertZerosToEmptyOutputFilter(), FormatCommitDataOutputFilter()]
     SAME_USER_OUTPUT_RULES = [ConvertSelfMetricsEmptyToZeroOutputFilter()]
 
     MERGE_COMMIT_REGEX = r"(?i)(?:^|.*[ :])\s*(down)?merge.*"
@@ -383,13 +384,13 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         }
 
         debug_print(f"Processing fresh data for cycle {cycle}...")
-        is_complete, failed_issues = self.get_issue_category_information(thread_count, sprint_simulation, mode, all_issues)
+        is_complete, failed_issues, failed_prs = self.get_issue_category_information(thread_count, sprint_simulation, mode, all_issues)
         debug_print(f"Finished processing cycle {cycle}")
 
         if is_cycle_complete:
             debug_print(f"Saving cycle {cycle} to cache...")
             data_to_cache = self.extract_database_data_for_cache(cycle_name)
-            SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, is_complete, failed_issues)
+            SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, is_complete, failed_issues, failed_prs)
             debug_print(f"Cycle {cycle} saved to cache")
 
     def _evict_stale_pr_cache_entries(self) -> None:
@@ -417,13 +418,13 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             if SprintDataCache.is_cache_complete(team_name, sprint_name, start_date, end_date):
                 # Complete cache: fast path, no network calls needed
                 debug_print("Loading from complete cache...")
-                cached_data, _ = SprintDataCache.load_cached_data(team_name, sprint_name, start_date, end_date)
+                cached_data, _, _ = SprintDataCache.load_cached_data(team_name, sprint_name, start_date, end_date)
                 debug_print("Cache loaded, loading into database...")
                 self.load_cached_data_into_database(cached_data)
                 debug_print("Cache data loaded into database successfully")
             else:
                 # Incomplete cache: load partial data and retry only failed issues
-                cached_data, prev_failed = SprintDataCache.load_cached_data(team_name, sprint_name, start_date, end_date)
+                cached_data, prev_failed, prev_failed_prs = SprintDataCache.load_cached_data(team_name, sprint_name, start_date, end_date)
                 debug_print(f"Found incomplete cached data for {sprint_name}, failed issues: {', '.join(prev_failed) if prev_failed else 'none (processing errors)'}")
 
                 # Filter to only retry the previously failed issues
@@ -434,37 +435,38 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 if retry_issues:
                     debug_print("Cache loaded, loading partial data into database...")
                     self.load_cached_data_into_database(cached_data)
-                    is_complete, new_failed = self.get_issue_category_information(thread_count, sprint, mode, retry_issues)
+                    is_complete, new_failed, new_failed_prs = self.get_issue_category_information(thread_count, sprint, mode, retry_issues)
                     debug_print("Extracting updated data for cache...")
                     data_to_cache = self.extract_database_data_for_cache(sprint_name)
                     debug_print("Saving updated cache...")
-                    SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, is_complete, new_failed)
+                    SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, is_complete, new_failed, new_failed_prs)
                     debug_print("Cache updated successfully")
                 elif not prev_failed:
                     # No tracked failures: incompleteness was from processing_errors; re-process all fresh
                     debug_print(f"No tracked failures for sprint, re-processing all {len(all_issues)} issues...")
-                    is_complete, new_failed = self.get_issue_category_information(thread_count, sprint, mode, all_issues)
+                    is_complete, new_failed, new_failed_prs = self.get_issue_category_information(thread_count, sprint, mode, all_issues)
                     data_to_cache = self.extract_database_data_for_cache(sprint_name)
-                    SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, is_complete, new_failed)
+                    SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, is_complete, new_failed, new_failed_prs)
                     debug_print("Cache updated successfully")
                 else:
                     # Had tracked failures but they're no longer in this sprint; clear and mark complete
                     self.load_cached_data_into_database(cached_data)
                     data_to_cache = self.extract_database_data_for_cache(sprint_name)
-                    SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, True, [])
+                    SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, True, [], [])
                     debug_print(f"Previously-failed issues {sorted(failed_set)} no longer in sprint {sprint_name}, cleared from cache")
+                    # TODO: Case D - implement retry of individual failed PRs here if prev_failed_prs
         else:
             # No cache: process all issues
             debug_print("Processing fresh data (no cache or cache disabled)...")
             debug_print(f"Starting getIssueCategoryInformation with {len(all_issues)} issues...")
-            is_complete, failed_issues = self.get_issue_category_information(thread_count, sprint, mode, all_issues)
+            is_complete, failed_issues, failed_prs = self.get_issue_category_information(thread_count, sprint, mode, all_issues)
             debug_print("Finished getIssueCategoryInformation")
 
             if use_cache:
                 debug_print("Extracting data for cache...")
                 data_to_cache = self.extract_database_data_for_cache(sprint_name)
                 debug_print("Saving to cache...")
-                SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, is_complete, failed_issues)
+                SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, is_complete, failed_issues, failed_prs)
                 debug_print("Cache saved successfully")
 
         debug_print(f"Completed processing sprint: {sprint_name}")
@@ -611,14 +613,21 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
             output_row = FlexiDBRow(row)
 
-            # Suppress commit line counts if aggregate exceeds maxCommitSize, but keep the row
-            # (preserves OPENED/MERGED/review activity for large commits)
-            commit_added = output_row.get(UserActivity.COMMIT_ADDED.name, 0) or 0
-            commit_removed = output_row.get(UserActivity.COMMIT_REMOVED.name, 0) or 0
-            total_commit_size = commit_added + commit_removed
-            if self.max_commit_size and total_commit_size >= self.max_commit_size:
-                output_row[UserActivity.COMMIT_ADDED.name] = None
-                output_row[UserActivity.COMMIT_REMOVED.name] = None
+            # Derive commit line counts by summing per-commit COMMIT_DATA rather than the stored
+            # totals. With maxCommitSize set, exclude individual commits whose size meets/exceeds
+            # the threshold (e.g. large vendoring commits) while still counting the smaller ones.
+            commit_added = 0
+            commit_removed = 0
+            for commit_entry in (output_row.get(DBData.COMMIT_DATA.name) or []):
+                entry_added = commit_entry.get("additions", 0) or 0
+                entry_removed = commit_entry.get("deletions", 0) or 0
+                if self.max_commit_size and (entry_added + entry_removed) >= self.max_commit_size:
+                    continue
+                commit_added += entry_added
+                commit_removed += entry_removed
+            # None renders as empty (ConvertZerosToEmptyOutputFilter handles zeros too).
+            output_row[UserActivity.COMMIT_ADDED.name] = commit_added or None
+            output_row[UserActivity.COMMIT_REMOVED.name] = commit_removed or None
 
             if not (row_user and author and row_user.casefold() == author.casefold()):
                 output_row[DBIndexData.PR_STATUS.name] = ""
@@ -631,7 +640,8 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     non_declined_prs += 1
 
             for column in column_order:
-                value = row.get(column)
+                # Read from output_row so totals reflect the recomputed (size-filtered) commit counts.
+                value = output_row.get(column)
                 if isinstance(value, (int, float)):
                     long_value = int(value)
                     sprint_existing = sprint_totals_row.get(column, 0)
@@ -688,6 +698,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         lock = threading.Lock()
         processing_errors = []  # Track errors to prevent cache on failure
         failed_issue_keys = []  # Track ticket keys that failed to process
+        failed_pr_entries = []  # Track individual PRs that failed to process
 
         # Pre-pass: fetch all PR data in parallel to build the primary-ticket map for activity attribution.
         # A PR linked to multiple tickets is attributed to the ticket whose key appears in the PR title
@@ -780,7 +791,15 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     print(f"   {_B}{counter[0]}/{len(issue_list)}: {ticket} / Issue {issue_id} has {len(pull_requests)} PRs{_R}")
 
                 for pull_request in pull_requests:
-                    self.process_pull_request(ticket, pull_request, sprint_name, start_date, end_date, sprint_start_ms, sprint_end_ms, mode)
+                    try:
+                        self.process_pull_request(ticket, pull_request, sprint_name, start_date, end_date, sprint_start_ms, sprint_end_ms, mode)
+                    except Exception as e:
+                        pr_id = pull_request.get('id', '').lstrip('#')
+                        pr_url = pull_request.get('url', '')
+                        with lock:
+                            failed_pr_entries.append({"ticket": ticket, "pr_id": pr_id, "pr_url": pr_url})
+                        with lock:
+                            print(f"   [ERROR] Failed to process PR {pr_id} for {ticket}: {e}", file=sys.stderr)
             except Exception as e:
                 with lock:
                     processing_errors.append(e)
@@ -797,8 +816,8 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         if processing_errors:
             print(f"\033[93mWarning: Encountered {len(processing_errors)} errors during issue processing. First error: {processing_errors[0]}\033[0m", file=sys.stderr)
 
-        is_complete = len(failed_issue_keys) == 0 and len(processing_errors) == 0
-        return is_complete, failed_issue_keys
+        is_complete = len(failed_issue_keys) == 0 and len(processing_errors) == 0 and len(failed_pr_entries) == 0
+        return is_complete, failed_issue_keys, failed_pr_entries
 
     def _retry_rest_call(self, func, max_retries: int = 3, retry_delay: int = 2):
         last_error = None
@@ -994,24 +1013,28 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 commit_filtered = self._commit_message_matches_filter(commit_message)
 
                 commit_url = commit.get('url') or pr_url
+                # Filtered commits (ignoreCommitMessageContent) contribute 0/0, matching legacy behavior.
+                c_add = 0
+                c_del = 0
                 if not commit_filtered:
                     if is_github and ("additions" in commit or "deletions" in commit):
                         c_add = commit.get("additions", 0)
                         c_del = commit.get("deletions", 0)
                         if c_add > 0 or c_del > 0:
-                            self.process_diffs(self.COMMIT_PREFIX, {"additions": c_add, "deletions": c_del}, index_lookup)
+                            c_add, c_del = self.process_diffs(self.COMMIT_PREFIX, {"additions": c_add, "deletions": c_del}, index_lookup)
                         elif commit.get("changedFilesIfAvailable", 0) > 0:
                             # Large-repo fallback: GraphQL returned 0/0 but files changed
                             diffs_response = self._retry_rest_call(lambda: source_control_rest.get_commit_diffs(commit_url, commit_sha))
                             if diffs_response:
-                                self.process_diffs(self.COMMIT_PREFIX, diffs_response, index_lookup)
+                                c_add, c_del = self.process_diffs(self.COMMIT_PREFIX, diffs_response, index_lookup)
                     else:
                         diffs_response = self._retry_rest_call(lambda: source_control_rest.get_commit_diffs(commit_url, commit_sha))
                         if diffs_response:
-                            self.process_diffs(self.COMMIT_PREFIX, diffs_response, index_lookup)
+                            c_add, c_del = self.process_diffs(self.COMMIT_PREFIX, diffs_response, index_lookup)
 
                 self.database.increment_field(index_lookup, UserActivity.COMMITS.name)
-                self.database.append(index_lookup, DBData.COMMIT_MESSAGES.name, commit_message, True)
+                self.database.append(index_lookup, DBData.COMMIT_DATA.name,
+                                     {"message": commit_message, "additions": c_add, "deletions": c_del}, True)
 
         # Process PR diffs if there was commit activity
         index_lookup = self.create_index_lookup(sprint_name, ticket, pr_id, pr_author, pr_status)
@@ -1043,7 +1066,8 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         self.database.set_value(index_lookup, DBData.END_DATE.name, end_date)
         self.database.set_value(index_lookup, DBData.AUTHOR.name, self.sanitize_name_for_index(pr_author))
 
-    def process_diffs(self, prefix: str, diffs_response: Dict[str, Any], index_lookup: List[FlexiDBQueryColumn]):
+    def process_diffs(self, prefix: str, diffs_response: Dict[str, Any], index_lookup: List[FlexiDBQueryColumn]) -> Tuple[int, int]:
+        """Accumulate diff line counts into the prefixed counters and return the (additions, deletions) computed."""
         additions = diffs_response.get('additions')
         deletions = diffs_response.get('deletions')
 
@@ -1052,13 +1076,15 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             deletions = diffs_response['stats'].get('deletions')
 
         if additions is not None or deletions is not None:
-            self.increment_counter(index_lookup, UserActivity[prefix + "ADDED"], additions or 0)
-            self.increment_counter(index_lookup, UserActivity[prefix + "REMOVED"], deletions or 0)
-            return
+            additions = additions or 0
+            deletions = deletions or 0
+            self.increment_counter(index_lookup, UserActivity[prefix + "ADDED"], additions)
+            self.increment_counter(index_lookup, UserActivity[prefix + "REMOVED"], deletions)
+            return additions, deletions
 
         diffs = diffs_response.get('diffs', [])
         if not diffs:
-            return
+            return 0, 0
 
         added_calculated = 0
         removed_calculated = 0
@@ -1073,6 +1099,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
         self.increment_counter(index_lookup, UserActivity[prefix + "ADDED"], added_calculated)
         self.increment_counter(index_lookup, UserActivity[prefix + "REMOVED"], removed_calculated)
+        return added_calculated, removed_calculated
 
     def increment_counter(self, index_lookup: List[FlexiDBQueryColumn], activity: UserActivity, increment: int = 1) -> int:
         return self.database.increment_field(index_lookup, activity.name, increment)

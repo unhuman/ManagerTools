@@ -8,7 +8,9 @@ class DBData(Enum):
     AUTHOR = ("author", None, 2)
     COMMENTS = ("comments", [], 3)
     OTHERS_COMMENTS = (None, [], 4)
-    COMMIT_MESSAGES = (None, [], 5)
+    # Per-commit data: list of dicts, each {"message": str, "additions": int, "deletions": int}.
+    # Future candidate fields: "sha", "committerTimestamp", "url".
+    COMMIT_DATA = (None, [], 5)
     PR_TITLE = (None, None, 6)
     PR_TITLE_FOR_FILTER = (None, None, 7)
 

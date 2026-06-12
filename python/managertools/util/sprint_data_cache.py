@@ -9,7 +9,7 @@ from .log_util import debug_print
 
 class SprintDataCache:
     CACHE_DIR = "cacheData"
-    CACHE_VERSION = "1.5"
+    CACHE_VERSION = "2.0"
 
     @staticmethod
     def _sanitize(s: str) -> str:
@@ -77,7 +77,7 @@ class SprintDataCache:
             return True
 
     @staticmethod
-    def load_cached_data(team_name: str, sprint_name: str, start_date: str, end_date: str) -> tuple[Dict[str, Any], list[str]]:
+    def load_cached_data(team_name: str, sprint_name: str, start_date: str, end_date: str) -> tuple[Dict[str, Any], list[str], list[Dict[str, str]]]:
         cache_key = SprintDataCache.generate_cache_key(team_name, sprint_name, start_date, end_date)
         file_path = SprintDataCache.get_cache_file_path(cache_key)
 
@@ -89,12 +89,14 @@ class SprintDataCache:
         if not SprintDataCache._is_version_compatible(cached_data.get("version", "")):
             raise RuntimeError(f"Cache version mismatch. Expected {SprintDataCache.CACHE_VERSION} or newer, found {cached_data.get('version')}")
 
-        return cached_data.get("data", {}), cached_data.get("failed_issues", [])
+        return cached_data.get("data", {}), cached_data.get("failed_issues", []), cached_data.get("failed_prs", [])
 
     @staticmethod
-    def save_to_cache(team_name: str, sprint_name: str, start_date: str, end_date: str, data: Dict[str, Any], is_complete: bool = True, failed_issues: Optional[list] = None) -> None:
+    def save_to_cache(team_name: str, sprint_name: str, start_date: str, end_date: str, data: Dict[str, Any], is_complete: bool = True, failed_issues: Optional[list] = None, failed_prs: Optional[list] = None) -> None:
         if failed_issues is None:
             failed_issues = []
+        if failed_prs is None:
+            failed_prs = []
 
         SprintDataCache.ensure_cache_directory_exists()
 
@@ -106,6 +108,7 @@ class SprintDataCache:
             "version": SprintDataCache.CACHE_VERSION,
             "complete": is_complete,
             "failed_issues": failed_issues,
+            "failed_prs": failed_prs,
             "teamName": team_name,
             "sprintName": sprint_name,
             "startDate": start_date,
