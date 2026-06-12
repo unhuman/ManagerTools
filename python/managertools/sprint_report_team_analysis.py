@@ -407,6 +407,11 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         if stale:
             debug_print(f"Evicted {len(stale)} stale PR cache entries")
 
+    def _set_github_commit_retry_mode(self, enabled: bool) -> None:
+        """Toggle the GitHub GraphQL small commit page-size ladder, if a GitHub client is in use."""
+        if self.github_rest is not None and hasattr(self.github_rest, 'set_commit_page_size_retry_mode'):
+            self.github_rest.set_commit_page_size_retry_mode(enabled)
+
     def process_potentially_cached_sprint_data(self, thread_count: int, team_name: str, sprint: Dict[str, Any], mode: Mode, all_issues: List[Any], use_cache: bool):
         sprint_name = sprint.get('name', '')
         start_date = self.clean_date(sprint.get('startDate', ''))
@@ -435,7 +440,13 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 if retry_issues:
                     debug_print("Cache loaded, loading partial data into database...")
                     self.load_cached_data_into_database(cached_data)
-                    is_complete, new_failed, new_failed_prs = self.get_issue_category_information(thread_count, sprint, mode, retry_issues)
+                    # Previously-failed tickets are the known-problematic large PRs; use the
+                    # small GraphQL commit page-size ladder so we don't waste large 502-prone attempts.
+                    self._set_github_commit_retry_mode(True)
+                    try:
+                        is_complete, new_failed, new_failed_prs = self.get_issue_category_information(thread_count, sprint, mode, retry_issues)
+                    finally:
+                        self._set_github_commit_retry_mode(False)
                     debug_print("Extracting updated data for cache...")
                     data_to_cache = self.extract_database_data_for_cache(sprint_name)
                     debug_print("Saving updated cache...")

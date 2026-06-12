@@ -30,6 +30,10 @@ class GithubREST(SourceControlREST):
         """Set current PR progress for debug logging."""
         self._graphql_client.set_pr_progress(index, total)
 
+    def set_commit_page_size_retry_mode(self, enabled: bool) -> None:
+        """Switch the GraphQL commit page-size ladder to the small retry strategy."""
+        self._graphql_client.set_retry_mode(enabled)
+
     def api_convert(self, pr_url: str) -> str:
         return (pr_url
                 .replace("://github.com/", "://api.github.com/repos/")

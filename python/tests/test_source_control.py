@@ -285,3 +285,20 @@ class TestBitbucketREST:
     def test_map_user_to_jira_name_dict(self):
         bitbucket = BitbucketREST("http://bitbucket.example.com", "token123")
         assert bitbucket.map_user_to_jira_name({'name': 'user1'}) == "user1"
+
+
+class TestGithubGraphQLCommitPageSize:
+    def test_default_uses_large_initial_ladder(self):
+        github = GithubREST("test_token")
+        assert github._graphql_client._commit_page_sizes == [20, 10, 5, 2, 1]
+
+    def test_retry_mode_switches_to_small_ladder(self):
+        github = GithubREST("test_token")
+        github.set_commit_page_size_retry_mode(True)
+        assert github._graphql_client._commit_page_sizes == [2, 1]
+
+    def test_retry_mode_reset_restores_large_ladder(self):
+        github = GithubREST("test_token")
+        github.set_commit_page_size_retry_mode(True)
+        github.set_commit_page_size_retry_mode(False)
+        assert github._graphql_client._commit_page_sizes == [20, 10, 5, 2, 1]

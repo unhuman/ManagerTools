@@ -13,7 +13,11 @@ from ..util.log_util import debug_print
 class GithubGraphQLClient(RestService):
     ENDPOINT = "https://api.github.com/graphql"
     _max_transient_retries = 0  # 502s handled via commit page-size reduction below
-    _COMMIT_PAGE_SIZES = [2, 1]  # Reduced from [20, 10, 5, 2] to minimize payload on retries
+    # Fresh pulls start large and step down on 502 (floor at 1). Re-running an
+    # incomplete cache's previously-failed tickets uses the small ladder, since
+    # those are the known-problematic large PRs that already 502'd at large sizes.
+    _COMMIT_PAGE_SIZES_INITIAL = [20, 10, 5, 2, 1]
+    _COMMIT_PAGE_SIZES_RETRY = [2, 1]
     _page_size_reductions: Dict[str, int] = {}  # pr_key -> page size that succeeded
 
     _QUERY = """
@@ -88,11 +92,17 @@ class GithubGraphQLClient(RestService):
         self._graphql_points_reserved = graphql_points_reserved
         self._pr_progress_index: int = 0
         self._pr_progress_total: int = 0
+        self._commit_page_sizes: List[int] = self._COMMIT_PAGE_SIZES_INITIAL
 
     def set_pr_progress(self, index: int, total: int) -> None:
         """Set current PR progress for debug logging."""
         self._pr_progress_index = index
         self._pr_progress_total = total
+
+    def set_retry_mode(self, enabled: bool) -> None:
+        """Use the small commit page-size ladder when re-fetching known-failed tickets."""
+        self._commit_page_sizes = (self._COMMIT_PAGE_SIZES_RETRY if enabled
+                                   else self._COMMIT_PAGE_SIZES_INITIAL)
 
     def get_pull_request_data(self, owner: str, repo: str, pr_number: int) -> Dict[str, Any]:
         """
@@ -110,7 +120,7 @@ class GithubGraphQLClient(RestService):
         commit_cursor: Optional[str] = None
         comment_cursor: Optional[str] = None
         rt_cursor: Optional[str] = None
-        commit_page_size = self._COMMIT_PAGE_SIZES[0]
+        commit_page_size = self._commit_page_sizes[0]
         commit_page_size_idx = 0
 
         # For progress tracking
@@ -135,9 +145,9 @@ class GithubGraphQLClient(RestService):
             try:
                 response = self._execute_request("POST", self.ENDPOINT, body, {})
             except RESTException as e:
-                if e.status_code == 502 and commit_page_size_idx < len(self._COMMIT_PAGE_SIZES) - 1:
+                if e.status_code == 502 and commit_page_size_idx < len(self._commit_page_sizes) - 1:
                     commit_page_size_idx += 1
-                    commit_page_size = self._COMMIT_PAGE_SIZES[commit_page_size_idx]
+                    commit_page_size = self._commit_page_sizes[commit_page_size_idx]
                     sys.stderr.write(f"\033[91m502 fetching {owner}/{repo}#{pr_number}, reducing commit page size to {commit_page_size}\033[0m\n")
                     continue
                 raise
@@ -240,13 +250,13 @@ class GithubGraphQLClient(RestService):
                 )
                 self._wait_with_countdown(seconds_until_reset + 2, "Proactive rate limit")
 
-        if commit_page_size != self._COMMIT_PAGE_SIZES[0]:
+        if commit_page_size != self._commit_page_sizes[0]:
             pr_key = f"{owner}/{repo}#{pr_number}"
             GithubGraphQLClient._page_size_reductions[pr_key] = commit_page_size
             sys.stderr.write(
                 f"Commit page size reduction summary: {owner}/{repo}#{pr_number} "
                 f"required page size {commit_page_size} "
-                f"(default {self._COMMIT_PAGE_SIZES[0]}). "
+                f"(default {self._commit_page_sizes[0]}). "
                 f"All reductions this run: {GithubGraphQLClient._page_size_reductions}\n"
             )
 
