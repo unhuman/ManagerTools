@@ -74,7 +74,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         parser.add_argument('-i', '--isolateTicket', help='Isolate ticket for processing (debugging)')
         parser.add_argument('-o', '--outputCSV', required=True, help='Output filename (.csv)')
         parser.add_argument('-mt', '--multithread', help='Number of threads, default 1, *=cores')
-        parser.add_argument('--includeMergeCommits', action='store_true', help='Include merge commits in code metrics')
+        parser.add_argument('--includeMergeCommits', action='store_true', help='Include merge commits (2+ parents) in report metrics; excluded by default')
         parser.add_argument('--maxCommitSize', type=int, help='Limit commit size (adds+removes) for code metrics')
         parser.add_argument('--kanbanCycleLength', type=int, default=2, help='Kanban cycle length in weeks (default 2)')
 
@@ -580,6 +580,17 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 print(f"Invalid regex pattern in ignoreCommitMessageContent: {pattern}", file=sys.stderr)
         return False
 
+    def _is_merge_commit(self, commit: Dict[str, Any], message: str) -> bool:
+        """A merge commit has 2+ parents. Prefer the authoritative parent count
+        (GitHub normalized `parents_count`, Bitbucket raw `parents` list); fall
+        back to the message regex only when parent data is unavailable."""
+        parent_count = commit.get("parents_count")
+        if parent_count is None and isinstance(commit.get("parents"), list):
+            parent_count = len(commit["parents"])
+        if parent_count is not None:
+            return parent_count > 1
+        return bool(re.match(self.MERGE_COMMIT_REGEX, message))
+
     def find_rows_and_append_csv_data(self, rows_filter: List[FlexiDBQueryColumn], sb: list, overall_totals_row: FlexiDBRow):
         rows = self.database.find_rows(rows_filter, True)
 
@@ -624,12 +635,18 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
             output_row = FlexiDBRow(row)
 
-            # Derive commit line counts by summing per-commit COMMIT_DATA rather than the stored
-            # totals. With maxCommitSize set, exclude individual commits whose size meets/exceeds
-            # the threshold (e.g. large vendoring commits) while still counting the smaller ones.
+            # Derive COMMITS and line counts by summing per-commit COMMIT_DATA rather than the
+            # stored totals. Merge commits are excluded unless --includeMergeCommits. With
+            # maxCommitSize set, exclude individual commits whose size meets/exceeds the threshold
+            # (e.g. large vendoring commits) from the line counts while still counting the commit.
+            include_merges = self.command_line_options.includeMergeCommits
+            commit_count = 0
             commit_added = 0
             commit_removed = 0
             for commit_entry in (output_row.get(DBData.COMMIT_DATA.name) or []):
+                if commit_entry.get("type") == "merge" and not include_merges:
+                    continue
+                commit_count += 1
                 entry_added = commit_entry.get("additions", 0) or 0
                 entry_removed = commit_entry.get("deletions", 0) or 0
                 if self.max_commit_size and (entry_added + entry_removed) >= self.max_commit_size:
@@ -637,6 +654,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 commit_added += entry_added
                 commit_removed += entry_removed
             # None renders as empty (ConvertZerosToEmptyOutputFilter handles zeros too).
+            output_row[UserActivity.COMMITS.name] = commit_count or None
             output_row[UserActivity.COMMIT_ADDED.name] = commit_added or None
             output_row[UserActivity.COMMIT_REMOVED.name] = commit_removed or None
 
@@ -1009,9 +1027,6 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 if mode != Mode.KANBAN and (sprint_start_ms > commit_timestamp or commit_timestamp >= sprint_end_ms):
                     continue
 
-                if not self.command_line_options.includeMergeCommits and re.match(self.MERGE_COMMIT_REGEX, commit.get('message', '')):
-                    continue
-
                 user_name = commit.get('committer', {}).get('name', '')
 
                 if user_name.lower() in self.IGNORE_USERS:
@@ -1022,12 +1037,20 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
                 commit_message = re.sub(r'(\r|\n)?\n', '  ', commit.get('message', '').strip())
                 commit_filtered = self._commit_message_matches_filter(commit_message)
+                commit_type = "merge" if self._is_merge_commit(commit, commit_message) else "normal"
 
                 commit_url = commit.get('url') or pr_url
-                # Filtered commits (ignoreCommitMessageContent) contribute 0/0, matching legacy behavior.
+                # Every commit is recorded in COMMIT_DATA with its type; report generation decides
+                # which to count (merges excluded unless --includeMergeCommits). The stored
+                # COMMIT_ADDED/COMMIT_REMOVED counters (which gate PR-diff fetching) only accumulate
+                # normal, non-filtered commits, matching legacy behavior.
                 c_add = 0
                 c_del = 0
-                if not commit_filtered:
+                if commit_type == "merge":
+                    # Use inline values only; skip the per-commit REST diff fallback for merges.
+                    c_add = commit.get("additions") or 0
+                    c_del = commit.get("deletions") or 0
+                elif not commit_filtered:
                     if is_github and ("additions" in commit or "deletions" in commit):
                         c_add = commit.get("additions", 0)
                         c_del = commit.get("deletions", 0)
@@ -1045,7 +1068,8 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
                 self.database.increment_field(index_lookup, UserActivity.COMMITS.name)
                 self.database.append(index_lookup, DBData.COMMIT_DATA.name,
-                                     {"message": commit_message, "additions": c_add, "deletions": c_del}, True)
+                                     {"message": commit_message, "additions": c_add, "deletions": c_del,
+                                      "type": commit_type}, True)
 
         # Process PR diffs if there was commit activity
         index_lookup = self.create_index_lookup(sprint_name, ticket, pr_id, pr_author, pr_status)

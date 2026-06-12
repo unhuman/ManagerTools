@@ -10,7 +10,7 @@ from .log_util import debug_print
 
 class PRDataCache:
     """Cache for GitHub PR data keyed by team + ticket + PR ID. Only caches merged PRs (immutable)."""
-    CACHE_VERSION = "1.0"
+    CACHE_VERSION = "1.1"
 
     def __init__(self, team_name: str, cache_base_dir: str = "cacheData"):
         """Initialize cache with team-namespaced directory as a run lock.

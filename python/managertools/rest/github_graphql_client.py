@@ -44,6 +44,7 @@ class GithubGraphQLClient(RestService):
                 deletions
                 changedFilesIfAvailable
                 committedDate
+                parents { totalCount }
                 author { name user { login } }
                 committer { name user { login } }
               }

@@ -346,3 +346,24 @@ class TestGithubCommitAdditionsNormalization:
                           return_value=self._raw([commit])):
             c = github.get_pull_request_full(self.PR_URL)["commits"][0]
         assert (c["additions"] > 0 or c["deletions"] > 0) is False
+
+    def test_parents_count_normalized_from_graphql(self):
+        github = GithubREST("test_token")
+        merge = {"oid": "m1", "message": "Merge", "additions": 0, "deletions": 0,
+                 "committedDate": None, "parents": {"totalCount": 2}}
+        normal = {"oid": "n1", "message": "work", "additions": 3, "deletions": 1,
+                  "committedDate": None, "parents": {"totalCount": 1}}
+        with patch.object(github._graphql_client, 'get_pull_request_data',
+                          return_value=self._raw([merge, normal])):
+            commits = github.get_pull_request_full(self.PR_URL)["commits"]
+        by_id = {c["id"]: c for c in commits}
+        assert by_id["m1"]["parents_count"] == 2
+        assert by_id["n1"]["parents_count"] == 1
+
+    def test_parents_count_none_when_absent(self):
+        github = GithubREST("test_token")
+        commit = {"oid": "x", "message": "m", "additions": 0, "deletions": 0, "committedDate": None}
+        with patch.object(github._graphql_client, 'get_pull_request_data',
+                          return_value=self._raw([commit])):
+            c = github.get_pull_request_full(self.PR_URL)["commits"][0]
+        assert c["parents_count"] is None

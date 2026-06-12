@@ -281,6 +281,8 @@ class GithubREST(SourceControlREST):
                 "additions": c.get("additions") or 0,
                 "deletions": c.get("deletions") or 0,
                 "changedFilesIfAvailable": c.get("changedFilesIfAvailable", 0),
+                # Parent count drives merge detection (a merge commit has 2+ parents).
+                "parents_count": (c.get("parents") or {}).get("totalCount"),
             })
 
         # Normalize activities: general comments + inline review-thread comments + reviews

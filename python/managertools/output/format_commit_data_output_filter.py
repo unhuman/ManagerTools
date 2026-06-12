@@ -21,4 +21,5 @@ class FormatCommitDataOutputFilter(OutputFilter):
         message = entry.get("message", "")
         additions = entry.get("additions", 0) or 0
         deletions = entry.get("deletions", 0) or 0
-        return f"{message} (+{additions}/-{deletions})"
+        prefix = "[merge] " if entry.get("type") == "merge" else ""
+        return f"{prefix}{message} (+{additions}/-{deletions})"
