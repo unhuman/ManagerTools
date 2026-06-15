@@ -644,6 +644,8 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             commit_added = 0
             commit_removed = 0
             for commit_entry in (output_row.get(DBData.COMMIT_DATA.name) or []):
+                if not isinstance(commit_entry, dict):
+                    continue
                 if commit_entry.get("type") == "merge" and not include_merges:
                     continue
                 commit_count += 1
@@ -1067,9 +1069,10 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                             c_add, c_del = self.process_diffs(self.COMMIT_PREFIX, diffs_response, index_lookup)
 
                 self.database.increment_field(index_lookup, UserActivity.COMMITS.name)
+                # No add_line_number: COMMIT_DATA holds dicts, which must NOT be stringified.
                 self.database.append(index_lookup, DBData.COMMIT_DATA.name,
                                      {"message": commit_message, "additions": c_add, "deletions": c_del,
-                                      "type": commit_type}, True)
+                                      "type": commit_type})
 
         # Process PR diffs if there was commit activity
         index_lookup = self.create_index_lookup(sprint_name, ticket, pr_id, pr_author, pr_status)

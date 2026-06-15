@@ -9,7 +9,7 @@ from .log_util import debug_print
 
 class SprintDataCache:
     CACHE_DIR = "cacheData"
-    CACHE_VERSION = "2.1"
+    CACHE_VERSION = "2.2"
 
     @staticmethod
     def _sanitize(s: str) -> str:

@@ -102,6 +102,27 @@ class TestFlexiDB:
         expected_csv_counter = "Counter\n2\n"
         assert db.to_csv([self.simple_counter_key]) == expected_csv_counter
 
+    def test_append_dict_without_line_number_stays_dict(self):
+        # Regression: COMMIT_DATA stores dicts; append() must NOT stringify them.
+        db = self.create_simple_db()
+        query = [FlexiDBQueryColumn(self.index_key_1, "row1")]
+        entry = {"message": "m", "additions": 6, "deletions": 1, "type": "normal"}
+
+        db.append(query, self.simple_comments_key, entry)
+        stored = db.get_value(query, self.simple_comments_key)
+        assert stored == [entry]
+        assert isinstance(stored[0], dict)
+        assert stored[0].get("type") == "normal"
+
+    def test_append_with_line_number_stringifies(self):
+        # Documents why add_line_number must not be used for structured data.
+        db = self.create_simple_db()
+        query = [FlexiDBQueryColumn(self.index_key_1, "row1")]
+        db.append(query, self.simple_comments_key, {"message": "m"}, True)
+        stored = db.get_value(query, self.simple_comments_key)
+        assert isinstance(stored[0], str)
+        assert stored[0].startswith("1. ")
+
     def test_flexi_database_simple_case_insensitive(self):
         index_field = FlexiDBInitIndexColumn(self.index_key_1)
         value_field = FlexiDBInitDataColumn(self.simple_value_key, None)
