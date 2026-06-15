@@ -200,6 +200,37 @@ class RestService(ABC):
                             pass
                     raise NeedsRetryException(response.status_code, response.text, uri, retry_after)
 
+                # 204 No Content is a legitimate empty success.
+                if response.status_code == 204:
+                    return None
+
+                # Some gateways / corporate proxies return a 2xx with an empty or HTML body for
+                # requests that actually failed (e.g. an over-large diff, or a proxy error page).
+                # Treat that like a transient 5xx: retry with backoff. If it persists, fall through
+                # to response.json() below so the parse raises and the caller's normal failure
+                # handling kicks in (the PR is tracked as failed and retried on a later run).
+                content_type = response.headers.get('Content-Type', '')
+                body_text = response.text
+                is_empty_body = not body_text or not body_text.strip()
+                is_html_body = 'html' in content_type.lower()
+                if is_empty_body or is_html_body:
+                    request_id = response.headers.get('X-GitHub-Request-Id', 'n/a')
+                    transient_retries += 1
+                    if transient_retries <= max_transient_retries:
+                        wait = transient_backoff * (2 ** (transient_retries - 1))
+                        sys.stderr.write(
+                            f"Empty/non-JSON {response.status_code} body "
+                            f"(attempt {transient_retries}/{max_transient_retries}, "
+                            f"content-type='{content_type}', request-id={request_id}), "
+                            f"retrying in {wait}s: {uri}\n"
+                        )
+                        time.sleep(wait)
+                        continue
+                    sys.stderr.write(
+                        f"Empty/non-JSON {response.status_code} body after {max_transient_retries} "
+                        f"retries (content-type='{content_type}', request-id={request_id}): {uri}\n"
+                    )
+
                 # Parse and return JSON response
                 return response.json()
 
