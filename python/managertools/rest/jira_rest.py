@@ -89,11 +89,32 @@ class JiraREST(RestService):
         uri = f"https://{self.jira_server}/rest/api/latest/issue/{ticket_id}"
         return self.get_request(uri, _=str(int(datetime.now(timezone.utc).timestamp() * 1000)))
 
+    @staticmethod
+    def _dedupe_pull_requests(pull_requests: List[Any]) -> List[Any]:
+        """Collapse duplicate PR entries (Jira dev-status can repeat a PR once per
+        associated branch/commit). Dedupe by url, falling back to id, preserving order."""
+        seen = set()
+        unique = []
+        for pr in pull_requests:
+            if not isinstance(pr, dict):
+                continue
+            key = pr.get('url') or pr.get('id')
+            if key is None:
+                unique.append(pr)  # can't key it; keep it rather than drop data
+                continue
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(pr)
+        return unique
+
     def get_ticket_pull_request_info(self, issue_id: str) -> List[Any]:
         uri = f"https://{self.jira_server}/rest/dev-status/1.0/issue/detail"
         now_ms = str(int(datetime.now(timezone.utc).timestamp() * 1000))
 
         pull_requests = []
+        stash_count = 0
+        github_count = 0
 
         # Try Stash/Bitbucket data
         try:
@@ -109,6 +130,7 @@ class JiraREST(RestService):
                 detail = stash_data.get('detail')
                 if isinstance(detail, list) and len(detail) > 0 and isinstance(detail[0], dict):
                     if detail[0].get('pullRequests'):
+                        stash_count = len(detail[0]['pullRequests'])
                         pull_requests.extend(detail[0]['pullRequests'])
         except RESTException as re:
             if re.status_code not in [HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND]:
@@ -127,6 +149,7 @@ class JiraREST(RestService):
                 detail = github_data.get('detail')
                 if isinstance(detail, list) and len(detail) > 0 and isinstance(detail[0], dict):
                     if detail[0].get('pullRequests'):
+                        github_count = len(detail[0]['pullRequests'])
                         pull_requests.extend(detail[0]['pullRequests'])
         except RESTException as re:
             if re.status_code not in [HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND]:
@@ -134,7 +157,15 @@ class JiraREST(RestService):
             import sys
             sys.stderr.write(f"Unable to retrieve requested url {str(re)}\n")
 
-        return pull_requests
+        unique = self._dedupe_pull_requests(pull_requests)
+        raw_count = len(pull_requests)
+        if raw_count != len(unique):
+            import sys
+            sys.stderr.write(
+                f"Issue {issue_id}: dev-status PRs — stash={stash_count}, github={github_count}, "
+                f"{raw_count} raw → {len(unique)} unique (collapsed {raw_count - len(unique)} duplicates)\n"
+            )
+        return unique
 
     def jql_summary_query(self, jql: str) -> Any:
         uri = f"https://{self.jira_server}/rest/api/2/search"
