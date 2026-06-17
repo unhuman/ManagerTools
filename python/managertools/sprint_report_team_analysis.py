@@ -285,13 +285,13 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             if SprintDataCache.is_cache_complete(team_name, "", clean_start_date, clean_end_date):
                 # Complete cache: fast path, no network calls needed
                 debug_print(f"Found complete cached data for cycle {cycle}, loading from cache...")
-                cached_data, _ = SprintDataCache.load_cached_data(team_name, "", clean_start_date, clean_end_date)
+                cached_data, _, _ = SprintDataCache.load_cached_data(team_name, "", clean_start_date, clean_end_date)
                 self.load_cached_data_into_database(cached_data)
                 debug_print(f"Successfully loaded cycle {cycle} from cache")
                 return
             else:
                 # Incomplete cache: load partial data and retry only failed issues
-                cached_data, prev_failed = SprintDataCache.load_cached_data(team_name, "", clean_start_date, clean_end_date)
+                cached_data, prev_failed, prev_failed_prs = SprintDataCache.load_cached_data(team_name, "", clean_start_date, clean_end_date)
                 debug_print(f"Found incomplete cached data for cycle {cycle}, failed issues: {', '.join(prev_failed) if prev_failed else 'none (processing errors)'}")
 
                 # Fetch all issues to filter for retries
@@ -324,30 +324,38 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     'endDate': data.get('endDate')
                 }
                 all_issues = data.get('issues', [])
-                failed_set = set(prev_failed)
+                # Retry failed issues AND tickets that own a failed PR (see sprint path).
+                failed_pr_tickets = {pr.get('ticket') for pr in prev_failed_prs if pr.get('ticket')}
+                failed_set = set(prev_failed) | failed_pr_tickets
                 retry_issues = [i for i in all_issues if i.get('key') in failed_set]
                 debug_print(f"Retrying {len(retry_issues)} previously failed issues in cycle {cycle}...")
 
                 if retry_issues:
-                    self.load_cached_data_into_database(cached_data)
-                    is_complete, new_failed = self.get_issue_category_information(thread_count, sprint_simulation, mode, retry_issues)
+                    # Drop retried tickets' cached rows first so reprocessing doesn't duplicate
+                    # list fields / over-count counters for a ticket already partially cached.
+                    retry_keys = {i.get('key') for i in retry_issues}
+                    filtered_cached = {'rows': [r for r in cached_data.get('rows', [])
+                                                if r.get(DBIndexData.TICKET.name) not in retry_keys]}
+                    self.load_cached_data_into_database(filtered_cached)
+                    is_complete, new_failed, new_failed_prs = self.get_issue_category_information(thread_count, sprint_simulation, mode, retry_issues)
                     debug_print(f"Extracting updated data for cycle {cycle}...")
                     data_to_cache = self.extract_database_data_for_cache(cycle_name)
                     debug_print(f"Saving updated cache for cycle {cycle}...")
-                    SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, is_complete, new_failed)
+                    SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, is_complete, new_failed, new_failed_prs)
                     debug_print(f"Cycle {cycle} cache updated")
-                elif not prev_failed:
+                elif not prev_failed and not prev_failed_prs:
                     # No tracked failures: incompleteness was from processing_errors; re-process all fresh
                     debug_print(f"No tracked failures for cycle {cycle}, re-processing all {len(all_issues)} issues...")
-                    is_complete, new_failed = self.get_issue_category_information(thread_count, sprint_simulation, mode, all_issues)
+                    is_complete, new_failed, new_failed_prs = self.get_issue_category_information(thread_count, sprint_simulation, mode, all_issues)
                     data_to_cache = self.extract_database_data_for_cache(cycle_name)
-                    SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, is_complete, new_failed)
+                    SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, is_complete, new_failed, new_failed_prs)
                     debug_print(f"Cycle {cycle} cache updated")
                 else:
-                    # Had tracked failures but they're no longer in this cycle; clear and mark complete
+                    # Had tracked failures (issues or PRs) but they're no longer in this cycle;
+                    # clear and mark complete.
                     self.load_cached_data_into_database(cached_data)
                     data_to_cache = self.extract_database_data_for_cache(cycle_name)
-                    SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, True, [])
+                    SprintDataCache.save_to_cache(team_name, "", clean_start_date, clean_end_date, data_to_cache, True, [], [])
                     debug_print(f"Previously-failed issues {sorted(failed_set)} no longer in cycle {cycle}, cleared from cache")
                 return
 
@@ -432,14 +440,23 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 cached_data, prev_failed, prev_failed_prs = SprintDataCache.load_cached_data(team_name, sprint_name, start_date, end_date)
                 debug_print(f"Found incomplete cached data for {sprint_name}, failed issues: {', '.join(prev_failed) if prev_failed else 'none (processing errors)'}")
 
-                # Filter to only retry the previously failed issues
-                failed_set = set(prev_failed)
+                # Retry the previously failed issues AND the tickets that own a failed PR.
+                # A failed PR leaves its ticket marked incomplete even though failed_issues is empty.
+                failed_pr_tickets = {pr.get('ticket') for pr in prev_failed_prs if pr.get('ticket')}
+                failed_set = set(prev_failed) | failed_pr_tickets
                 retry_issues = [i for i in all_issues if i.get('key') in failed_set]
                 debug_print(f"Retrying {len(retry_issues)} previously failed issues...")
 
                 if retry_issues:
                     debug_print("Cache loaded, loading partial data into database...")
-                    self.load_cached_data_into_database(cached_data)
+                    # Drop the retried tickets' cached rows first. For a failed PR the owning
+                    # ticket already has (partial) rows in the cache; reprocessing it would
+                    # otherwise duplicate list fields (COMMIT_DATA/COMMENTS) and over-count
+                    # counters (COMMITS/COMMIT_ADDED/...) via append/increment.
+                    retry_keys = {i.get('key') for i in retry_issues}
+                    filtered_cached = {'rows': [r for r in cached_data.get('rows', [])
+                                                if r.get(DBIndexData.TICKET.name) not in retry_keys]}
+                    self.load_cached_data_into_database(filtered_cached)
                     # Previously-failed tickets are the known-problematic large PRs; use the
                     # small GraphQL commit page-size ladder so we don't waste large 502-prone attempts.
                     self._set_github_commit_retry_mode(True)
@@ -452,7 +469,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     debug_print("Saving updated cache...")
                     SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, is_complete, new_failed, new_failed_prs)
                     debug_print("Cache updated successfully")
-                elif not prev_failed:
+                elif not prev_failed and not prev_failed_prs:
                     # No tracked failures: incompleteness was from processing_errors; re-process all fresh
                     debug_print(f"No tracked failures for sprint, re-processing all {len(all_issues)} issues...")
                     is_complete, new_failed, new_failed_prs = self.get_issue_category_information(thread_count, sprint, mode, all_issues)
@@ -460,12 +477,12 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, is_complete, new_failed, new_failed_prs)
                     debug_print("Cache updated successfully")
                 else:
-                    # Had tracked failures but they're no longer in this sprint; clear and mark complete
+                    # Had tracked failures (issues or PRs) but they're no longer in this sprint;
+                    # clear and mark complete.
                     self.load_cached_data_into_database(cached_data)
                     data_to_cache = self.extract_database_data_for_cache(sprint_name)
                     SprintDataCache.save_to_cache(team_name, sprint_name, start_date, end_date, data_to_cache, True, [], [])
                     debug_print(f"Previously-failed issues {sorted(failed_set)} no longer in sprint {sprint_name}, cleared from cache")
-                    # TODO: Case D - implement retry of individual failed PRs here if prev_failed_prs
         else:
             # No cache: process all issues
             debug_print("Processing fresh data (no cache or cache disabled)...")
