@@ -1042,7 +1042,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             if self._head_branch_is_trunk(src_branch):
                 skip_reason = f"down-merge PR (source={src_branch})"
             elif self._pr_title_is_down_merge(pr_title):
-                skip_reason = "down-merge PR (title)"
+                skip_reason = f"down-merge PR (title: {pr_title})"
             debug_print(f"PR {ticket}/{pr_id}: down-merge check title={pr_title!r} "
                         f"source={src_branch} -> {skip_reason or 'keep'}")
             if skip_reason:
