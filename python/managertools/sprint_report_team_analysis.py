@@ -78,6 +78,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         self._github_pr_fetch_total: int = 0
         self.down_merge_title_patterns: List[str] = []
         self.down_merge_trunk_branches: List[str] = []
+        self._down_merge_skips: List[str] = []  # skip_reason strings, for the per-pass summary
 
     def add_custom_command_line_options(self, parser):
         parser.add_argument('-i', '--isolateTicket', help='Isolate ticket for processing (debugging)')
@@ -640,6 +641,21 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 print(f"Invalid regex pattern in ignoreCommitMessageContent: {pattern}", file=sys.stderr)
         return False
 
+    @staticmethod
+    def _pr_title(pull_request: Dict[str, Any]) -> str:
+        """PR title from a Jira dev-status PR dict. Dev-status stores the title under 'name';
+        fall back to 'title' for any other source."""
+        return pull_request.get('name') or pull_request.get('title') or ''
+
+    @staticmethod
+    def _pr_source_branch(pull_request: Dict[str, Any]) -> Optional[str]:
+        """The PR's source ('from'/head) branch from a dev-status PR dict. 'source' is normally
+        {'branch': ..., 'url': ..., 'repository': {...}}; tolerate a bare string."""
+        src = pull_request.get('source')
+        if isinstance(src, dict):
+            return src.get('branch')
+        return src if isinstance(src, str) else None
+
     def _pr_title_is_down_merge(self, pr_title: str) -> bool:
         """True if the PR title matches any configured down-merge pattern (substring search)."""
         if not self.down_merge_title_patterns or not pr_title:
@@ -854,7 +870,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         for ticket_key, prs in self._ticket_pr_data.items():
             for pr in prs:
                 pr_id = str(pr.get('id', ''))
-                pr_title = pr.get('title', '')
+                pr_title = self._pr_title(pr)
                 if pr_id and pr_title:
                     activity_key = (sprint_name, pr_id)
                     if activity_key not in self._pr_primary_ticket:
@@ -934,11 +950,19 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 print(f"Error processing issue: {e}", file=sys.stderr)
                 traceback.print_exc(file=sys.stderr)
 
+        skips_before = len(self._down_merge_skips)
         with ThreadPoolExecutor(max_workers=thread_count) as executor:
             list(executor.map(process_issue, issue_list))
 
         debug_print(f"Parallel processing completed for {len(issue_list)} issues")
         debug_print(f"getIssueCategoryInformation finished for sprint: {sprint_name}")
+
+        new_skips = self._down_merge_skips[skips_before:]
+        if new_skips:
+            by_branch = sum(1 for r in new_skips if r.startswith("down-merge PR (source"))
+            by_title = len(new_skips) - by_branch
+            print(f"   \033[92mDown-merge skips for {sprint_name}: {len(new_skips)} PRs "
+                  f"(source-branch: {by_branch}, title: {by_title})\033[0m", file=sys.stderr)
 
         if processing_errors:
             print(f"\033[93mWarning: Encountered {len(processing_errors)} errors during issue processing. First error: {processing_errors[0]}\033[0m", file=sys.stderr)
@@ -978,6 +1002,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                            pr_status: str, start_date: str, end_date: str, pr_title: str, skip_reason: str):
         """Write a visible [skipped] marker row for a PR skipped at collection time (no commit
         data fetched). The row shows the PR title and a single skipped COMMIT_DATA entry."""
+        self._down_merge_skips.append(skip_reason)  # list.append is atomic under the GIL
         print(f"   {ticket}/{pr_id}: skipped {skip_reason}", file=sys.stderr)
         index_lookup = self.create_index_lookup(sprint_name, ticket, pr_id, marker_author, pr_status)
         self.populate_baseline_db_info(index_lookup, start_date, end_date, marker_author)
@@ -1003,19 +1028,28 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         pr_id = pull_request.get('id', '').lstrip('#')
         pr_status = pull_request.get('status', '')
         pr_author = source_control_rest.map_user_to_jira_name(pull_request.get('author', ''))
-        pr_title = pull_request.get('title', '')
+        pr_title = self._pr_title(pull_request)
 
         # Collection-time down-merge skip: a down-merge PR (trunk merged into a branch) carries
-        # hundreds of already-counted commits and is absurdly expensive to fetch. The title rule
-        # is free (Jira dev-status) so it runs here, before any cache/network work. The branch
-        # rule needs a metadata probe, so it runs only on a cache miss (below), preserving the
-        # cache fast-path. Skipped PRs get a visible marker rather than disappearing.
+        # hundreds of already-counted commits and is absurdly expensive to fetch. Both signals —
+        # the source/from branch and the title — come from the Jira dev-status payload, so this
+        # runs for free before any cache/network work, on every PR. The branch rule is preferred;
+        # title is the fallback. Skipped PRs get a visible marker rather than disappearing.
         skip_enabled = not self.command_line_options.includeDownMergePRs
-        if skip_enabled and self._pr_title_is_down_merge(pr_title):
-            marker_author = pr_author or pull_request.get('author') or 'unknown'
-            self._record_skipped_pr(sprint_name, ticket, pr_id, marker_author, pr_status,
-                                    start_date, end_date, pr_title, "down-merge PR (title)")
-            return
+        if skip_enabled:
+            src_branch = self._pr_source_branch(pull_request)
+            skip_reason = None
+            if self._head_branch_is_trunk(src_branch):
+                skip_reason = f"down-merge PR (source={src_branch})"
+            elif self._pr_title_is_down_merge(pr_title):
+                skip_reason = "down-merge PR (title)"
+            debug_print(f"PR {ticket}/{pr_id}: down-merge check title={pr_title!r} "
+                        f"source={src_branch} -> {skip_reason or 'keep'}")
+            if skip_reason:
+                marker_author = pr_author or pull_request.get('author') or 'unknown'
+                self._record_skipped_pr(sprint_name, ticket, pr_id, marker_author, pr_status,
+                                        start_date, end_date, pr_title, skip_reason)
+                return
 
         # For GitHub, fetch all PR data in one GraphQL call; Bitbucket uses REST
         if is_github:
@@ -1028,21 +1062,6 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     debug_print(f"PR {ticket}/{pr_id}: disk cache hit")
 
             if pr_full is None:
-                # Cache miss → we'd otherwise pay the full commit pagination. Probe metadata
-                # first (~1 point); if this is a down-merge (source branch is trunk), skip before
-                # the expensive fetch. Only runs on a miss, so cached PRs keep the fast path.
-                if skip_enabled and self.down_merge_trunk_branches:
-                    try:
-                        meta = self._retry_rest_call(lambda: source_control_rest.get_pull_request_metadata(pr_url))
-                    except Exception as e:
-                        meta = None
-                        debug_print(f"PR {ticket}/{pr_id}: metadata probe failed ({e}); proceeding with full fetch")
-                    if meta and self._head_branch_is_trunk(meta.get('headRefName')):
-                        marker_author = pr_author or pull_request.get('author') or 'unknown'
-                        self._record_skipped_pr(sprint_name, ticket, pr_id, marker_author, pr_status,
-                                                start_date, end_date, pr_title,
-                                                f"down-merge PR (head={meta.get('headRefName')})")
-                        return
                 self._github_pr_fetch_index += 1
                 source_control_rest.set_pr_progress(self._github_pr_fetch_index, self._github_pr_fetch_total)
                 pr_full = self._retry_rest_call(lambda: source_control_rest.get_pull_request_full(pr_url))

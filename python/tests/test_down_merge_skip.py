@@ -62,6 +62,52 @@ class TestHeadBranchIsTrunk:
         assert _analysis(trunk_branches=[])._head_branch_is_trunk("main") is False
 
 
+class TestPrFieldAccessors:
+    def test_title_from_name(self):
+        # Jira dev-status stores the PR title under 'name', not 'title'.
+        assert SprintReportTeamAnalysis._pr_title({"name": "Down Merge", "id": "#1"}) == "Down Merge"
+
+    def test_title_falls_back_to_title_key(self):
+        assert SprintReportTeamAnalysis._pr_title({"title": "Other"}) == "Other"
+
+    def test_title_missing(self):
+        assert SprintReportTeamAnalysis._pr_title({"id": "#1"}) == ""
+
+    def test_source_branch_from_dict(self):
+        assert SprintReportTeamAnalysis._pr_source_branch({"source": {"branch": "main"}}) == "main"
+
+    def test_source_branch_bare_string(self):
+        assert SprintReportTeamAnalysis._pr_source_branch({"source": "release/2026.6"}) == "release/2026.6"
+
+    def test_source_branch_missing(self):
+        assert SprintReportTeamAnalysis._pr_source_branch({"id": "#1"}) is None
+
+
+class TestDownMergeClassificationFromPrDict:
+    """End-to-end-ish: classify a realistic dev-status PR dict (title under 'name',
+    branch under 'source.branch') the way process_pull_request does."""
+
+    def _is_skip(self, pull_request, a):
+        if a._head_branch_is_trunk(a._pr_source_branch(pull_request)):
+            return True
+        return a._pr_title_is_down_merge(a._pr_title(pull_request))
+
+    def test_down_merge_title_caught(self):
+        a = _analysis()
+        pr = {"name": "Down Merge", "source": {"branch": "feature/x"}, "id": "#29135"}
+        assert self._is_skip(pr, a) is True
+
+    def test_trunk_source_branch_caught(self):
+        a = _analysis()
+        pr = {"name": "Merge main into release", "source": {"branch": "main"}, "id": "#29211"}
+        assert self._is_skip(pr, a) is True
+
+    def test_normal_feature_pr_kept(self):
+        a = _analysis()
+        pr = {"name": "ERPT-829: add widget", "source": {"branch": "feature/ERPT-829"}, "id": "#1"}
+        assert self._is_skip(pr, a) is False
+
+
 class TestSkippedMarkerRendering:
     def test_skipped_entry_rendered(self):
         f = FormatCommitDataOutputFilter()

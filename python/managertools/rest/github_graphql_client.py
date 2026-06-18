@@ -88,20 +88,6 @@ class GithubGraphQLClient(RestService):
     }
     """
 
-    _METADATA_QUERY = """
-    query GetPRMeta($owner: String!, $repo: String!, $number: Int!) {
-      repository(owner: $owner, name: $repo) {
-        pullRequest(number: $number) {
-          title
-          merged
-          baseRefName
-          headRefName
-          commits { totalCount }
-        }
-      }
-    }
-    """
-
     def __init__(self, bearer_token: str, graphql_points_reserved: int = 5):
         super().__init__(AuthInfo(AuthType.Bearer, bearer_token))
         self._graphql_points_reserved = graphql_points_reserved
@@ -118,24 +104,6 @@ class GithubGraphQLClient(RestService):
         """Use the small commit page-size ladder when re-fetching known-failed tickets."""
         self._commit_page_sizes = (self._COMMIT_PAGE_SIZES_RETRY if enabled
                                    else self._COMMIT_PAGE_SIZES_INITIAL)
-
-    def get_pull_request_metadata(self, owner: str, repo: str, pr_number: int) -> Dict[str, Any]:
-        """Cheap metadata-only query (no commit nodes, ~1 point, no 502 risk) used to decide
-        whether to skip a PR before the expensive full commit pagination.
-        Returns {title, baseRefName, headRefName, commits_total, merged}."""
-        variables = {"owner": owner, "repo": repo, "number": pr_number}
-        body = json.dumps({"query": self._METADATA_QUERY, "variables": variables})
-        response = self._execute_request("POST", self.ENDPOINT, body, {})
-        if "errors" in response and response.get("data") is None:
-            raise RuntimeError(f"GraphQL errors for {owner}/{repo}#{pr_number} (metadata): {response['errors']}")
-        pr = (response.get("data", {}).get("repository") or {}).get("pullRequest") or {}
-        return {
-            "title": pr.get("title"),
-            "baseRefName": pr.get("baseRefName"),
-            "headRefName": pr.get("headRefName"),
-            "commits_total": (pr.get("commits") or {}).get("totalCount"),
-            "merged": pr.get("merged"),
-        }
 
     def get_pull_request_data(self, owner: str, repo: str, pr_number: int) -> Dict[str, Any]:
         """
