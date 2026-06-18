@@ -23,6 +23,7 @@ from managertools.flexidb.output.output_filter import OutputFilter
 from managertools.data import DBData, DBIndexData, UserActivity
 from managertools.output.convert_self_metrics_empty_to_zero_output_filter import ConvertSelfMetricsEmptyToZeroOutputFilter
 from managertools.output.format_commit_data_output_filter import FormatCommitDataOutputFilter
+from managertools.output.append_asterisk_output_filter import AppendAsteriskOutputFilter
 from managertools.rest.source_control_rest import SourceControlREST
 from managertools.rest.exceptions import RESTException, NeedsRetryException
 from managertools.util.command_line_helper import CommandLineHelper
@@ -79,6 +80,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         self.down_merge_title_patterns: List[str] = []
         self.down_merge_trunk_branches: List[str] = []
         self._down_merge_skips: List[str] = []  # skip_reason strings, for the per-pass summary
+        self._overall_capped_cols: set = set()  # columns capped on any row, for the Overall Totals '*'
 
     def add_custom_command_line_options(self, parser):
         parser.add_argument('-i', '--isolateTicket', help='Isolate ticket for processing (debugging)')
@@ -86,6 +88,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         parser.add_argument('-mt', '--multithread', help='Number of threads, default 1, *=cores')
         parser.add_argument('--includeMergeCommits', action='store_true', help='Include merge commits (2+ parents) in report metrics; excluded by default')
         parser.add_argument('--includeDownMergePRs', action='store_true', help='Process down-merge PRs (huge trunk-into-branch merges) instead of skipping them at collection time')
+        parser.add_argument('--includeBroughtInCommits', action='store_true', help='Include commits merged in from other branches (2nd-parent of a merge) in report metrics; excluded by default')
         parser.add_argument('--maxCommitSize', type=int, help='Limit commit size (adds+removes) for code metrics')
         parser.add_argument('--kanbanCycleLength', type=int, default=2, help='Kanban cycle length in weeks (default 2)')
 
@@ -606,6 +609,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         sb.append(FlexiDBRow.headings_to_csv(column_order))
 
         overall_totals_row = FlexiDBRow({})
+        self._overall_capped_cols = set()
         for sprint in sprints:
             sprint_finder = [FlexiDBQueryColumn(DBIndexData.SPRINT.name, sprint)]
             self.find_rows_and_append_csv_data(sprint_finder, sb, overall_totals_row)
@@ -692,6 +696,28 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             return parent_count > 1
         return bool(re.match(self.MERGE_COMMIT_REGEX, message))
 
+    @staticmethod
+    def _brought_in_oids(commits: List[Dict[str, Any]], head_oid: Optional[str]) -> set:
+        """Identify commits merged in from another branch (a merge's 2nd+ parent side).
+
+        Walks first-parent only from the PR head through the fetched commit set; that linear
+        chain is the PR's own "mainline" (including merge nodes). Every fetched commit not on the
+        chain was brought in by a merge and was already authored/counted in its own PR.
+
+        Returns the set of brought-in oids. Empty (no-op) when head_oid is missing/unknown or
+        parent oids aren't available (e.g. Bitbucket), so callers degrade gracefully.
+        """
+        by_oid = {c.get('id'): c for c in commits if c.get('id')}
+        if not head_oid or head_oid not in by_oid:
+            return set()
+        mainline = set()
+        cur = head_oid
+        while cur and cur in by_oid and cur not in mainline:
+            mainline.add(cur)
+            parent_oids = by_oid[cur].get('parent_oids') or []
+            cur = parent_oids[0] if parent_oids else None
+        return set(by_oid) - mainline
+
     def find_rows_and_append_csv_data(self, rows_filter: List[FlexiDBQueryColumn], sb: list, overall_totals_row: FlexiDBRow):
         rows = self.database.find_rows(rows_filter, True)
 
@@ -721,6 +747,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
         column_order = self.generate_columns_order()
         sprint_totals_row = FlexiDBRow({})
+        sprint_capped_cols = set()  # columns capped on any row this sprint, for the Sprint Totals '*'
 
         total_prs = 0
         non_declined_prs = 0
@@ -737,25 +764,34 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             output_row = FlexiDBRow(row)
 
             # Derive COMMITS and line counts by summing per-commit COMMIT_DATA rather than the
-            # stored totals. Merge commits are excluded unless --includeMergeCommits. With
-            # maxCommitSize set, exclude individual commits whose size meets/exceeds the threshold
-            # (e.g. large vendoring commits) from the line counts while still counting the commit.
+            # stored totals. Merge commits are excluded unless --includeMergeCommits, and
+            # brought-in (merged-from-another-branch) commits unless --includeBroughtInCommits.
+            # Commits at/above maxCommitSize (e.g. large vendoring commits) are excluded from BOTH
+            # COMMITS and the line totals. COMMITS counts only commits whose lines are counted.
             include_merges = self.command_line_options.includeMergeCommits
+            include_brought_in = self.command_line_options.includeBroughtInCommits
             commit_count = 0
             commit_added = 0
             commit_removed = 0
+            commits_excluded = False  # a real commit was dropped from COMMITS (merge/brought-in/oversized)
             for commit_entry in (output_row.get(DBData.COMMIT_DATA.name) or []):
                 if not isinstance(commit_entry, dict):
                     continue
-                if commit_entry.get("type") == "skipped":
+                entry_type = commit_entry.get("type")
+                if entry_type == "skipped":
                     continue  # collection-time skip marker (e.g. down-merge); never a real commit
-                if commit_entry.get("type") == "merge" and not include_merges:
+                if entry_type == "merge" and not include_merges:
+                    commits_excluded = True
                     continue
-                commit_count += 1
+                if entry_type == "brought-in" and not include_brought_in:
+                    commits_excluded = True  # merged in from another branch; already counted in its own PR
+                    continue
                 entry_added = commit_entry.get("additions", 0) or 0
                 entry_removed = commit_entry.get("deletions", 0) or 0
                 if self.max_commit_size and (entry_added + entry_removed) >= self.max_commit_size:
+                    commits_excluded = True  # oversized; excluded from both COMMITS and the line totals
                     continue
+                commit_count += 1
                 commit_added += entry_added
                 commit_removed += entry_removed
             # None renders as empty (ConvertZerosToEmptyOutputFilter handles zeros too).
@@ -763,10 +799,31 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             output_row[UserActivity.COMMIT_ADDED.name] = commit_added or None
             output_row[UserActivity.COMMIT_REMOVED.name] = commit_removed or None
 
+            # Cap PR line counts at the authored-commit totals. PR_ADDED/PR_REMOVED is the whole-PR
+            # net diff — credited entirely to the PR author and not sprint-scoped — so it can
+            # massively overstate one developer's contribution (merged-in / others' / carryover
+            # work). Never credit more PR lines than authored commit lines; flag capped cells with
+            # a trailing '*' at render (kept numeric here so the totals below stay correct).
+            capped_cols = []
+            if (output_row.get(UserActivity.PR_ADDED.name) or 0) > commit_added:
+                output_row[UserActivity.PR_ADDED.name] = commit_added or None
+                capped_cols.append(UserActivity.PR_ADDED.name)
+            if (output_row.get(UserActivity.PR_REMOVED.name) or 0) > commit_removed:
+                output_row[UserActivity.PR_REMOVED.name] = commit_removed or None
+                capped_cols.append(UserActivity.PR_REMOVED.name)
+            if commits_excluded:
+                # COMMITS excluded merge/brought-in/oversized commits; flag it with '*' too.
+                capped_cols.append(UserActivity.COMMITS.name)
+            # Propagate to the totals so aggregated counts are flagged when any component was.
+            sprint_capped_cols.update(capped_cols)
+            self._overall_capped_cols.update(capped_cols)
+
             if not (row_user and author and row_user.casefold() == author.casefold()):
                 output_row[DBIndexData.PR_STATUS.name] = ""
 
-            sb.append(output_row.to_csv(column_order, self.STANDARD_OUTPUT_RULES))
+            row_rules = ([AppendAsteriskOutputFilter(capped_cols)] + self.STANDARD_OUTPUT_RULES
+                         if capped_cols else self.STANDARD_OUTPUT_RULES)
+            sb.append(output_row.to_csv(column_order, row_rules))
 
             if row_user and author and row_user.casefold() == author.casefold():
                 total_prs += 1
@@ -802,11 +859,11 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         overall_totals_row[self.TOTAL_PRS] = overall_pr_count + total_prs
         overall_totals_row[self.NON_DECLINED_PRS] = overall_non_declined + non_declined_prs
 
-        self.append_totals_info(sb, "Sprint Totals", sprint_totals_row)
+        self.append_totals_info(sb, "Sprint Totals", sprint_totals_row, sprint_capped_cols)
         sb.append("")
 
     def append_summary(self, sb: list, overall_totals_row: FlexiDBRow):
-        self.append_totals_info(sb, "Overall Totals", overall_totals_row)
+        self.append_totals_info(sb, "Overall Totals", overall_totals_row, self._overall_capped_cols)
 
     def write_results_file(self, filename: str, data: str):
         print(f"Writing file: {filename}")
@@ -1075,12 +1132,17 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             _github_created_ms = pr_full.get("created_ms", 0) if pr_full else 0
             _github_merged_ms = pr_full.get("merged_ms", 0) if pr_full else 0
             _github_activities = pr_full.get("activities") if pr_full else None
+            # Classify commits merged in from other branches (a merge's 2nd-parent side) so they
+            # aren't double-counted; they were already authored/counted in their own PR.
+            brought_in_oids = self._brought_in_oids(pr_commits or [], pr_full.get("head_oid") if pr_full else None)
         else:
             pr_commits = self._retry_rest_call(lambda: source_control_rest.get_commits(pr_url))
             _github_created_ms = None
             _github_merged_ms = None
             _github_activities = None
-        debug_print(f"PR {ticket}/{pr_id}: Got {len(pr_commits) if pr_commits else 0} commits")
+            brought_in_oids = set()
+        debug_print(f"PR {ticket}/{pr_id}: Got {len(pr_commits) if pr_commits else 0} commits"
+                    + (f", {len(brought_in_oids)} brought-in" if brought_in_oids else ""))
 
         if pr_author is None:
             if pr_commits:
@@ -1194,17 +1256,23 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
                 commit_message = re.sub(r'(\r|\n)?\n', '  ', commit.get('message', '').strip())
                 commit_filtered = self._commit_message_matches_filter(commit_message)
-                commit_type = "merge" if self._is_merge_commit(commit, commit_message) else "normal"
+                if self._is_merge_commit(commit, commit_message):
+                    commit_type = "merge"
+                elif commit_sha in brought_in_oids:
+                    commit_type = "brought-in"  # merged in from another branch; already counted there
+                else:
+                    commit_type = "normal"
 
                 commit_url = commit.get('url') or pr_url
                 # Every commit is recorded in COMMIT_DATA with its type; report generation decides
-                # which to count (merges excluded unless --includeMergeCommits). The stored
-                # COMMIT_ADDED/COMMIT_REMOVED counters (which gate PR-diff fetching) only accumulate
-                # normal, non-filtered commits, matching legacy behavior.
+                # which to count (merges/brought-in excluded unless their include flag is set). The
+                # stored COMMIT_ADDED/COMMIT_REMOVED counters (which gate PR-diff fetching) only
+                # accumulate normal, non-filtered commits, matching legacy behavior.
                 c_add = 0
                 c_del = 0
-                if commit_type == "merge":
-                    # Use inline values only; skip the per-commit REST diff fallback for merges.
+                if commit_type in ("merge", "brought-in"):
+                    # Use inline values only; skip the per-commit REST diff fallback (these aren't
+                    # counted by default and the brought-in ones were already measured in their PR).
                     c_add = commit.get("additions") or 0
                     c_del = commit.get("deletions") or 0
                 elif not commit_filtered:
@@ -1370,7 +1438,8 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
         return columns
 
-    def append_totals_info(self, sb: list, totals_description: str, totals_row: FlexiDBRow):
+    def append_totals_info(self, sb: list, totals_description: str, totals_row: FlexiDBRow, capped_cols: set = None):
+        capped_cols = capped_cols or set()
         column_order = self.generate_columns_order()
 
         if column_order and column_order[0] not in totals_row:
@@ -1402,7 +1471,9 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     value = totals_row.get(column_name, user_activity.get_default_value() if user_activity else None)
                     if user_activity and column_name in totals_row and value == user_activity.get_default_value():
                         value = 0
-                    totals_row[column_name] = f"{column_name}: {value}"
+                    # Flag aggregated counts whose components were capped (e.g. PR_ADDED/PR_REMOVED/COMMITS).
+                    asterisk = "*" if column_name in capped_cols else ""
+                    totals_row[column_name] = f"{column_name}: {value}{asterisk}"
             except KeyError:
                 pass
 

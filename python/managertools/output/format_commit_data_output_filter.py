@@ -25,5 +25,9 @@ class FormatCommitDataOutputFilter(OutputFilter):
         if entry_type == "skipped":
             # Collection-time skip marker (e.g. down-merge PR); message already self-describing.
             return f"[skipped] {message}"
-        prefix = "[merge] " if entry_type == "merge" else ""
+        prefix = ""
+        if entry_type == "merge":
+            prefix = "[merge] "
+        elif entry_type == "brought-in":
+            prefix = "[brought-in] "  # merged in from another branch; not counted by default
         return f"{prefix}{message} (+{additions}/-{deletions})"

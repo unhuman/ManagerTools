@@ -36,6 +36,9 @@ GitHub integration requires a Personal Access Token. To create one, go to Accoun
 - PR_ADDED, PR_REMOVED, and PR_MODIFIED values are not time-checked against the sprints, so those values will duplicate for carryover tickets.
 - Nested comments could be mis-attributed to the wrong sprint. Nested comments are attributed to the same sprint as the initial comment.
 - Supports Kanban. All activity on a ticket (regardless of time) is contained within the time period that the ticket is resolved.
+- PR_ADDED/PR_REMOVED are capped at the same row's COMMIT_ADDED/COMMIT_REMOVED, so a developer is never credited more PR lines than authored-commit lines. This prevents outsized credit from the whole-PR net diff (which is author-attributed and not sprint-scoped) — e.g. work merged in from another branch.
+- COMMITS counts only the individual's own commits whose lines are counted — it excludes merge commits, brought-in (merged-from-another-branch) commits, and commits at/above `maxCommitSize`.
+- **Any value capped/reduced by the above is flagged with a trailing `*`** (e.g. `120*`) on PR_ADDED, PR_REMOVED, and COMMITS. The Sprint Totals / Overall Totals rows are likewise flagged with `*` on any column whose components were capped. The visualizer strips the `*` for charting and instead marks the affected sprint with a `*` plus a footnote.
 
 ## Groovy (Deprecated)
 

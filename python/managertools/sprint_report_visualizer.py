@@ -48,7 +48,8 @@ def safe_int(val):
     if pd.isna(val) or val == '':
         return 0
     if isinstance(val, str):
-        val = val.strip()
+        # Strip the trailing '*' the report appends to capped PR_ADDED/PR_REMOVED values.
+        val = val.strip().replace('*', '')
         if val == '':
             return 0
     try:
@@ -62,6 +63,14 @@ def aggregate_metrics(df, user):
     # Case-insensitive user matching
     user_data = df[df['USER'].str.lower() == user.lower()].copy()
 
+    # Detect rows whose PR line counts were capped (flagged with a trailing '*' by the report) —
+    # must run BEFORE safe_int strips the '*'.
+    cap_mask = pd.Series(False, index=user_data.index)
+    for col in ('PR_ADDED', 'PR_REMOVED', 'COMMITS'):
+        if col in user_data.columns:
+            cap_mask |= user_data[col].astype(str).str.contains('*', regex=False)
+    capped_by_sprint = cap_mask.groupby(user_data['SPRINT']).any()
+
     # Coerce columns to numeric
     numeric_cols = ['PR_ADDED', 'PR_REMOVED', 'COMMITS', 'APPROVED',
                     'COMMENTED_ON_OTHERS', 'OTHERS_COMMENTED']
@@ -73,6 +82,8 @@ def aggregate_metrics(df, user):
 
     # Group by sprint and sum
     grouped = user_data.groupby('SPRINT')[numeric_cols].sum()
+    # Flag sprints where any PR line count was capped (for the per-sprint report annotation).
+    grouped['Capped'] = capped_by_sprint.reindex(grouped.index).fillna(False)
 
     # Calculate derived metrics
     grouped['Code Volume'] = grouped['PR_ADDED'] + grouped['PR_REMOVED']
@@ -321,6 +332,10 @@ def generate_individual_png(user, df, team_name, output_dir):
     aggregated = aggregated.loc[sprint_names]
     x = np.arange(len(sprint_names))
 
+    # Sprints whose PR line counts were capped get a '*' on their label + a footnote.
+    capped = aggregated['Capped'] if 'Capped' in aggregated.columns else pd.Series(False, index=aggregated.index)
+    xlabels = [f"{s}*" if bool(capped.get(s, False)) else s for s in sprint_names]
+
     # Create 2x3 grid
     fig, axes = plt.subplots(2, 3, figsize=(14, 10))
     axes = axes.flatten()
@@ -394,10 +409,16 @@ def generate_individual_png(user, df, team_name, output_dir):
     # Set x-axis labels for all
     for ax in axes[:5]:
         ax.set_xticks(x)
-        ax.set_xticklabels(sprint_names, rotation=45, ha='right', fontsize=8)
+        ax.set_xticklabels(xlabels, rotation=45, ha='right', fontsize=8)
 
     plt.suptitle(f'{user} ({team_name}) — Sprint Activity Report', fontsize=12, fontweight='bold')
-    plt.tight_layout()
+    if bool(capped.any()):
+        fig.text(0.5, 0.01,
+                 "* Some commits were merges, so PR_ADDED, PR_REMOVED, and COMMITS were capped",
+                 ha='center', fontsize=8, style='italic', color='dimgray')
+        plt.tight_layout(rect=[0, 0.03, 1, 1])  # reserve bottom space for the footnote
+    else:
+        plt.tight_layout()
 
     # Save
     output_path = os.path.join(output_dir, f'individual-{team_name}-{user}-report.png')

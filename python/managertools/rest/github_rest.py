@@ -242,11 +242,13 @@ class GithubREST(SourceControlREST):
 
         Returns a dict with keys:
           - commits: list of normalized commit dicts (keys: id, committerTimestamp, message,
-                     committer.name, url, additions, deletions, changedFilesIfAvailable)
+                     committer.name, url, additions, deletions, changedFilesIfAvailable,
+                     parents_count, parent_oids)
           - activities: list of normalized activity dicts (keys: user.name, action,
                         comment.text, createdDate)
           - created_ms: PR created-at as int milliseconds
           - merged_ms:  PR merged-at as int milliseconds (0 if not merged)
+          - head_oid:   the PR head (tip) commit oid, for first-parent classification
         """
         m = re.search(r'/repos/([^/]+)/([^/]+)/pulls/(\d+)', pr_url)
         if not m:
@@ -283,6 +285,8 @@ class GithubREST(SourceControlREST):
                 "changedFilesIfAvailable": c.get("changedFilesIfAvailable", 0),
                 # Parent count drives merge detection (a merge commit has 2+ parents).
                 "parents_count": (c.get("parents") or {}).get("totalCount"),
+                # Ordered parent oids (first parent first) for first-parent classification.
+                "parent_oids": [(p or {}).get("oid") for p in (c.get("parents") or {}).get("nodes", [])],
             })
 
         # Normalize activities: general comments + inline review-thread comments + reviews
@@ -322,6 +326,7 @@ class GithubREST(SourceControlREST):
             "activities": activities,
             "created_ms": created_ms,
             "merged_ms": merged_ms,
+            "head_oid": pr_meta.get("headRefOid"),
         }
 
     def get_pr_created_ms(self, pr_url: str) -> int:

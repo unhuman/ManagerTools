@@ -33,6 +33,7 @@ class GithubGraphQLClient(RestService):
           deletions
           createdAt
           mergedAt
+          headRefOid
           commits(first: $commitPageSize, after: $commitCursor) {
             totalCount
             pageInfo { hasNextPage endCursor }
@@ -44,7 +45,7 @@ class GithubGraphQLClient(RestService):
                 deletions
                 changedFilesIfAvailable
                 committedDate
-                parents { totalCount }
+                parents(first: 8) { totalCount nodes { oid } }
                 author { name user { login } }
                 committer { name user { login } }
               }
@@ -201,6 +202,7 @@ class GithubGraphQLClient(RestService):
                     "deletions": pr.get("deletions", 0),
                     "createdAt": pr.get("createdAt"),
                     "mergedAt": pr.get("mergedAt"),
+                    "headRefOid": pr.get("headRefOid"),
                     "reviews": pr.get("reviews", {}).get("nodes", []),
                 }
 
