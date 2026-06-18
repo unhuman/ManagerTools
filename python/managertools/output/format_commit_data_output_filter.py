@@ -21,5 +21,9 @@ class FormatCommitDataOutputFilter(OutputFilter):
         message = entry.get("message", "")
         additions = entry.get("additions", 0) or 0
         deletions = entry.get("deletions", 0) or 0
-        prefix = "[merge] " if entry.get("type") == "merge" else ""
+        entry_type = entry.get("type")
+        if entry_type == "skipped":
+            # Collection-time skip marker (e.g. down-merge PR); message already self-describing.
+            return f"[skipped] {message}"
+        prefix = "[merge] " if entry_type == "merge" else ""
         return f"{prefix}{message} (+{additions}/-{deletions})"

@@ -56,6 +56,13 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
     MERGE_COMMIT_REGEX = r"(?i)(?:^|.*[ :])\s*(down)?merge.*"
     DEFAULT_MAX_COMMIT_SIZE = 2_000  # lines added + removed
 
+    # Collection-time down-merge PR skip ruleset (see README "Configuration"). A PR is skipped
+    # if its title matches any title pattern (free, from Jira dev-status) OR its source branch
+    # (headRefName) is a trunk branch (needs a cheap GraphQL metadata probe). Both lists are
+    # configurable; an empty list disables that rule. --includeDownMergePRs disables skipping.
+    DEFAULT_DOWN_MERGE_TITLE_PATTERNS = [r"(?i).*down\s*merge.*"]
+    DEFAULT_DOWN_MERGE_TRUNK_BRANCHES = ["main", "master", "develop", r"release/.*"]
+
     def __init__(self, args: List[str]):
         super().__init__(args)
         self.database = None
@@ -69,12 +76,15 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         self._pr_data_cache: Optional[PRDataCache] = None
         self._github_pr_fetch_index: int = 0
         self._github_pr_fetch_total: int = 0
+        self.down_merge_title_patterns: List[str] = []
+        self.down_merge_trunk_branches: List[str] = []
 
     def add_custom_command_line_options(self, parser):
         parser.add_argument('-i', '--isolateTicket', help='Isolate ticket for processing (debugging)')
         parser.add_argument('-o', '--outputCSV', required=True, help='Output filename (.csv)')
         parser.add_argument('-mt', '--multithread', help='Number of threads, default 1, *=cores')
         parser.add_argument('--includeMergeCommits', action='store_true', help='Include merge commits (2+ parents) in report metrics; excluded by default')
+        parser.add_argument('--includeDownMergePRs', action='store_true', help='Process down-merge PRs (huge trunk-into-branch merges) instead of skipping them at collection time')
         parser.add_argument('--maxCommitSize', type=int, help='Limit commit size (adds+removes) for code metrics')
         parser.add_argument('--kanbanCycleLength', type=int, default=2, help='Kanban cycle length in weeks (default 2)')
 
@@ -94,6 +104,15 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         # Load PR title and commit message filters
         self.ignore_pr_title_patterns = self.command_line_helper.get_config_file_manager().get_value("ignorePRTitleContent") or []
         self.ignore_commit_message_patterns = self.command_line_helper.get_config_file_manager().get_value("ignoreCommitMessageContent") or []
+
+        # Down-merge PR skip ruleset (configurable; defaults applied when keys are absent).
+        config_mgr = self.command_line_helper.get_config_file_manager()
+        self.down_merge_title_patterns = (config_mgr.get_value("downMergePRTitlePatterns")
+                                          if config_mgr.contains_key("downMergePRTitlePatterns")
+                                          else self.DEFAULT_DOWN_MERGE_TITLE_PATTERNS)
+        self.down_merge_trunk_branches = (config_mgr.get_value("downMergeTrunkBranches")
+                                          if config_mgr.contains_key("downMergeTrunkBranches")
+                                          else self.DEFAULT_DOWN_MERGE_TRUNK_BRANCHES)
 
         self.database = FlexiDB(self.generate_db_signature(), True)
         self.incomplete_sprints = []
@@ -324,20 +343,15 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     'endDate': data.get('endDate')
                 }
                 all_issues = data.get('issues', [])
-                # Retry failed issues AND tickets that own a failed PR (see sprint path).
-                failed_pr_tickets = {pr.get('ticket') for pr in prev_failed_prs if pr.get('ticket')}
-                failed_set = set(prev_failed) | failed_pr_tickets
-                retry_issues = [i for i in all_issues if i.get('key') in failed_set]
+                # Retry failed issues (whole ticket) and failed PRs (only those PR ids), keeping
+                # the rest from cache. See _plan_incomplete_cache_retry.
+                retry_issues, filtered_cached, failed_set, pr_id_filter = self._plan_incomplete_cache_retry(
+                    all_issues, prev_failed, prev_failed_prs, cached_data)
                 debug_print(f"Retrying {len(retry_issues)} previously failed issues in cycle {cycle}...")
 
                 if retry_issues:
-                    # Drop retried tickets' cached rows first so reprocessing doesn't duplicate
-                    # list fields / over-count counters for a ticket already partially cached.
-                    retry_keys = {i.get('key') for i in retry_issues}
-                    filtered_cached = {'rows': [r for r in cached_data.get('rows', [])
-                                                if r.get(DBIndexData.TICKET.name) not in retry_keys]}
                     self.load_cached_data_into_database(filtered_cached)
-                    is_complete, new_failed, new_failed_prs = self.get_issue_category_information(thread_count, sprint_simulation, mode, retry_issues)
+                    is_complete, new_failed, new_failed_prs = self.get_issue_category_information(thread_count, sprint_simulation, mode, retry_issues, pr_id_filter)
                     debug_print(f"Extracting updated data for cycle {cycle}...")
                     data_to_cache = self.extract_database_data_for_cache(cycle_name)
                     debug_print(f"Saving updated cache for cycle {cycle}...")
@@ -420,6 +434,43 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         if self.github_rest is not None and hasattr(self.github_rest, 'set_commit_page_size_retry_mode'):
             self.github_rest.set_commit_page_size_retry_mode(enabled)
 
+    def _plan_incomplete_cache_retry(self, all_issues: List[Any], prev_failed: List[str],
+                                     prev_failed_prs: List[Dict[str, str]], cached_data: Dict[str, Any]):
+        """Decide what an incomplete cache needs to reprocess, at PR-level granularity.
+
+        - A *failed issue* (ticket absent from cache) → reprocess the whole ticket.
+        - A *failed PR only* (ticket cached, specific PRs failed) → reprocess only those PR ids
+          (via the returned pr_id_filter); the ticket's other (good) PR rows are kept from cache.
+
+        Returns (retry_issues, filtered_cached, all_failed_tickets, pr_id_filter). The row filter
+        drops whole-ticket rows for failed issues and only the failed-PR rows for PR-only tickets,
+        so reprocessing never duplicates list fields / over-counts counters. pr_id_filter is
+        passed to get_issue_category_information to narrow PR fetching to the failed PRs.
+        """
+        failed_issue_set = set(prev_failed or [])
+        pr_id_filter: Dict[str, set] = {}
+        for pr in (prev_failed_prs or []):
+            ticket = pr.get('ticket')
+            if not ticket or ticket in failed_issue_set:
+                continue  # whole ticket already being retried
+            pr_id_filter.setdefault(ticket, set()).add(pr.get('pr_id'))
+        all_failed_tickets = failed_issue_set | set(pr_id_filter.keys())
+
+        retry_issues = [i for i in all_issues if i.get('key') in all_failed_tickets]
+        if pr_id_filter:
+            debug_print("PR-level retry filter: "
+                        + ", ".join(f"{t}={sorted(p for p in ids if p)}" for t, ids in pr_id_filter.items()))
+
+        def _keep(row):
+            ticket = row.get(DBIndexData.TICKET.name)
+            if ticket in failed_issue_set:
+                return False  # whole ticket reprocessed
+            if ticket in pr_id_filter:
+                return row.get(DBIndexData.PR_ID.name) not in pr_id_filter[ticket]  # keep good PRs
+            return True
+        filtered_cached = {'rows': [r for r in cached_data.get('rows', []) if _keep(r)]}
+        return retry_issues, filtered_cached, all_failed_tickets, pr_id_filter
+
     def process_potentially_cached_sprint_data(self, thread_count: int, team_name: str, sprint: Dict[str, Any], mode: Mode, all_issues: List[Any], use_cache: bool):
         sprint_name = sprint.get('name', '')
         start_date = self.clean_date(sprint.get('startDate', ''))
@@ -440,28 +491,20 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 cached_data, prev_failed, prev_failed_prs = SprintDataCache.load_cached_data(team_name, sprint_name, start_date, end_date)
                 debug_print(f"Found incomplete cached data for {sprint_name}, failed issues: {', '.join(prev_failed) if prev_failed else 'none (processing errors)'}")
 
-                # Retry the previously failed issues AND the tickets that own a failed PR.
-                # A failed PR leaves its ticket marked incomplete even though failed_issues is empty.
-                failed_pr_tickets = {pr.get('ticket') for pr in prev_failed_prs if pr.get('ticket')}
-                failed_set = set(prev_failed) | failed_pr_tickets
-                retry_issues = [i for i in all_issues if i.get('key') in failed_set]
+                # Retry failed issues (whole ticket) and failed PRs (only those PR ids), keeping
+                # the rest from cache. See _plan_incomplete_cache_retry.
+                retry_issues, filtered_cached, failed_set, pr_id_filter = self._plan_incomplete_cache_retry(
+                    all_issues, prev_failed, prev_failed_prs, cached_data)
                 debug_print(f"Retrying {len(retry_issues)} previously failed issues...")
 
                 if retry_issues:
                     debug_print("Cache loaded, loading partial data into database...")
-                    # Drop the retried tickets' cached rows first. For a failed PR the owning
-                    # ticket already has (partial) rows in the cache; reprocessing it would
-                    # otherwise duplicate list fields (COMMIT_DATA/COMMENTS) and over-count
-                    # counters (COMMITS/COMMIT_ADDED/...) via append/increment.
-                    retry_keys = {i.get('key') for i in retry_issues}
-                    filtered_cached = {'rows': [r for r in cached_data.get('rows', [])
-                                                if r.get(DBIndexData.TICKET.name) not in retry_keys]}
                     self.load_cached_data_into_database(filtered_cached)
                     # Previously-failed tickets are the known-problematic large PRs; use the
                     # small GraphQL commit page-size ladder so we don't waste large 502-prone attempts.
                     self._set_github_commit_retry_mode(True)
                     try:
-                        is_complete, new_failed, new_failed_prs = self.get_issue_category_information(thread_count, sprint, mode, retry_issues)
+                        is_complete, new_failed, new_failed_prs = self.get_issue_category_information(thread_count, sprint, mode, retry_issues, pr_id_filter)
                     finally:
                         self._set_github_commit_retry_mode(False)
                     debug_print("Extracting updated data for cache...")
@@ -597,6 +640,31 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 print(f"Invalid regex pattern in ignoreCommitMessageContent: {pattern}", file=sys.stderr)
         return False
 
+    def _pr_title_is_down_merge(self, pr_title: str) -> bool:
+        """True if the PR title matches any configured down-merge pattern (substring search)."""
+        if not self.down_merge_title_patterns or not pr_title:
+            return False
+        for pattern in self.down_merge_title_patterns:
+            try:
+                if re.search(pattern, pr_title):
+                    return True
+            except re.error:
+                print(f"Invalid regex pattern in downMergePRTitlePatterns: {pattern}", file=sys.stderr)
+        return False
+
+    def _head_branch_is_trunk(self, head_ref: Optional[str]) -> bool:
+        """True if the PR's source branch is a trunk branch. Uses fullmatch so 'main' does not
+        match 'maintenance' while 'release/.*' matches 'release/2026.6'."""
+        if not self.down_merge_trunk_branches or not head_ref:
+            return False
+        for pattern in self.down_merge_trunk_branches:
+            try:
+                if re.fullmatch(pattern, head_ref):
+                    return True
+            except re.error:
+                print(f"Invalid regex pattern in downMergeTrunkBranches: {pattern}", file=sys.stderr)
+        return False
+
     def _is_merge_commit(self, commit: Dict[str, Any], message: str) -> bool:
         """A merge commit has 2+ parents. Prefer the authoritative parent count
         (GitHub normalized `parents_count`, Bitbucket raw `parents` list); fall
@@ -663,6 +731,8 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             for commit_entry in (output_row.get(DBData.COMMIT_DATA.name) or []):
                 if not isinstance(commit_entry, dict):
                     continue
+                if commit_entry.get("type") == "skipped":
+                    continue  # collection-time skip marker (e.g. down-merge); never a real commit
                 if commit_entry.get("type") == "merge" and not include_merges:
                     continue
                 commit_count += 1
@@ -727,7 +797,10 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         with open(filename, 'w') as f:
             f.write(data)
 
-    def get_issue_category_information(self, thread_count: int, sprint: Dict[str, Any], mode: Mode, issue_list: List[Any]) -> tuple[bool, list[str]]:
+    def get_issue_category_information(self, thread_count: int, sprint: Dict[str, Any], mode: Mode, issue_list: List[Any],
+                                       pr_id_filter: Optional[Dict[str, set]] = None) -> tuple[bool, list[str]]:
+        # pr_id_filter: {ticket -> set of PR ids (no '#')}. When set, only those PRs are
+        # processed for that ticket (PR-level retry); other tickets are unaffected.
         sprint_name = sprint.get('name', '')
         start_date = self.clean_date(sprint.get('startDate', ''))
         end_date = self.clean_date(sprint.get('endDate', ''))
@@ -751,13 +824,19 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         # Pre-pass: fetch all PR data in parallel to build the primary-ticket map for activity attribution.
         # A PR linked to multiple tickets is attributed to the ticket whose key appears in the PR title
         # (by convention e.g. "AI-164: ..."); falls back to first-found when no title match exists.
+        def _apply_pr_filter(t, prs):
+            # PR-level retry: keep only the failed PR ids for this ticket.
+            if pr_id_filter and t in pr_id_filter:
+                return [pr for pr in prs if pr.get('id', '').lstrip('#') in pr_id_filter[t]]
+            return prs
+
         def prefetch_prs(issue):
             t = issue.get('key')
             if isolated_ticket and t != isolated_ticket:
                 return
             try:
                 prs = self.jira_rest.get_ticket_pull_request_info(str(issue.get('id')))
-                self._ticket_pr_data[t] = prs
+                self._ticket_pr_data[t] = _apply_pr_filter(t, prs)
             except Exception:
                 pass  # main pass will retry with full backoff logic
 
@@ -804,7 +883,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     pull_requests = []
                     for attempt in range(1, max_retries + 1):
                         try:
-                            pull_requests = self.jira_rest.get_ticket_pull_request_info(str(issue_id))
+                            pull_requests = _apply_pr_filter(ticket, self.jira_rest.get_ticket_pull_request_info(str(issue_id)))
                             last_error = None
                             break
                         except (RemoteDisconnected, RequestsConnectionError, BrokenPipeError, EOFError) as ce:
@@ -895,6 +974,19 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         if last_error:
             raise last_error
 
+    def _record_skipped_pr(self, sprint_name: str, ticket: str, pr_id: str, marker_author: str,
+                           pr_status: str, start_date: str, end_date: str, pr_title: str, skip_reason: str):
+        """Write a visible [skipped] marker row for a PR skipped at collection time (no commit
+        data fetched). The row shows the PR title and a single skipped COMMIT_DATA entry."""
+        print(f"   {ticket}/{pr_id}: skipped {skip_reason}", file=sys.stderr)
+        index_lookup = self.create_index_lookup(sprint_name, ticket, pr_id, marker_author, pr_status)
+        self.populate_baseline_db_info(index_lookup, start_date, end_date, marker_author)
+        if pr_title:
+            self.database.set_value(index_lookup, DBData.PR_TITLE_FOR_FILTER.name, pr_title)
+        self.database.append(index_lookup, DBData.COMMIT_DATA.name,
+                             {"message": f"[skipped: {skip_reason}]", "additions": 0,
+                              "deletions": 0, "type": "skipped"})
+
     def process_pull_request(self, ticket: str, pull_request: Dict[str, Any], sprint_name: str, start_date: str,
                             end_date: str, sprint_start_ms: float, sprint_end_ms: float, mode: Mode):
         pr_id = pull_request.get('id', 'UNKNOWN')
@@ -911,6 +1003,19 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         pr_id = pull_request.get('id', '').lstrip('#')
         pr_status = pull_request.get('status', '')
         pr_author = source_control_rest.map_user_to_jira_name(pull_request.get('author', ''))
+        pr_title = pull_request.get('title', '')
+
+        # Collection-time down-merge skip: a down-merge PR (trunk merged into a branch) carries
+        # hundreds of already-counted commits and is absurdly expensive to fetch. The title rule
+        # is free (Jira dev-status) so it runs here, before any cache/network work. The branch
+        # rule needs a metadata probe, so it runs only on a cache miss (below), preserving the
+        # cache fast-path. Skipped PRs get a visible marker rather than disappearing.
+        skip_enabled = not self.command_line_options.includeDownMergePRs
+        if skip_enabled and self._pr_title_is_down_merge(pr_title):
+            marker_author = pr_author or pull_request.get('author') or 'unknown'
+            self._record_skipped_pr(sprint_name, ticket, pr_id, marker_author, pr_status,
+                                    start_date, end_date, pr_title, "down-merge PR (title)")
+            return
 
         # For GitHub, fetch all PR data in one GraphQL call; Bitbucket uses REST
         if is_github:
@@ -923,6 +1028,21 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     debug_print(f"PR {ticket}/{pr_id}: disk cache hit")
 
             if pr_full is None:
+                # Cache miss → we'd otherwise pay the full commit pagination. Probe metadata
+                # first (~1 point); if this is a down-merge (source branch is trunk), skip before
+                # the expensive fetch. Only runs on a miss, so cached PRs keep the fast path.
+                if skip_enabled and self.down_merge_trunk_branches:
+                    try:
+                        meta = self._retry_rest_call(lambda: source_control_rest.get_pull_request_metadata(pr_url))
+                    except Exception as e:
+                        meta = None
+                        debug_print(f"PR {ticket}/{pr_id}: metadata probe failed ({e}); proceeding with full fetch")
+                    if meta and self._head_branch_is_trunk(meta.get('headRefName')):
+                        marker_author = pr_author or pull_request.get('author') or 'unknown'
+                        self._record_skipped_pr(sprint_name, ticket, pr_id, marker_author, pr_status,
+                                                start_date, end_date, pr_title,
+                                                f"down-merge PR (head={meta.get('headRefName')})")
+                        return
                 self._github_pr_fetch_index += 1
                 source_control_rest.set_pr_progress(self._github_pr_fetch_index, self._github_pr_fetch_total)
                 pr_full = self._retry_rest_call(lambda: source_control_rest.get_pull_request_full(pr_url))
@@ -955,8 +1075,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 print(f"Skipping processing of PR {ticket} / {pr_id} due to unknown author: {pull_request.get('author')}", file=sys.stderr)
                 return
 
-        # Store PR title in database for filtering
-        pr_title = pull_request.get('title', '')
+        # Store PR title in database for filtering (pr_title captured earlier, pre-fetch)
         if pr_title:
             title_index = self.create_index_lookup(sprint_name, ticket, pr_id, pr_author, pr_status)
             self.database.set_value(title_index, DBData.PR_TITLE_FOR_FILTER.name, pr_title)

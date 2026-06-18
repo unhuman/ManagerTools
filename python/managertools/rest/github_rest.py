@@ -237,6 +237,15 @@ class GithubREST(SourceControlREST):
             return None
 
 
+    def get_pull_request_metadata(self, pr_url: str) -> Dict[str, Any]:
+        """Cheap PR metadata for collection-time down-merge detection, avoiding the full
+        commit pagination. Returns {title, baseRefName, headRefName, commits_total, merged}."""
+        m = re.search(r'/repos/([^/]+)/([^/]+)/pulls/(\d+)', pr_url)
+        if not m:
+            raise ValueError(f"Cannot parse owner/repo/number from PR URL: {pr_url}")
+        owner, repo, pr_number = m.group(1), m.group(2), int(m.group(3))
+        return self._graphql_client.get_pull_request_metadata(owner, repo, pr_number)
+
     def get_pull_request_full(self, pr_url: str) -> Dict[str, Any]:
         """Fetch all PR data via a single paginated GraphQL query.
 

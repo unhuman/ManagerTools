@@ -120,6 +120,16 @@ Configuration is stored in `~/.managerTools.cfg` as a JSON file. The following o
   "ignoreCommitMessageContent": ["(?i)merge|revert", "^bump version"]
   ```
 
+- **`downMergePRTitlePatterns`** — Array of regex patterns matched (substring `re.search`) against the PR title to detect down-merge / bulk-merge PRs and **skip them at collection time** (before the expensive commit fetch). Unlike `ignorePRTitleContent` (which excludes a PR at report time but still fetches it), a matched PR is never fetched and instead gets a visible `[skipped]` marker row. The title is available pre-fetch (from Jira dev-status), so this rule costs no extra API calls. Default (used when the key is absent): `["(?i).*down\\s*merge.*"]` — matches `downmerge`/`down merge` but not bare "merge". Set to `[]` to disable the title rule.
+  ```json
+  "downMergePRTitlePatterns": ["(?i).*down\\s*merge.*"]
+  ```
+
+- **`downMergeTrunkBranches`** — Array of regex patterns (full-match) for "trunk" branch names. A PR whose **source** branch (`headRefName`) matches is treated as a down-merge and **skipped at collection time** with a visible `[skipped]` marker. Detecting this needs the branch name, fetched via a cheap GraphQL metadata probe (~1 point) that runs before — and avoids — the full commit pagination. Default (used when the key is absent): `["main", "master", "develop", "release/.*"]` (note: `hotfix/*` is intentionally excluded because real work is authored there). Set to `[]` to disable the branch rule. Both rules can be disabled for a single run with `--includeDownMergePRs`.
+  ```json
+  "downMergeTrunkBranches": ["main", "master", "develop", "release/.*"]
+  ```
+
 #### GitHub API Rate Limiting
 
 - **`graphqlPointsReserved`** — Number of GraphQL rate-limit points to keep in reserve. When the remaining point count drops to or below this value, processing pauses (with a countdown display) until the rate-limit window resets. Increase this value when running multiple simultaneous processes that share the same GitHub token. Default: `5`.
@@ -145,7 +155,9 @@ When the same setting is provided in both the configuration file and CLI flags:
   "graphqlPointsReserved": 5,
   "ignoreFilenames": ["*.min.js", "*.bundle.js"],
   "ignorePRTitleContent": ["(?i)automated", "(?i)downmerge"],
-  "ignoreCommitMessageContent": ["(?i)bump version"]
+  "ignoreCommitMessageContent": ["(?i)bump version"],
+  "downMergePRTitlePatterns": ["(?i).*down\\s*merge.*"],
+  "downMergeTrunkBranches": ["main", "master", "develop", "release/.*"]
 }
 ```
 

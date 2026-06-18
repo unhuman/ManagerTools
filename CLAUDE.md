@@ -84,6 +84,7 @@ python -m managertools.sprint_report_individual_analysis \
 **Optional:**
 - `-p, --prompt` — Prompt for interactive input
 - `--includeMergeCommits` — Include merge commits in metrics
+- `--includeDownMergePRs` — Process down-merge PRs instead of skipping them at collection time
 - `--maxCommitSize N` — Limit commit size for metrics
 - `-m, --multithread N` — Number of threads (* for CPU count)
 
