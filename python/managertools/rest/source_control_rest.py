@@ -25,6 +25,15 @@ class SourceControlREST(RestService, ABC):
         pass
 
     @abstractmethod
+    def get_repo_commit_diffs(self, repo_url: str, commit_sha: str):
+        """Fetch a single commit's diffs given the REPOSITORY url (not a PR url).
+
+        Needed for commits sourced from the Jira dev-status commit view, which are not
+        associated with any PR. Implementations should degrade gracefully (return None)
+        on 403/404 rather than raising."""
+        pass
+
+    @abstractmethod
     def get_pr_created_ms(self, pr_url: str) -> int:
         pass
 

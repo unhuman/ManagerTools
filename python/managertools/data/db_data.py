@@ -8,8 +8,9 @@ class DBData(Enum):
     AUTHOR = ("author", None, 2)
     COMMENTS = ("comments", [], 3)
     OTHERS_COMMENTS = (None, [], 4)
-    # Per-commit data: list of dicts, each {"message": str, "additions": int, "deletions": int}.
-    # Future candidate fields: "sha", "committerTimestamp", "url".
+    # Per-commit data: list of dicts, each {"message": str, "additions": int, "deletions": int,
+    # "type": str, "sha": str}. "sha" is the commit id, used to de-dupe commit-view commits
+    # against PR commits in WorkSource.BOTH mode. Future candidate fields: "committerTimestamp", "url".
     COMMIT_DATA = (None, [], 5)
     PR_TITLE = (None, None, 6)
     PR_TITLE_FOR_FILTER = (None, None, 7)

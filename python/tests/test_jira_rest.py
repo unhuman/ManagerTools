@@ -51,3 +51,59 @@ class TestGetTicketPullRequestInfo:
             "https://github.com/cvent-internal/c4/pull/28600",
         ]
         assert len(result) == 2
+
+
+class TestDedupeCommits:
+    def test_dedupes_by_id_preserving_order(self):
+        commits = [
+            {"id": "aaa", "displayId": "aaa"},
+            {"id": "aaa", "displayId": "aaa"},   # dup
+            {"id": "bbb", "displayId": "bbb"},
+            {"id": "aaa", "displayId": "aaa"},   # dup again
+        ]
+        unique = JiraREST._dedupe_commits(commits)
+        assert [c["id"] for c in unique] == ["aaa", "bbb"]
+
+    def test_falls_back_to_displayId_then_url(self):
+        commits = [{"displayId": "x"}, {"displayId": "x"}, {"url": "u"}, {"url": "u"}]
+        unique = JiraREST._dedupe_commits(commits)
+        assert len(unique) == 2
+
+    def test_keeps_unkeyable_and_skips_non_dicts(self):
+        commits = [{"message": "no keys"}, "garbage", {"message": "no keys"}]
+        unique = JiraREST._dedupe_commits(commits)
+        assert unique == [{"message": "no keys"}, {"message": "no keys"}]
+
+
+class TestGetTicketCommitInfo:
+    def _jira(self):
+        return JiraREST("jira.example.com", "bearer_token")
+
+    def test_flattens_repositories_tags_repo_and_dedupes(self):
+        jira = self._jira()
+        stash_resp = {"detail": []}
+        c1 = {"id": "sha1", "message": "work", "author": {"name": "Dev One"}}
+        c2 = {"id": "sha2", "message": "more", "author": {"name": "Dev Two"}}
+        github_resp = {"detail": [{"repositories": [
+            {"url": "https://github.com/org/repo", "name": "repo",
+             "commits": [c1, c2, dict(c1)]},  # c1 repeated -> deduped
+        ]}]}
+
+        with patch.object(jira, "get_request", side_effect=[stash_resp, github_resp]) as gr:
+            result = jira.get_ticket_commit_info("123")
+
+        assert [c["id"] for c in result] == ["sha1", "sha2"]
+        # Each commit is tagged with its parent repository for later diff fetching.
+        assert result[0]["_repository"] == {"url": "https://github.com/org/repo", "name": "repo"}
+        # Commits come from the "repository" detail — there is no "commit" dataType
+        # (GitHub Enterprise rejects it with "Unsupported type: commit").
+        for call in gr.call_args_list:
+            assert call.kwargs["dataType"] == "repository"
+
+    def test_swallows_403(self):
+        from http import HTTPStatus
+        from managertools.rest.exceptions import RESTException
+        jira = self._jira()
+        err = RESTException(HTTPStatus.FORBIDDEN, "forbidden", "u")
+        with patch.object(jira, "get_request", side_effect=err):
+            assert jira.get_ticket_commit_info("123") == []

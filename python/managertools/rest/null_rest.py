@@ -20,5 +20,8 @@ class NullREST(SourceControlREST):
     def get_commit_diffs(self, pr_url: str, commit_sha: str):
         return []
 
+    def get_repo_commit_diffs(self, repo_url: str, commit_sha: str):
+        return []
+
     def map_user_to_jira_name(self, user_data):
         return None

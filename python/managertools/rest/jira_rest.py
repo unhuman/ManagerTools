@@ -167,6 +167,76 @@ class JiraREST(RestService):
             )
         return unique
 
+    @staticmethod
+    def _dedupe_commits(commits: List[Any]) -> List[Any]:
+        """Collapse duplicate commit entries (the same commit can appear under multiple
+        branches/repos in dev-status). Dedupe by id, falling back to displayId then url,
+        preserving order."""
+        seen = set()
+        unique = []
+        for commit in commits:
+            if not isinstance(commit, dict):
+                continue
+            key = commit.get('id') or commit.get('displayId') or commit.get('url')
+            if key is None:
+                unique.append(commit)  # can't key it; keep it rather than drop data
+                continue
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(commit)
+        return unique
+
+    def get_ticket_commit_info(self, issue_id: str) -> List[Any]:
+        """Fetch commits linked to a ticket via the dev-status "Commits" panel.
+
+        The dev-status detail endpoint has no "commit" dataType (GitHub Enterprise rejects it
+        with "Unsupported type: commit"); commits are carried by the "repository" detail, which
+        groups them under detail[0]['repositories'][*]['commits']. Each commit is tagged with
+        its parent repository ({url, name}) so the per-commit diff can later be fetched by
+        repository url (loose commits have no PR url)."""
+        uri = f"https://{self.jira_server}/rest/dev-status/1.0/issue/detail"
+        now_ms = str(int(datetime.now(timezone.utc).timestamp() * 1000))
+
+        commits = []
+        for app_type in ("stash", "githube"):
+            try:
+                data = self.get_request(uri,
+                                        issueId=issue_id,
+                                        dataType="repository",
+                                        applicationType=app_type,
+                                        _=now_ms)
+                if not isinstance(data, dict):
+                    continue
+                if data.get('errors'):
+                    import sys
+                    sys.stderr.write(f"Error in response: {data.get('errors')}\n")
+                detail = data.get('detail')
+                if isinstance(detail, list) and len(detail) > 0 and isinstance(detail[0], dict):
+                    for repo in detail[0].get('repositories') or []:
+                        if not isinstance(repo, dict):
+                            continue
+                        repo_ref = {'url': repo.get('url'), 'name': repo.get('name')}
+                        for commit in repo.get('commits') or []:
+                            if isinstance(commit, dict):
+                                commit['_repository'] = repo_ref
+                                commits.append(commit)
+            except RESTException as re:
+                if re.status_code not in [HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND]:
+                    raise
+                import sys
+                sys.stderr.write(f"Unable to retrieve requested url {str(re)}\n")
+
+        unique = self._dedupe_commits(commits)
+        raw_count = len(commits)
+        if raw_count != len(unique):
+            import sys
+            sys.stderr.write(
+                f"Issue {issue_id}: dev-status commits — {raw_count} raw → {len(unique)} unique "
+                f"(collapsed {raw_count - len(unique)} duplicates)\n"
+            )
+        return unique
+
     def jql_summary_query(self, jql: str) -> Any:
         uri = f"https://{self.jira_server}/rest/api/2/search"
         return self.get_request(uri,

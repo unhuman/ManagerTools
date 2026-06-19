@@ -102,6 +102,24 @@ class BitbucketREST(SourceControlREST):
                                whitespace="ignore-all",
                                ignoreComments="true")
 
+    def get_repo_commit_diffs(self, repo_url: str, commit_sha: str) -> Optional[Any]:
+        # Loose commits (dev-status commit view) carry a repository url rather than a PR url,
+        # so build the commit-diff endpoint directly from the repo url. Same query params and
+        # 403/404 degradation as get_diffs.
+        uri = f"{repo_url}/commits/{commit_sha}/diff"
+        try:
+            return self.get_request(uri,
+                                   start=self.STARTING_PAGE,
+                                   limit=self.PAGE_SIZE_LIMIT,
+                                   contextLines="0",
+                                   whitespace="ignore-all",
+                                   ignoreComments="true")
+        except RESTException as re:
+            if re.status_code not in [HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND, HTTPStatus.INTERNAL_SERVER_ERROR]:
+                raise
+            sys.stderr.write(f"Unable to retrieve repo commit diffs {str(re)}\n")
+            return None
+
 
     def get_pr_created_ms(self, pr_url: str) -> int:
         try:

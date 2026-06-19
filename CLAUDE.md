@@ -86,6 +86,7 @@ python -m managertools.sprint_report_individual_analysis \
 - `--includeMergeCommits` — Include merge commits in metrics
 - `--includeDownMergePRs` — Process down-merge PRs instead of skipping them at collection time
 - `--includeBroughtInCommits` — Include commits merged in from other branches (2nd-parent of a merge) in metrics
+- `--workSource pr|commit|both` — Source work from PRs (default), the Jira dev-status Commits view, or both (de-duped by SHA)
 - `--maxCommitSize N` — Limit commit size for metrics
 - `-m, --multithread N` — Number of threads (* for CPU count)
 

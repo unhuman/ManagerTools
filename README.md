@@ -39,6 +39,7 @@ GitHub integration requires a Personal Access Token. To create one, go to Accoun
 - PR_ADDED/PR_REMOVED are capped at the same row's COMMIT_ADDED/COMMIT_REMOVED, so a developer is never credited more PR lines than authored-commit lines. This prevents outsized credit from the whole-PR net diff (which is author-attributed and not sprint-scoped) — e.g. work merged in from another branch.
 - COMMITS counts only the individual's own commits whose lines are counted — it excludes merge commits, brought-in (merged-from-another-branch) commits, and commits at/above `maxCommitSize`.
 - **Any value capped/reduced by the above is flagged with a trailing `*`** (e.g. `120*`) on PR_ADDED, PR_REMOVED, and COMMITS. The Sprint Totals / Overall Totals rows are likewise flagged with `*` on any column whose components were capped. The visualizer strips the `*` for charting and instead marks the affected sprint with a `*` plus a footnote.
+- **Work source** (`--workSource` / `workSource` config) selects where work is sourced: `pr` (default; pull requests only), `commit` (commits from the Jira dev-status Commits view, no PR processing), or `both` (PRs plus any commits not already counted by a PR, de-duped by commit SHA). In `commit`/`both` mode, commits with no associated PR are grouped per ticket under a synthetic PR id of `(commits)` and are **excluded from TOTAL_PRS / NON_DECLINED_PRS** (they aren't PRs). Their line counts come from per-commit diff fetches, so `both` is slower than `pr` but corrects undercounting when work lands outside (or unlinked from) PRs.
 
 ## Groovy (Deprecated)
 
@@ -94,6 +95,13 @@ GitHub integration requires a Personal Access Token. To create one, go to Accoun
 
 Configuration is stored in `~/.managerTools.cfg` as a JSON file. The following options are supported:
 
+#### Work Source
+
+- **`workSource`** — Where sprint work is sourced. One of `"pr"` (default; pull requests via Jira dev-status), `"commit"` (commits via the Jira dev-status Commits view; no PR processing), or `"both"` (PRs plus any commits a PR didn't already count, de-duped by commit SHA). Overridden by the `--workSource {pr,commit,both}` CLI flag. Commits with no PR are grouped per ticket under a synthetic `(commits)` PR id and excluded from `TOTAL_PRS`/`NON_DECLINED_PRS`; their line counts come from per-commit diff fetches.
+  ```json
+  "workSource": "both"
+  ```
+
 #### Code Metrics Filtering
 
 - **`maxCommitSize`** — Exclude individual commits larger than this line threshold (additions + removals) from metrics. Defaults to 2000 if not specified. Helps filter out large auto-generated changes and downmerges. Applied per commit at report-generation time against the per-commit data stored in the cache: each commit whose own size meets or exceeds this threshold is dropped from the `COMMIT_ADDED`/`COMMIT_REMOVED` line counts, while smaller commits on the same PR still contribute. The row still appears in reports showing `OPENED`/`MERGED`/review activity. Because filtering happens at report time, changing this value re-shapes the totals without needing to rebuild the cache.
@@ -143,9 +151,9 @@ Configuration is stored in `~/.managerTools.cfg` as a JSON file. The following o
 #### Precedence
 
 When the same setting is provided in both the configuration file and CLI flags:
-- CLI flags take highest priority (e.g., `--maxCommitSize N`)
+- CLI flags take highest priority (e.g., `--maxCommitSize N`, `--workSource both`)
 - Configuration file values are used if no CLI flag is provided
-- Built-in defaults are used if neither is specified
+- Built-in defaults are used if neither is specified (e.g., `workSource` defaults to `pr`)
 
 #### Example Configuration File
 
@@ -153,6 +161,7 @@ When the same setting is provided in both the configuration file and CLI flags:
 {
   "jiraServer": "https://jira.company.com",
   "bitbucketServer": "https://bitbucket.company.com",
+  "workSource": "pr",
   "maxCommitSize": 2000,
   "maxFileChangeSize": 5000,
   "graphqlPointsReserved": 5,

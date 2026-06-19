@@ -20,7 +20,7 @@ from managertools.flexidb.init.flexidb_init_data_column import FlexiDBInitDataCo
 from managertools.flexidb.init.flexidb_init_index_column import FlexiDBInitIndexColumn
 from managertools.flexidb.output.convert_zeros_to_empty_output_filter import ConvertZerosToEmptyOutputFilter
 from managertools.flexidb.output.output_filter import OutputFilter
-from managertools.data import DBData, DBIndexData, UserActivity
+from managertools.data import DBData, DBIndexData, UserActivity, WorkSource
 from managertools.output.convert_self_metrics_empty_to_zero_output_filter import ConvertSelfMetricsEmptyToZeroOutputFilter
 from managertools.output.format_commit_data_output_filter import FormatCommitDataOutputFilter
 from managertools.output.append_asterisk_output_filter import AppendAsteriskOutputFilter
@@ -50,6 +50,11 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
     TOTAL_PRS = "TOTAL_PRS"
     NON_DECLINED_PRS = "NON_DECLINED_PRS"
+
+    # Synthetic PR id for commits sourced directly from the Jira dev-status commit view
+    # (WorkSource.COMMIT / BOTH). These commits have no PR, so they roll up under one bucket
+    # per ticket and are excluded from the TOTAL_PRS / NON_DECLINED_PRS counts.
+    COMMITS_PR_ID = "(commits)"
 
     STANDARD_OUTPUT_RULES = [ConvertZerosToEmptyOutputFilter(), FormatCommitDataOutputFilter()]
     SAME_USER_OUTPUT_RULES = [ConvertSelfMetricsEmptyToZeroOutputFilter()]
@@ -81,6 +86,8 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         self.down_merge_trunk_branches: List[str] = []
         self._down_merge_skips: List[str] = []  # skip_reason strings, for the per-pass summary
         self._overall_capped_cols: set = set()  # columns capped on any row, for the Overall Totals '*'
+        self.work_source: WorkSource = WorkSource.PR  # where work is sourced (pr/commit/both)
+        self._ticket_commit_data: Dict[str, Any] = {}  # ticket -> dev-status commit list (prefetch)
 
     def add_custom_command_line_options(self, parser):
         parser.add_argument('-i', '--isolateTicket', help='Isolate ticket for processing (debugging)')
@@ -90,6 +97,10 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         parser.add_argument('--includeDownMergePRs', action='store_true', help='Process down-merge PRs (huge trunk-into-branch merges) instead of skipping them at collection time')
         parser.add_argument('--includeBroughtInCommits', action='store_true', help='Include commits merged in from other branches (2nd-parent of a merge) in report metrics; excluded by default')
         parser.add_argument('--maxCommitSize', type=int, help='Limit commit size (adds+removes) for code metrics')
+        parser.add_argument('--workSource', choices=['pr', 'commit', 'both'], default=None,
+                            help="Where sprint work is sourced: 'pr' (default), 'commit' (Jira dev-status "
+                                 "Commits view), or 'both' (PRs + uncovered commits, de-duped by SHA). "
+                                 "Overrides the workSource config value.")
         parser.add_argument('--kanbanCycleLength', type=int, default=2, help='Kanban cycle length in weeks (default 2)')
 
     def validate_custom_command_line_options(self):
@@ -118,11 +129,19 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                                           if config_mgr.contains_key("downMergeTrunkBranches")
                                           else self.DEFAULT_DOWN_MERGE_TRUNK_BRANCHES)
 
+        # Work source: CLI flag wins, then config "workSource", then default "pr" (backward compatible).
+        work_source_str = (config_mgr.get_value("workSource")
+                           if config_mgr.contains_key("workSource") else "pr")
+        if self.command_line_options.workSource is not None:
+            work_source_str = self.command_line_options.workSource
+        self.work_source = WorkSource(str(work_source_str).lower())
+
         self.database = FlexiDB(self.generate_db_signature(), True)
         self.incomplete_sprints = []
         self._counted_pr_activities = set()
         self._pr_primary_ticket = {}
         self._ticket_pr_data = {}
+        self._ticket_commit_data = {}
         self._pr_mem_cache: Dict[str, Any] = {}
         self._pr_data_cache = PRDataCache(self.team_name)
 
@@ -756,6 +775,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             row_user = row.get(DBIndexData.USER.name)
             author = row.get(DBData.AUTHOR.name)
             pr_status = row.get(DBIndexData.PR_STATUS.name)
+            pr_id = row.get(DBIndexData.PR_ID.name)
 
             # Filter out rows by PR title patterns (entire PR is excluded)
             if self._should_filter_row_by_pr_title(row):
@@ -825,7 +845,9 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                          if capped_cols else self.STANDARD_OUTPUT_RULES)
             sb.append(output_row.to_csv(column_order, row_rules))
 
-            if row_user and author and row_user.casefold() == author.casefold():
+            if (row_user and author and row_user.casefold() == author.casefold()
+                    and pr_id != self.COMMITS_PR_ID):
+                # Synthetic (commits) rows have no PR, so they never count toward PR totals.
                 total_prs += 1
                 if pr_status and pr_status.upper() != "DECLINED":
                     non_declined_prs += 1
@@ -903,13 +925,19 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 return [pr for pr in prs if pr.get('id', '').lstrip('#') in pr_id_filter[t]]
             return prs
 
+        process_prs = self.work_source in (WorkSource.PR, WorkSource.BOTH)
+        process_commits = self.work_source in (WorkSource.COMMIT, WorkSource.BOTH)
+
         def prefetch_prs(issue):
             t = issue.get('key')
             if isolated_ticket and t != isolated_ticket:
                 return
             try:
-                prs = self.jira_rest.get_ticket_pull_request_info(str(issue.get('id')))
-                self._ticket_pr_data[t] = _apply_pr_filter(t, prs)
+                if process_prs:
+                    prs = self.jira_rest.get_ticket_pull_request_info(str(issue.get('id')))
+                    self._ticket_pr_data[t] = _apply_pr_filter(t, prs)
+                if process_commits:
+                    self._ticket_commit_data[t] = self.jira_rest.get_ticket_commit_info(str(issue.get('id')))
             except Exception:
                 pass  # main pass will retry with full backoff logic
 
@@ -952,7 +980,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 pull_requests = self._ticket_pr_data.get(ticket)
                 last_error = None
 
-                if pull_requests is None:
+                if process_prs and pull_requests is None:
                     pull_requests = []
                     for attempt in range(1, max_retries + 1):
                         try:
@@ -984,11 +1012,16 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                     if last_error:
                         raise last_error
 
+                pull_requests = pull_requests or []
+                ticket_commits = self._ticket_commit_data.get(ticket) if process_commits else None
+
                 with lock:
                     counter[0] += 1
                     _B = "\033[94m"
                     _R = "\033[0m"
-                    print(f"   {_B}{counter[0]}/{len(issue_list)}: {ticket} / Issue {issue_id} has {len(pull_requests)} PRs{_R}")
+                    commit_note = f", {len(ticket_commits or [])} commits" if process_commits else ""
+                    print(f"   {_B}{counter[0]}/{len(issue_list)}: {ticket} / Issue {issue_id} "
+                          f"has {len(pull_requests)} PRs{commit_note}{_R}")
 
                 for pull_request in pull_requests:
                     try:
@@ -1000,6 +1033,27 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                             failed_pr_entries.append({"ticket": ticket, "pr_id": pr_id, "pr_url": pr_url})
                         with lock:
                             print(f"   [ERROR] Failed to process PR {pr_id} for {ticket}: {e}", file=sys.stderr)
+
+                # Commit pass (WorkSource.COMMIT / BOTH). Runs AFTER the PR loop so BOTH-mode
+                # de-dupe can read the SHAs the PRs just counted for this ticket.
+                if process_commits:
+                    if ticket_commits is None:
+                        try:
+                            ticket_commits = self.jira_rest.get_ticket_commit_info(str(issue_id))
+                        except Exception as e:
+                            ticket_commits = []
+                            with lock:
+                                failed_issue_keys.append(ticket)
+                                print(f"   [ERROR] Failed to fetch commits for {ticket}: {e}", file=sys.stderr)
+                    seen_shas = (self._counted_shas_for_ticket(sprint_name, ticket)
+                                 if self.work_source == WorkSource.BOTH else None)
+                    try:
+                        self.process_ticket_commits(ticket, ticket_commits, sprint_name, start_date,
+                                                    end_date, sprint_start_ms, sprint_end_ms, mode, seen_shas)
+                    except Exception as e:
+                        with lock:
+                            failed_issue_keys.append(ticket)
+                            print(f"   [ERROR] Failed to process commits for {ticket}: {e}", file=sys.stderr)
             except Exception as e:
                 with lock:
                     processing_errors.append(e)
@@ -1293,9 +1347,10 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
 
                 self.database.increment_field(index_lookup, UserActivity.COMMITS.name)
                 # No add_line_number: COMMIT_DATA holds dicts, which must NOT be stringified.
+                # "sha" lets WorkSource.BOTH de-dupe commit-view commits against these PR commits.
                 self.database.append(index_lookup, DBData.COMMIT_DATA.name,
                                      {"message": commit_message, "additions": c_add, "deletions": c_del,
-                                      "type": commit_type})
+                                      "type": commit_type, "sha": commit_sha})
 
         # Process PR diffs if there was commit activity
         index_lookup = self.create_index_lookup(sprint_name, ticket, pr_id, pr_author, pr_status)
@@ -1307,6 +1362,113 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 if diffs_response:
                     self.populate_baseline_db_info(index_lookup, start_date, end_date, pr_author)
                     self.process_diffs(self.PR_PREFIX, diffs_response, index_lookup)
+
+    def _counted_shas_for_ticket(self, sprint_name: str, ticket: str) -> set:
+        """SHAs already counted via PRs for this ticket (across all its PR rows). Used by the
+        BOTH-mode commit pass to skip commits a PR already covered. Reads COMMIT_DATA, which
+        carries 'sha' (and so works for both freshly-processed and cache-restored PR rows)."""
+        rows = self.database.find_rows([
+            FlexiDBQueryColumn(DBIndexData.SPRINT.name, sprint_name),
+            FlexiDBQueryColumn(DBIndexData.TICKET.name, ticket)], True)
+        shas = set()
+        for row in rows:
+            for entry in (row.get(DBData.COMMIT_DATA.name) or []):
+                if isinstance(entry, dict) and entry.get('sha'):
+                    shas.add(entry.get('sha'))
+        return shas
+
+    @staticmethod
+    def _coerce_epoch_ms(value: Any) -> Optional[int]:
+        """Normalize a dev-status timestamp to epoch milliseconds. The repository detail returns
+        authorTimestamp as an epoch-ms int, a numeric string, or an ISO-8601 string depending on
+        the provider — return None when it can't be parsed so callers can default it."""
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return int(value)
+        if isinstance(value, str):
+            s = value.strip()
+            if not s:
+                return None
+            try:
+                return int(s)
+            except ValueError:
+                pass
+            try:
+                # Normalize 'Z' and a colon-less offset (e.g. +0000) for fromisoformat.
+                iso = s.replace('Z', '+00:00')
+                iso = re.sub(r'([+-]\d{2})(\d{2})$', r'\1:\2', iso)
+                return int(datetime.fromisoformat(iso).timestamp() * 1000)
+            except ValueError:
+                return None
+        return None
+
+    def process_ticket_commits(self, ticket: str, commits: List[Dict[str, Any]], sprint_name: str,
+                               start_date: str, end_date: str, sprint_start_ms: float, sprint_end_ms: float,
+                               mode: Mode, already_counted_shas: Optional[set] = None):
+        """Process commits sourced from the Jira dev-status commit view (no PR involved).
+
+        Mirrors the commit loop in process_pull_request: same sprint-window filter, committer
+        attribution, IGNORE_USERS, merge/maxCommitSize handling, and per-commit diff fetch for
+        line counts. Loose commits roll up under the synthetic COMMITS_PR_ID bucket per ticket.
+        'brought-in' is never assigned here — it requires a PR head/first-parent walk we don't have.
+        """
+        if not commits:
+            return
+        already_counted_shas = already_counted_shas or set()
+        for commit in commits:
+            sha = commit.get('id') or commit.get('displayId') or ''
+            if sha and sha in already_counted_shas:
+                continue  # already counted via a PR (BOTH-mode de-dupe)
+
+            # dev-status uses authorTimestamp (often a string); coerce to epoch ms so the
+            # window check matches the PR path's numeric comparison.
+            raw_ts = commit.get('committerTimestamp')
+            if raw_ts is None:
+                raw_ts = commit.get('authorTimestamp')
+            commit_timestamp = self._coerce_epoch_ms(raw_ts) or 0
+            if mode != Mode.KANBAN and (sprint_start_ms > commit_timestamp or commit_timestamp >= sprint_end_ms):
+                continue
+
+            # dev-status commit author/committer is a display name block.
+            author_block = commit.get('committer') or commit.get('author') or {}
+            user_name = author_block.get('name', '') if isinstance(author_block, dict) else ''
+            if not user_name or user_name.lower() in self.IGNORE_USERS:
+                continue
+
+            repo_url = (commit.get('_repository') or {}).get('url')
+            is_github = 'github.com/' in (repo_url or '').lower()
+            scm = self.github_rest if is_github else self.bitbucket_rest
+
+            index_lookup = self.create_index_lookup(sprint_name, ticket, self.COMMITS_PR_ID, user_name, "")
+            # No separate PR author for loose commits; attribute authorship to the committer.
+            self.populate_baseline_db_info(index_lookup, start_date, end_date, user_name)
+
+            commit_message = re.sub(r'(\r|\n)?\n', '  ', (commit.get('message') or '').strip())
+            commit_filtered = self._commit_message_matches_filter(commit_message)
+
+            # dev-status may flag merges with a 'merge' bool; map it to a parent count so the
+            # authoritative _is_merge_commit path applies (it otherwise falls back to the regex).
+            merge_probe = dict(commit)
+            if 'parents_count' not in merge_probe and isinstance(commit.get('merge'), bool):
+                merge_probe['parents_count'] = 2 if commit.get('merge') else 1
+            commit_type = "merge" if self._is_merge_commit(merge_probe, commit_message) else "normal"
+
+            c_add = 0
+            c_del = 0
+            if commit_type == "merge":
+                # Use inline values only (dev-status rarely supplies them); skip the diff fetch.
+                c_add = commit.get("additions") or 0
+                c_del = commit.get("deletions") or 0
+            elif not commit_filtered and sha and repo_url:
+                diffs_response = self._retry_rest_call(lambda: scm.get_repo_commit_diffs(repo_url, sha))
+                if diffs_response:
+                    c_add, c_del = self.process_diffs(self.COMMIT_PREFIX, diffs_response, index_lookup)
+
+            self.database.increment_field(index_lookup, UserActivity.COMMITS.name)
+            self.database.append(index_lookup, DBData.COMMIT_DATA.name,
+                                 {"message": commit_message, "additions": c_add, "deletions": c_del,
+                                  "type": commit_type, "sha": sha})
 
     @staticmethod
     def sanitize_name_for_index(name: str) -> str:

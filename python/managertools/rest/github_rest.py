@@ -236,6 +236,15 @@ class GithubREST(SourceControlREST):
             sys.stderr.write(f"Unable to retrieve commit diffs {str(re)}\n")
             return None
 
+    def get_repo_commit_diffs(self, repo_url: str, commit_sha: str) -> Optional[Any]:
+        # The dev-status commit view gives a browser repo url (https://github.com/org/repo);
+        # api_convert maps it to the REST repos/ form, then we hit the single-commit endpoint
+        # (which returns a `stats` block process_diffs understands). Reuses get_commit_diffs
+        # for the actual fetch + 403/404 degradation.
+        api_repo = self.api_convert(repo_url).rstrip('/')
+        commit_url = f"{api_repo}/commits/{commit_sha}"
+        return self.get_commit_diffs(commit_url, commit_sha)
+
 
     def get_pull_request_full(self, pr_url: str) -> Dict[str, Any]:
         """Fetch all PR data via a single paginated GraphQL query.
