@@ -65,15 +65,22 @@ def _analysis(scm=None):
 
 
 class _StubSCM:
-    """Returns a fixed GitHub-style stats diff for every commit."""
+    """Returns a fixed GitHub-style stats diff for every commit. When author_login is set, the
+    response includes an author block so attribution can map to a Jira login."""
 
-    def __init__(self, additions=7, deletions=3):
+    def __init__(self, additions=7, deletions=3, author_login=None):
         self.calls = []
         self._resp = {"stats": {"additions": additions, "deletions": deletions}}
+        if author_login is not None:
+            self._resp["author"] = {"login": author_login}
 
     def get_repo_commit_diffs(self, repo_url, sha):
         self.calls.append((repo_url, sha))
         return self._resp
+
+    def map_user_to_jira_name(self, user_data):
+        # Mirror GithubREST: pull the login from the SCM author object.
+        return user_data.get("login") if isinstance(user_data, dict) else None
 
 
 # Realistic epoch-ms window (≈2024-2026); _IN_WINDOW sits inside it.
@@ -124,6 +131,22 @@ class TestProcessTicketCommits:
         a = _analysis(scm)
         self._run(a, [_commit("late", ts=9999)], mode=Mode.KANBAN)
         assert scm.calls == [("https://github.com/org/repo", "late")]
+
+    def test_user_mapped_to_login_from_scm_response(self):
+        # dev-status gives the display name "Dixit, Anurag"; the SCM commit response carries the
+        # login, so the row must be keyed by the mapped login (matches PR mode / team rosters).
+        scm = _StubSCM(author_login="anurag.dixit")
+        a = _analysis(scm)
+        self._run(a, [_commit("s", name="Dixit, Anurag")])
+        row = next(iter(a.database.rows.values()))
+        assert row[DBIndexData.USER.name] == "anurag.dixit"
+        assert row[DBData.AUTHOR.name] == "anurag.dixit"
+
+    def test_falls_back_to_display_name_without_login(self):
+        scm = _StubSCM()  # no author login in response
+        a = _analysis(scm)
+        self._run(a, [_commit("s", name="Dev One")])
+        assert next(iter(a.database.rows.values()))[DBIndexData.USER.name] == "Dev One"
 
     def test_ignored_user_skipped(self):
         # IGNORE_USERS is matched case-insensitively (same as the PR path's user_name.lower()).

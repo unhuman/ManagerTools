@@ -1427,6 +1427,22 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 return None
         return None
 
+    @staticmethod
+    def _commit_author_jira_name(scm, commit_response: Any, fallback_name: str) -> str:
+        """Resolve a commit author to a Jira name. dev-status only provides the git author display
+        name; the SCM commit response (fetched for diffs) carries the login, which maps to the same
+        Jira name the PR path uses — so individual reports / team rosters (keyed by login) match.
+        Falls back to the display name when no login is available (e.g. merges, Bitbucket, or an
+        author not linked to an SCM account)."""
+        if isinstance(commit_response, dict):
+            try:
+                mapped = scm.map_user_to_jira_name(commit_response.get('author'))
+            except Exception:
+                mapped = None
+            if mapped:
+                return mapped
+        return fallback_name
+
     def process_ticket_commits(self, ticket: str, commits: List[Dict[str, Any]], sprint_name: str,
                                start_date: str, end_date: str, sprint_start_ms: float, sprint_end_ms: float,
                                mode: Mode):
@@ -1460,22 +1476,19 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                             f"[{int(sprint_start_ms)},{int(sprint_end_ms)}) for {ticket}")
                 continue
 
-            # dev-status commit author/committer is a display name block.
-            author_block = commit.get('committer') or commit.get('author') or {}
-            user_name = author_block.get('name', '') if isinstance(author_block, dict) else ''
-            if not user_name or user_name.lower() in self.IGNORE_USERS:
+            # dev-status only carries the git author *display name* (e.g. "Dixit, Anurag"), not the
+            # SCM login the PR path / team rosters use. Cheap-skip obvious bots by display name here;
+            # final attribution is resolved (and re-checked) against the mapped login below.
+            ds_block = commit.get('author') or commit.get('committer') or {}
+            ds_name = ds_block.get('name', '') if isinstance(ds_block, dict) else ''
+            if ds_name and ds_name.lower() in self.IGNORE_USERS:
                 _ignored += 1
-                debug_print(f"  commit {sha[:8]} skipped (user={user_name!r}) for {ticket}")
+                debug_print(f"  commit {sha[:8]} skipped (display-name={ds_name!r}) for {ticket}")
                 continue
-            _kept += 1
 
             repo_url = (commit.get('_repository') or {}).get('url')
             is_github = 'github.com/' in (repo_url or '').lower()
             scm = self.github_rest if is_github else self.bitbucket_rest
-
-            index_lookup = self.create_index_lookup(sprint_name, ticket, self.COMMITS_PR_ID, user_name, "")
-            # No separate PR author for loose commits; attribute authorship to the committer.
-            self.populate_baseline_db_info(index_lookup, start_date, end_date, user_name)
 
             commit_message = re.sub(r'(\r|\n)?\n', '  ', (commit.get('message') or '').strip())
             commit_filtered = self._commit_message_matches_filter(commit_message)
@@ -1487,16 +1500,31 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 merge_probe['parents_count'] = 2 if commit.get('merge') else 1
             commit_type = "merge" if self._is_merge_commit(merge_probe, commit_message) else "normal"
 
+            # Fetch the SCM commit (for diffs) once; its author carries the login, so we can map the
+            # user to the same Jira name the PR path produces. Falls back to the display name when
+            # unavailable (merges/filtered commits aren't fetched; Bitbucket/unlinked authors).
+            diffs_response = None
+            if commit_type != "merge" and not commit_filtered and sha and repo_url:
+                diffs_response = self._retry_rest_call(lambda: scm.get_repo_commit_diffs(repo_url, sha))
+            user_name = self._commit_author_jira_name(scm, diffs_response, ds_name)
+            if not user_name or user_name.lower() in self.IGNORE_USERS:
+                _ignored += 1
+                debug_print(f"  commit {sha[:8]} skipped (user={user_name!r}) for {ticket}")
+                continue
+            _kept += 1
+
+            index_lookup = self.create_index_lookup(sprint_name, ticket, self.COMMITS_PR_ID, user_name, "")
+            # No separate PR author for loose commits; attribute authorship to the committer.
+            self.populate_baseline_db_info(index_lookup, start_date, end_date, user_name)
+
             c_add = 0
             c_del = 0
             if commit_type == "merge":
                 # Use inline values only (dev-status rarely supplies them); skip the diff fetch.
                 c_add = commit.get("additions") or 0
                 c_del = commit.get("deletions") or 0
-            elif not commit_filtered and sha and repo_url:
-                diffs_response = self._retry_rest_call(lambda: scm.get_repo_commit_diffs(repo_url, sha))
-                if diffs_response:
-                    c_add, c_del = self.process_diffs(self.COMMIT_PREFIX, diffs_response, index_lookup)
+            elif diffs_response:
+                c_add, c_del = self.process_diffs(self.COMMIT_PREFIX, diffs_response, index_lookup)
 
             self.database.increment_field(index_lookup, UserActivity.COMMITS.name)
             self.database.append(index_lookup, DBData.COMMIT_DATA.name,
