@@ -76,12 +76,18 @@ class _StubSCM:
         return self._resp
 
 
-def _commit(sha, name="Dev One", ts=1500, message="real work", merge=False, repo="https://github.com/org/repo"):
+# Realistic epoch-ms window (≈2024-2026); _IN_WINDOW sits inside it.
+_WIN_START = 1_700_000_000_000
+_WIN_END = 1_800_000_000_000
+_IN_WINDOW = 1_750_000_000_000
+
+
+def _commit(sha, name="Dev One", ts=_IN_WINDOW, message="real work", merge=False, repo="https://github.com/org/repo"):
     return {"id": sha, "author": {"name": name}, "authorTimestamp": ts,
             "message": message, "merge": merge, "_repository": {"url": repo, "name": "repo"}}
 
 
-WINDOW = dict(sprint_start_ms=1000, sprint_end_ms=2000)
+WINDOW = dict(sprint_start_ms=_WIN_START, sprint_end_ms=_WIN_END)
 
 
 class TestProcessTicketCommits:
@@ -154,7 +160,17 @@ class TestProcessTicketCommits:
         scm = _StubSCM()
         a = _analysis(scm)
         c = _commit("s")
-        c["authorTimestamp"] = "1500"  # string epoch ms, inside [1000, 2000)
+        c["authorTimestamp"] = str(_IN_WINDOW)  # string epoch ms, inside the window
+        self._run(a, [c])
+        assert scm.calls == [("https://github.com/org/repo", "s")]
+
+    def test_string_seconds_timestamp_in_window_processed(self):
+        # dev-status may return authorTimestamp in epoch *seconds*; it must be scaled to ms so the
+        # ms-based window doesn't drop it (the "no commit data" regression).
+        scm = _StubSCM()
+        a = _analysis(scm)
+        c = _commit("s")
+        c["authorTimestamp"] = str(_IN_WINDOW // 1000)  # seconds
         self._run(a, [c])
         assert scm.calls == [("https://github.com/org/repo", "s")]
 
@@ -168,11 +184,17 @@ class TestProcessTicketCommits:
 
 
 class TestCoerceEpochMs:
-    def test_int_passthrough(self):
-        assert SprintReportTeamAnalysis._coerce_epoch_ms(1500) == 1500
+    def test_int_ms_passthrough(self):
+        assert SprintReportTeamAnalysis._coerce_epoch_ms(1_750_000_000_000) == 1_750_000_000_000
 
-    def test_numeric_string(self):
-        assert SprintReportTeamAnalysis._coerce_epoch_ms("1500") == 1500
+    def test_numeric_string_seconds_scaled_to_ms(self):
+        # Epoch *seconds* (≈1.77e9 for 2026) must scale to ms so the ms-based window doesn't drop them.
+        assert SprintReportTeamAnalysis._coerce_epoch_ms("1771005688") == 1771005688000
+        assert SprintReportTeamAnalysis._coerce_epoch_ms(1771005688) == 1771005688000
+
+    def test_numeric_string_millis_unchanged(self):
+        assert SprintReportTeamAnalysis._coerce_epoch_ms("1771005688000") == 1771005688000
+        assert SprintReportTeamAnalysis._coerce_epoch_ms(1771005688000) == 1771005688000
 
     def test_iso_string_with_colonless_offset(self):
         from datetime import datetime

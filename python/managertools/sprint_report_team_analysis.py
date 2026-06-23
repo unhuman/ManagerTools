@@ -1397,18 +1397,25 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
     @staticmethod
     def _coerce_epoch_ms(value: Any) -> Optional[int]:
         """Normalize a dev-status timestamp to epoch milliseconds. The repository detail returns
-        authorTimestamp as an epoch-ms int, a numeric string, or an ISO-8601 string depending on
-        the provider — return None when it can't be parsed so callers can default it."""
+        authorTimestamp as an epoch-ms int, a numeric string (which may be in *seconds*), or an
+        ISO-8601 string depending on the provider — return None when it can't be parsed so callers
+        can default it. Numeric values that look like epoch *seconds* are scaled to ms so the
+        sprint-window comparison (always in ms) doesn't silently reject every commit."""
+        def _normalize(v: int) -> int:
+            # Epoch seconds for current dates are ~1.7e9; epoch ms are ~1.7e12. Anything below
+            # ~1e11 must be seconds (or finer) — scale up so the comparison stays in ms.
+            return v * 1000 if 0 < v < 100_000_000_000 else v
+
         if value is None:
             return None
         if isinstance(value, (int, float)):
-            return int(value)
+            return _normalize(int(value))
         if isinstance(value, str):
             s = value.strip()
             if not s:
                 return None
             try:
-                return int(s)
+                return _normalize(int(s))
             except ValueError:
                 pass
             try:
@@ -1435,6 +1442,9 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         """
         if not commits:
             return
+        _kept = 0
+        _out_of_window = 0
+        _ignored = 0
         for commit in commits:
             sha = commit.get('id') or commit.get('displayId') or ''
 
@@ -1445,13 +1455,19 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                 raw_ts = commit.get('authorTimestamp')
             commit_timestamp = self._coerce_epoch_ms(raw_ts) or 0
             if mode != Mode.KANBAN and (sprint_start_ms > commit_timestamp or commit_timestamp >= sprint_end_ms):
+                _out_of_window += 1
+                debug_print(f"  commit {sha[:8]} ts={raw_ts!r}->{commit_timestamp} outside "
+                            f"[{int(sprint_start_ms)},{int(sprint_end_ms)}) for {ticket}")
                 continue
 
             # dev-status commit author/committer is a display name block.
             author_block = commit.get('committer') or commit.get('author') or {}
             user_name = author_block.get('name', '') if isinstance(author_block, dict) else ''
             if not user_name or user_name.lower() in self.IGNORE_USERS:
+                _ignored += 1
+                debug_print(f"  commit {sha[:8]} skipped (user={user_name!r}) for {ticket}")
                 continue
+            _kept += 1
 
             repo_url = (commit.get('_repository') or {}).get('url')
             is_github = 'github.com/' in (repo_url or '').lower()
@@ -1486,6 +1502,9 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             self.database.append(index_lookup, DBData.COMMIT_DATA.name,
                                  {"message": commit_message, "additions": c_add, "deletions": c_del,
                                   "type": commit_type, "sha": sha})
+
+        debug_print(f"process_ticket_commits {ticket}: {len(commits)} commits "
+                    f"-> {_kept} kept, {_out_of_window} out-of-window, {_ignored} ignored-user")
 
     @staticmethod
     def sanitize_name_for_index(name: str) -> str:
