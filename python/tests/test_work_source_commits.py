@@ -1,8 +1,14 @@
+import csv
+import io
+import types
 from unittest.mock import patch
 
 from managertools.sprint_report_team_analysis import SprintReportTeamAnalysis
 from managertools.abstract_sprint_report import Mode
 from managertools.data import DBData, DBIndexData, UserActivity, WorkSource
+from managertools.flexidb.flexidb import FlexiDB
+from managertools.flexidb.flexidb_query_column import FlexiDBQueryColumn
+from managertools.flexidb.data.flexidb_row import FlexiDBRow
 from managertools.rest.github_rest import GithubREST
 from managertools.rest.bitbucket_rest import BitbucketREST
 
@@ -79,9 +85,9 @@ WINDOW = dict(sprint_start_ms=1000, sprint_end_ms=2000)
 
 
 class TestProcessTicketCommits:
-    def _run(self, a, commits, seen=None, mode=Mode.SCRUM):
+    def _run(self, a, commits, mode=Mode.SCRUM):
         a.process_ticket_commits("TIK-1", commits, "Sprint 1", "s", "e",
-                                 WINDOW["sprint_start_ms"], WINDOW["sprint_end_ms"], mode, seen)
+                                 WINDOW["sprint_start_ms"], WINDOW["sprint_end_ms"], mode)
 
     def test_normal_commit_recorded_under_synthetic_pr_with_sha(self):
         scm = _StubSCM(additions=10, deletions=4)
@@ -131,11 +137,16 @@ class TestProcessTicketCommits:
         assert entry["type"] == "merge"
         assert entry["additions"] == 0 and entry["deletions"] == 0
 
-    def test_dedupe_skips_already_counted_sha(self):
+    def test_stores_full_set_no_collection_dedupe(self):
+        # The commit pass no longer de-dupes at collection time (that moved to render); it always
+        # stores the full set so the cached commit rows are mode-independent.
         scm = _StubSCM()
         a = _analysis(scm)
-        self._run(a, [_commit("dup"), _commit("fresh")], seen={"dup"})
-        assert scm.calls == [("https://github.com/org/repo", "fresh")]
+        self._run(a, [_commit("a"), _commit("b")])
+        assert scm.calls == [("https://github.com/org/repo", "a"),
+                             ("https://github.com/org/repo", "b")]
+        row = next(iter(a.database.rows.values()))
+        assert [e["sha"] for e in row[DBData.COMMIT_DATA.name]] == ["a", "b"]
 
     def test_string_timestamp_in_window_processed(self):
         # dev-status repository detail returns authorTimestamp as a string; it must be coerced
@@ -179,20 +190,79 @@ class TestCoerceEpochMs:
         assert SprintReportTeamAnalysis._coerce_epoch_ms("") is None
 
 
-class TestCountedShasForTicket:
-    def test_collects_shas_across_pr_rows(self):
-        a = _analysis()
-        # Two PR rows for the ticket, each with COMMIT_DATA carrying shas.
-        idx1 = a.create_index_lookup("Sprint 1", "TIK-1", "10", "Dev One", "MERGED")
-        a.database.append(idx1, DBData.COMMIT_DATA.name, {"sha": "A", "type": "normal"})
-        a.database.append(idx1, DBData.COMMIT_DATA.name, {"sha": "B", "type": "normal"})
-        idx2 = a.create_index_lookup("Sprint 1", "TIK-1", "11", "Dev Two", "OPEN")
-        a.database.append(idx2, DBData.COMMIT_DATA.name, {"sha": "C", "type": "normal"})
-        # A different ticket should not leak in.
-        idx3 = a.create_index_lookup("Sprint 1", "OTHER-9", "12", "Dev One", "OPEN")
-        a.database.append(idx3, DBData.COMMIT_DATA.name, {"sha": "Z", "type": "normal"})
+class TestSourcesForAndRowSource:
+    def test_sources_for(self):
+        assert SprintReportTeamAnalysis._sources_for(WorkSource.PR) == {"pr"}
+        assert SprintReportTeamAnalysis._sources_for(WorkSource.COMMIT) == {"commit"}
+        assert SprintReportTeamAnalysis._sources_for(WorkSource.BOTH) == {"pr", "commit"}
 
-        assert a._counted_shas_for_ticket("Sprint 1", "TIK-1") == {"A", "B", "C"}
+    def test_row_source(self):
+        a = SprintReportTeamAnalysis.__new__(SprintReportTeamAnalysis)
+        assert a._row_source({DBIndexData.PR_ID.name: SprintReportTeamAnalysis.COMMITS_PR_ID}) == "commit"
+        assert a._row_source({DBIndexData.PR_ID.name: "1234"}) == "pr"
+
+
+class TestRenderModeFilteringAndDedupe:
+    """End-to-end render: one PR row + one (commits) row sharing ticket T-1 and SHA 'X'.
+    PR row: commit X (10/5). Commit row: X (dup, 10/5) + Y (3/2)."""
+
+    def _analysis_with_db(self):
+        a = SprintReportTeamAnalysis.__new__(SprintReportTeamAnalysis)
+        a.database = FlexiDB(a.generate_db_signature(), True)
+        a.command_line_options = types.SimpleNamespace(
+            includeMergeCommits=False, includeBroughtInCommits=False)
+        a.max_commit_size = None
+        a.ignore_pr_title_patterns = []
+        a._overall_capped_cols = set()
+        # PR row
+        pr = a.create_index_lookup("Sprint 1", "T-1", "1", "UserA", "MERGED")
+        a.populate_baseline_db_info(pr, "s", "e", "UserA")
+        a.database.append(pr, DBData.COMMIT_DATA.name,
+                          {"message": "x", "additions": 10, "deletions": 5, "type": "normal", "sha": "X"})
+        # Commit row (full set incl. the dup X)
+        cm = a.create_index_lookup("Sprint 1", "T-1", SprintReportTeamAnalysis.COMMITS_PR_ID, "UserA", "")
+        a.populate_baseline_db_info(cm, "s", "e", "UserA")
+        a.database.append(cm, DBData.COMMIT_DATA.name,
+                          {"message": "x", "additions": 10, "deletions": 5, "type": "normal", "sha": "X"})
+        a.database.append(cm, DBData.COMMIT_DATA.name,
+                          {"message": "y", "additions": 3, "deletions": 2, "type": "normal", "sha": "Y"})
+        return a
+
+    def _render(self, work_source):
+        a = self._analysis_with_db()
+        a.work_source = work_source
+        sb = []
+        a.find_rows_and_append_csv_data(
+            [FlexiDBQueryColumn(DBIndexData.SPRINT.name, "Sprint 1")], sb, FlexiDBRow({}))
+        # find_rows_and_append_csv_data emits data rows + the Sprint Totals line (no header — that's
+        # added by generate_output). Build the header from the column order.
+        header = a.generate_columns_order()
+        rows = list(csv.reader(io.StringIO("\n".join(l for l in sb if l))))
+        data = [dict(zip(header, r)) for r in rows]
+        # Keep only the two data rows (by PR_ID), drop the Sprint Totals line.
+        return {d[DBIndexData.PR_ID.name]: d for d in data
+                if d.get(DBIndexData.PR_ID.name) in ("1", SprintReportTeamAnalysis.COMMITS_PR_ID)}
+
+    def test_pr_mode_renders_only_pr_row(self):
+        rendered = self._render(WorkSource.PR)
+        assert set(rendered) == {"1"}
+        assert rendered["1"][UserActivity.COMMITS.name] == "1"
+
+    def test_commit_mode_renders_only_commit_row_full_set(self):
+        rendered = self._render(WorkSource.COMMIT)
+        assert set(rendered) == {SprintReportTeamAnalysis.COMMITS_PR_ID}
+        cm = rendered[SprintReportTeamAnalysis.COMMITS_PR_ID]
+        assert cm[UserActivity.COMMITS.name] == "2"  # X and Y both counted (no dedupe)
+        assert cm[UserActivity.COMMIT_ADDED.name] == "13"
+
+    def test_both_mode_renders_all_with_render_dedupe(self):
+        rendered = self._render(WorkSource.BOTH)
+        assert set(rendered) == {"1", SprintReportTeamAnalysis.COMMITS_PR_ID}
+        cm = rendered[SprintReportTeamAnalysis.COMMITS_PR_ID]
+        # X is already counted by the PR row -> only Y survives in the commit row.
+        assert cm[UserActivity.COMMITS.name] == "1"
+        assert cm[UserActivity.COMMIT_ADDED.name] == "3"
+        assert cm[UserActivity.COMMIT_REMOVED.name] == "2"
 
 
 class TestRepoCommitDiffUrlDerivation:
