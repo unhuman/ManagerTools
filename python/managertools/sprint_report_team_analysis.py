@@ -207,7 +207,14 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                               f"[{len(completed)} done, {len(incomplete)} incomplete, {len(punted)} punted], "
                               f"dates: {start_date} - {end_date}){_R}")
 
-                        self.process_potentially_cached_sprint_data(thread_count, team_name, data.get('sprint', {}), mode, all_issues, is_completed)
+                        # Back-fill the window start to the predecessor sprint's end (closes the
+                        # ~1-day Jira gap between sprints). effective_start_by_id is board-wide and
+                        # run-independent; absent → consumer falls back to start-of-day.
+                        sprint_dict = data.get('sprint', {})
+                        eff = getattr(self, 'effective_start_by_id', {}).get(str(sprint_id))
+                        if eff is not None:
+                            sprint_dict['effectiveStartMs'] = eff
+                        self.process_potentially_cached_sprint_data(thread_count, team_name, sprint_dict, mode, all_issues, is_completed)
 
                         # Evict PR cache entries not referenced by any ticket in this sprint
                         self._evict_stale_pr_cache_entries()
@@ -916,10 +923,25 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         debug_print(f"getIssueCategoryInformation started for sprint: {sprint_name}")
 
         # Parse sprint times
-        sprint_start_time = datetime.strptime(sprint.get('startDate', ''), "%d/%b/%y %I:%M %p").replace(tzinfo=timezone.utc)
         sprint_end_time = datetime.strptime(sprint.get('endDate', ''), "%d/%b/%y %I:%M %p").replace(tzinfo=timezone.utc)
-        sprint_start_ms = sprint_start_time.timestamp() * 1000
         sprint_end_ms = sprint_end_time.timestamp() * 1000
+        # SCRUM sprints don't abut (Jira start/complete times leave ~1-day gaps). Back-fill the
+        # window start to the predecessor sprint's end so commits/activities in a gap land in the
+        # next sprint instead of being dropped by every window. effectiveStartMs is injected by
+        # aggregate_data from the board-wide sprint sequence (so it's run-independent / cache-safe);
+        # absent (or for Kanban) we fall back to this sprint's own start.
+        effective_start_ms = sprint.get('effectiveStartMs')
+        backfilled = effective_start_ms is not None and float(effective_start_ms) < sprint_end_ms
+        if backfilled:
+            sprint_start_ms = float(effective_start_ms)
+        else:
+            # No predecessor available (absolute first board sprint, -s with no board, or Kanban):
+            # floor to 00:00 of the start day so commits made earlier that day aren't dropped.
+            sprint_start_time = datetime.strptime(sprint.get('startDate', ''), "%d/%b/%y %I:%M %p").replace(
+                hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
+            sprint_start_ms = sprint_start_time.timestamp() * 1000
+        debug_print(f"  sprint window for {sprint_name}: [{int(sprint_start_ms)}, {int(sprint_end_ms)})"
+                    + ("  (back-filled to predecessor end)" if backfilled else ""))
 
         isolated_ticket = self.command_line_options.isolateTicket or None
 

@@ -47,6 +47,8 @@ class AbstractSprintReport(ABC):
         self.board_id = None
         self.team_name = None
         self.sprint_ids = []
+        # sprint id -> predecessor sprint end (epoch ms); back-fills SCRUM windows to close gaps
+        self.effective_start_by_id = {}
         self.weeks = None
         self.kanban_start_date = None
         self.incomplete_sprints = []
@@ -193,6 +195,18 @@ class AbstractSprintReport(ABC):
         # Validate that at least one sprint/cycle selection option was provided
         if not limit_raw and not self.sprint_ids:
             parser.error('Must provide one of: -l (limit), -s (sprintIds), or -p (prompt)')
+
+        # Build the board-wide predecessor-end map so SCRUM windows back-fill into inter-sprint
+        # gaps (run-independent). Skip for Kanban (self.weeks set) and when no board is known
+        # (e.g. -s with no board); the consumer then falls back to start-of-day.
+        if self.board_id and self.sprint_ids and not self.weeks:
+            try:
+                self.effective_start_by_id = GetTeamSprints(self.jira_rest).get_effective_start_map(
+                    self.command_line_options.includeActive, self.board_id)
+            except Exception as e:
+                print(f"   [WARN] Could not build sprint predecessor map; windows fall back to "
+                      f"start-of-day: {e}", file=sys.stderr)
+                self.effective_start_by_id = {}
 
         if self.weeks:
             self.mode = Mode.KANBAN

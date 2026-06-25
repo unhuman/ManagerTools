@@ -35,6 +35,32 @@ class GetTeamSprints:
 
         return filtered_data
 
+    def get_effective_start_map(self, include_active_sprint: bool, board_id: str) -> dict:
+        """Map each board sprint id -> predecessor sprint's end time in epoch ms.
+
+        Computed over the full board-wide sprint sequence (every sprint, not a -l N slice), so a
+        given sprint's predecessor — and therefore its back-filled window start — is identical
+        regardless of how many sprints a run requested (deterministic / cache-safe). Used to close
+        the ~1-day gaps Jira leaves between a sprint's start and the previous sprint's end, where
+        commits/activities would otherwise fall outside every window.
+
+        The absolute first sprint of the board has no predecessor and gets no entry (callers fall
+        back to start-of-day). _fetch_and_filter_sprints already fetches all board sprints, so the
+        predecessor of even the first reported sprint is available without an extra fetch.
+        """
+        data = self._fetch_and_filter_sprints(include_active_sprint, board_id)
+        # _fetch_and_filter_sprints returns most-recent-first; sort ascending by startDate.
+        ascending = sorted((s for s in data if s.get('startDate') and s.get('endDate')),
+                           key=lambda x: x.get('startDate', ''))
+        effective_start_by_id = {}
+        for i in range(1, len(ascending)):
+            prev_end_str = ascending[i - 1].get('endDate')
+            prev_end = datetime.fromisoformat(prev_end_str.replace('Z', '+00:00'))
+            sprint_id = ascending[i].get('id')
+            if sprint_id is not None:
+                effective_start_by_id[str(sprint_id)] = prev_end.timestamp() * 1000
+        return effective_start_by_id
+
     def get_recent_sprints(self, include_active_sprint: bool, board_id: str, limit_count: Optional[int]) -> List[dict]:
         data = self._fetch_and_filter_sprints(include_active_sprint, board_id)
 
