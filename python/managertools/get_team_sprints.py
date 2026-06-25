@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from managertools.util.command_line_helper import CommandLineHelper
+from managertools.util.log_util import debug_print
 from managertools.rest.jira_rest import JiraREST
 
 
@@ -54,11 +55,20 @@ class GetTeamSprints:
                            key=lambda x: x.get('startDate', ''))
         effective_start_by_id = {}
         for i in range(1, len(ascending)):
-            prev_end_str = ascending[i - 1].get('endDate')
+            prev = ascending[i - 1]
+            curr = ascending[i]
+            prev_end_str = prev.get('endDate')
             prev_end = datetime.fromisoformat(prev_end_str.replace('Z', '+00:00'))
-            sprint_id = ascending[i].get('id')
+            sprint_id = curr.get('id')
             if sprint_id is not None:
                 effective_start_by_id[str(sprint_id)] = prev_end.timestamp() * 1000
+                # Log the predecessor that supplies each window start, including the gap being
+                # closed. For the earliest sprint in a -l N run this predecessor is an "extra"
+                # sprint outside the reported range, pulled in only for its end timestamp.
+                gap = datetime.fromisoformat(curr.get('startDate').replace('Z', '+00:00')) - prev_end
+                debug_print(f"sprint window back-fill: '{curr.get('name')}' (id {sprint_id}) start "
+                            f"<- predecessor '{prev.get('name')}' (id {prev.get('id')}) end {prev_end_str} "
+                            f"[closing {gap} gap]")
         return effective_start_by_id
 
     def get_recent_sprints(self, include_active_sprint: bool, board_id: str, limit_count: Optional[int]) -> List[dict]:
