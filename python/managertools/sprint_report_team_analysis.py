@@ -56,6 +56,13 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
     # per ticket and are excluded from the TOTAL_PRS / NON_DECLINED_PRS counts.
     COMMITS_PR_ID = "(commits)"
 
+    # Synthetic PR id for the per-ticket "closed by assignee" marker rows (TICKETS_CLOSED). These
+    # are derived fresh from the sprint report's completedIssues every run (the report is always
+    # fetched, even on a cache hit) and are NOT persisted to the per-source cache, so they never
+    # touch the additive PR/commit cache bookkeeping. They render regardless of --workSource and
+    # are excluded from PR totals.
+    CLOSED_TICKET_PR_ID = "(closed)"
+
     STANDARD_OUTPUT_RULES = [ConvertZerosToEmptyOutputFilter(), FormatCommitDataOutputFilter()]
     SAME_USER_OUTPUT_RULES = [ConvertSelfMetricsEmptyToZeroOutputFilter()]
 
@@ -214,6 +221,11 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                         eff = getattr(self, 'effective_start_by_id', {}).get(str(sprint_id))
                         if eff is not None:
                             sprint_dict['effectiveStartMs'] = eff
+                        # Record tickets closed (completed) this sprint, attributed to each
+                        # ticket's assignee. Derived from the always-available sprint report (not
+                        # the SCM cache), so it's correct on cache hits too; not cached itself.
+                        self._record_closed_tickets(sprint_name, completed, start_date, end_date)
+
                         self.process_potentially_cached_sprint_data(thread_count, team_name, sprint_dict, mode, all_issues, is_completed)
 
                         # Evict PR cache entries not referenced by any ticket in this sprint
@@ -365,6 +377,22 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             issues = data.get('issues', [])
             print(f"   Cycle {cycle} / {cycles}: {len(issues)} issues")
             return issues
+
+        # Memoize so the eager fetch below and the cache handler share one network call.
+        _fetched_issues_memo = [None]
+        _original_fetch = fetch_cycle_issues
+
+        def fetch_cycle_issues():
+            if _fetched_issues_memo[0] is None:
+                _fetched_issues_memo[0] = _original_fetch()
+            return _fetched_issues_memo[0]
+
+        # Always record closed tickets — uses the cycle's JQL-resolved issues as the Kanban
+        # equivalent of SCRUM's completedIssues. Idempotent and excluded from the cache, so this
+        # runs every time regardless of cache state.
+        issues_for_closed = fetch_cycle_issues()
+        if issues_for_closed is not None:
+            self._record_closed_tickets("", issues_for_closed, clean_start_date, clean_end_date)
 
         # Cache key uses team + dates only ("" sprint component); cycle number is display-only.
         self._process_sprint_with_source_aware_cache(
@@ -554,12 +582,66 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                                           data_to_cache, new_records)
         debug_print(f"Completed processing sprint: {db_sprint_name}")
 
+    @staticmethod
+    def _issue_assignee(issue: Dict[str, Any]) -> Optional[str]:
+        """Assignee display name from a Jira issue, handling both Greenhopper and standard formats.
+
+        Greenhopper sprint-report issues carry assignee as top-level fields (assignee,
+        assigneeName, assigneeDisplayName). Standard Jira API (JQL/search) nests assignee under
+        issue['fields']['assignee']. Both formats are tried in order.
+        """
+        for key in ('assignee', 'assigneeName', 'assigneeDisplayName'):
+            val = issue.get(key)
+            if isinstance(val, str) and val.strip():
+                return val.strip()
+            if isinstance(val, dict):
+                name = val.get('displayName') or val.get('name')
+                if name and str(name).strip():
+                    return str(name).strip()
+        # Standard Jira API format: issue['fields']['assignee']
+        fields_assignee = issue.get('fields', {}).get('assignee')
+        if isinstance(fields_assignee, str) and fields_assignee.strip():
+            return fields_assignee.strip()
+        if isinstance(fields_assignee, dict):
+            name = fields_assignee.get('displayName') or fields_assignee.get('name')
+            if name and str(name).strip():
+                return str(name).strip()
+        return None
+
+    def _record_closed_tickets(self, sprint_name: str, completed_issues: List[Any],
+                               start_date: str, end_date: str):
+        """Record one synthetic TICKETS_CLOSED=1 row per (sprint, ticket, assignee) for tickets
+        completed this sprint. Idempotent (set_value), so a ticket is counted once regardless of
+        how many activity rows it has. Unassigned completed issues are skipped."""
+        for issue in completed_issues:
+            ticket = issue.get('key')
+            assignee = self._issue_assignee(issue)
+            if not ticket or not assignee:
+                continue
+            user_index = self.sanitize_name_for_index(assignee)
+            index_lookup = [
+                FlexiDBQueryColumn(DBIndexData.SPRINT.name, sprint_name),
+                FlexiDBQueryColumn(DBIndexData.TICKET.name, ticket),
+                FlexiDBQueryColumn(DBIndexData.PR_ID.name, self.CLOSED_TICKET_PR_ID),
+                FlexiDBQueryColumn(DBIndexData.PR_STATUS.name, ''),
+                FlexiDBQueryColumn(DBIndexData.USER.name, user_index),
+            ]
+            self.database.set_value(index_lookup, UserActivity.TICKETS_CLOSED.name, 1)
+            self.database.set_value(index_lookup, DBData.AUTHOR.name, user_index)
+            self.database.set_value(index_lookup, DBData.START_DATE.name, start_date)
+            self.database.set_value(index_lookup, DBData.END_DATE.name, end_date)
+
     def extract_database_data_for_cache(self, sprint_name: str) -> Dict[str, Any]:
         sprint_filter = [FlexiDBQueryColumn(DBIndexData.SPRINT.name, sprint_name)]
         rows = self.database.find_rows(sprint_filter, True)
 
+        # Closed-ticket marker rows are derived fresh from the sprint report each run, so they are
+        # NOT persisted — keeping the per-source cache purely PR/commit (no version bump, no impact
+        # on the additive source bookkeeping).
         serialized_rows = []
         for row in rows:
+            if row.get(DBIndexData.PR_ID.name) == self.CLOSED_TICKET_PR_ID:
+                continue
             serialized_row = dict(row)
             serialized_rows.append(serialized_row)
 
@@ -780,12 +862,15 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             pr_status = row.get(DBIndexData.PR_STATUS.name)
             pr_id = row.get(DBIndexData.PR_ID.name)
             is_commit_row = (pr_id == self.COMMITS_PR_ID)
+            is_closed_row = (pr_id == self.CLOSED_TICKET_PR_ID)
 
             # Mode filter: skip rows whose source isn't rendered in the active work source.
-            if is_commit_row and not render_commits:
-                continue
-            if not is_commit_row and not render_prs:
-                continue
+            # Closed-ticket marker rows are work-source independent and always render.
+            if not is_closed_row:
+                if is_commit_row and not render_commits:
+                    continue
+                if not is_commit_row and not render_prs:
+                    continue
 
             # Filter out rows by PR title patterns (entire PR is excluded)
             if self._should_filter_row_by_pr_title(row):
@@ -862,8 +947,8 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             sb.append(output_row.to_csv(column_order, row_rules))
 
             if (row_user and author and row_user.casefold() == author.casefold()
-                    and pr_id != self.COMMITS_PR_ID):
-                # Synthetic (commits) rows have no PR, so they never count toward PR totals.
+                    and pr_id != self.COMMITS_PR_ID and pr_id != self.CLOSED_TICKET_PR_ID):
+                # Synthetic (commits) / (closed) rows have no PR, so they never count toward PR totals.
                 total_prs += 1
                 if pr_status and pr_status.upper() != "DECLINED":
                     non_declined_prs += 1

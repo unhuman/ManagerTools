@@ -73,7 +73,7 @@ def aggregate_metrics(df, user):
 
     # Coerce columns to numeric
     numeric_cols = ['PR_ADDED', 'PR_REMOVED', 'COMMITS', 'APPROVED',
-                    'COMMENTED_ON_OTHERS', 'OTHERS_COMMENTED']
+                    'COMMENTED_ON_OTHERS', 'OTHERS_COMMENTED', 'TICKETS_CLOSED']
     for col in numeric_cols:
         if col in user_data.columns:
             user_data[col] = user_data[col].apply(safe_int)
@@ -89,6 +89,7 @@ def aggregate_metrics(df, user):
     grouped['Code Volume'] = grouped['PR_ADDED'] + grouped['PR_REMOVED']
     grouped['Reviews Given'] = grouped['APPROVED'] + grouped['COMMENTED_ON_OTHERS']
     grouped['Engagement Received'] = grouped['OTHERS_COMMENTED']
+    grouped['Tickets Closed'] = grouped['TICKETS_CLOSED']
 
     # Derive PR counts from MERGED/OPENED columns and AUTHOR
     # Only count PRs the user authored (not ones they reviewed)
@@ -138,13 +139,15 @@ def calculate_overall_totals(df, user):
     """Calculate overall totals across all sprints for a user."""
     aggregated = aggregate_metrics(df, user)
     if aggregated.empty:
-        return {'Code Volume': 0, 'Commits': 0, 'PRs Merged': 0, 'Reviews Given': 0, 'Engagement Received': 0}
-    return aggregated[['Code Volume', 'Commits', 'PRs Merged', 'Reviews Given', 'Engagement Received']].sum().to_dict()
+        return {'Code Volume': 0, 'Commits': 0, 'PRs Merged': 0, 'Reviews Given': 0,
+                'Engagement Received': 0, 'Tickets Closed': 0}
+    return aggregated[['Code Volume', 'Commits', 'PRs Merged', 'Reviews Given',
+                       'Engagement Received', 'Tickets Closed']].sum().to_dict()
 
 
 def create_team_heatmap(ax, team_members, metrics_dict):
     """Create heatmap of team metrics."""
-    metric_names = ['Code Volume', 'Commits', 'PRs Merged', 'Reviews Given', 'Engagement Received']
+    metric_names = ['Code Volume', 'Commits', 'PRs Merged', 'Reviews Given', 'Engagement Received', 'Tickets Closed']
 
     # Build matrix: members × metrics
     data = []
@@ -186,7 +189,7 @@ def create_team_heatmap(ax, team_members, metrics_dict):
 
 def create_team_bar_charts(ax, team_members, metrics_dict):
     """Create side-by-side bar charts for each metric."""
-    metric_names = ['Code Volume', 'Commits', 'PRs Merged', 'Reviews Given', 'Engagement Received']
+    metric_names = ['Code Volume', 'Commits', 'PRs Merged', 'Reviews Given', 'Engagement Received', 'Tickets Closed']
 
     # Prepare data
     member_names = [m for m in team_members if m in metrics_dict]
@@ -196,7 +199,7 @@ def create_team_bar_charts(ax, team_members, metrics_dict):
     width = 0.8
 
     for idx, metric in enumerate(metric_names):
-        sub_ax = plt.subplot(1, 5, idx + 1)
+        sub_ax = plt.subplot(1, len(metric_names), idx + 1)
         values = [metrics_dict[m].get(metric, 0) for m in member_names]
         sub_ax.bar(x, values, width, color=colors)
         sub_ax.set_ylabel(metric, fontsize=9)
@@ -207,7 +210,7 @@ def create_team_bar_charts(ax, team_members, metrics_dict):
 
 def create_radar_chart(ax, member_name, metrics, team_max):
     """Create a single radar chart for a team member."""
-    metric_names = ['Code Volume', 'Commits', 'PRs Merged', 'Reviews Given', 'Engagement Received']
+    metric_names = ['Code Volume', 'Commits', 'PRs Merged', 'Reviews Given', 'Engagement Received', 'Tickets Closed']
 
     values = [metrics.get(m, 0) for m in metric_names]
 
@@ -226,8 +229,9 @@ def create_radar_chart(ax, member_name, metrics, team_max):
     ax.fill(angles, values_plot, alpha=0.25, color='steelblue')
     ax.set_xticks(angles[:-1])
 
-    # Multi-line labels for radar charts to prevent horizontal overlap
-    radar_labels = ['Code\nVolume', 'Commits', 'PRs\nMerged', 'Reviews\nGiven', 'Engagement\nReceived']
+    # Multi-line labels for radar charts to prevent horizontal overlap (one per metric_names entry)
+    radar_labels = ['Code\nVolume', 'Commits', 'PRs\nMerged', 'Reviews\nGiven',
+                    'Engagement\nReceived', 'Tickets\nClosed']
     ax.set_xticklabels(radar_labels, fontsize=5)
     ax.xaxis.set_tick_params(pad=6)
     ax.set_ylim(0, 1.0)
@@ -250,7 +254,7 @@ def generate_team_png(team_name, team_dataframes, output_dir):
     # Sort by code volume descending
     team_members = sorted(team_members, key=lambda m: metrics_dict[m].get('Code Volume', 0), reverse=True)
 
-    metric_names = ['Code Volume', 'Commits', 'PRs Merged', 'Reviews Given', 'Engagement Received']
+    metric_names = ['Code Volume', 'Commits', 'PRs Merged', 'Reviews Given', 'Engagement Received', 'Tickets Closed']
     team_max = [max([metrics_dict[m].get(metric, 0) for m in team_members]) for metric in metric_names]
     team_max = [max(1, m) for m in team_max]
 
@@ -267,15 +271,16 @@ def generate_team_png(team_name, team_dataframes, output_dir):
     # Create single figure with clear GridSpec
     fig = plt.figure(figsize=(18, total_height))
     n_gs_rows = 2 + n_spider_rows
+    n_gs_cols = max(len(metric_names), n_spider_cols)  # one bar column per metric
     height_ratios = [heatmap_height, bar_height] + [3] * n_spider_rows
     gs = gridspec.GridSpec(
-        n_gs_rows, 5,
+        n_gs_rows, n_gs_cols,
         height_ratios=height_ratios,
         hspace=0.8,
         wspace=0.4
     )
 
-    # Section 1: Heatmap (top, spans all 5 columns)
+    # Section 1: Heatmap (top, spans all columns)
     ax_heatmap = fig.add_subplot(gs[0, :])
     create_team_heatmap(ax_heatmap, team_members, metrics_dict)
 
@@ -336,8 +341,8 @@ def generate_individual_png(user, df, team_name, output_dir):
     capped = aggregated['Capped'] if 'Capped' in aggregated.columns else pd.Series(False, index=aggregated.index)
     xlabels = [f"{s}*" if bool(capped.get(s, False)) else s for s in sprint_names]
 
-    # Create 2x3 grid
-    fig, axes = plt.subplots(2, 3, figsize=(14, 10))
+    # Create 2x4 grid (6 metric panels + summary; last cell unused)
+    fig, axes = plt.subplots(2, 4, figsize=(18, 10))
     axes = axes.flatten()
 
     # 1. Code Volume
@@ -382,9 +387,17 @@ def generate_individual_png(user, df, team_name, output_dir):
     ax.set_title('Engagement Received')
     ax.grid(alpha=0.3)
 
-    # 6. Summary stats
+    # 6. Tickets Closed
     ax = axes[5]
+    ax.bar(x, aggregated['Tickets Closed'], color='mediumpurple')
+    ax.set_ylabel('Count')
+    ax.set_title('Tickets Closed')
+    ax.grid(axis='y', alpha=0.3)
+
+    # 7. Summary stats
+    ax = axes[6]
     ax.axis('off')
+    axes[7].axis('off')  # unused cell in the 2x4 grid
 
     totals = {
         'Code Volume': aggregated['Code Volume'].sum(),
@@ -392,7 +405,8 @@ def generate_individual_png(user, df, team_name, output_dir):
         'PRs Opened': aggregated['PRs Opened'].sum(),
         'PRs Merged': aggregated['PRs Merged'].sum(),
         'Reviews Given': aggregated['Reviews Given'].sum(),
-        'Engagement Received': aggregated['Engagement Received'].sum()
+        'Engagement Received': aggregated['Engagement Received'].sum(),
+        'Tickets Closed': aggregated['Tickets Closed'].sum()
     }
 
     top_sprints = aggregated['Code Volume'].nlargest(3)
@@ -406,8 +420,8 @@ def generate_individual_png(user, df, team_name, output_dir):
 
     ax.text(0.1, 0.9, summary_text, transform=ax.transAxes, fontsize=10, verticalalignment='top', family='monospace')
 
-    # Set x-axis labels for all
-    for ax in axes[:5]:
+    # Set x-axis labels for all (6 metric panels)
+    for ax in axes[:6]:
         ax.set_xticks(x)
         ax.set_xticklabels(xlabels, rotation=45, ha='right', fontsize=8)
 

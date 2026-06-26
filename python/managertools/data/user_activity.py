@@ -26,6 +26,11 @@ class UserActivity(Enum):
     UNAPPROVED = (0, 14)
     UPDATED = (0, 15)
 
+    # Tickets the user closed (was assignee of) within the sprint. Sourced from the sprint
+    # report's completedIssues and attributed to the assignee, recorded as one synthetic row per
+    # (sprint, ticket, assignee) so it is never double-counted across a ticket's activity rows.
+    TICKETS_CLOSED = (0, 16)
+
     def __init__(self, default_value: Any, _unused: int):
         self.default_value = default_value
 
