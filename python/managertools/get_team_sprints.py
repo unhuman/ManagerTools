@@ -44,17 +44,17 @@ class GetTeamSprints:
         return filtered_data
 
     def get_effective_start_map(self, include_active_sprint: bool, board_id: str,
-                               fetch_tail: Optional[int] = None) -> dict:
+                               relevant_sprint_ids: Optional[set] = None) -> dict:
         """Map each board sprint id -> predecessor sprint's end time in epoch ms.
 
-        fetch_tail limits the sprint history fetched: pass len(sprint_ids)+1 so only the reported
-        sprints plus one predecessor are fetched. Falls back to _last_fetch_tail (set by
-        get_recent_sprints) if not provided, or to a full board fetch if neither is set.
-        When total is absent (Jira Server), the tail hint is ignored and all sprints are fetched.
+        relevant_sprint_ids limits which entries are built and logged. When provided (the normal
+        case), only sprints in the set get an entry — the full board list is still used to find the
+        correct predecessor, but history outside the reporting window is silently skipped.
+        Reuses the _fetch_and_filter_sprints cache so no extra network call is made when called
+        after get_recent_sprints or get_sprints_by_date_range on the same instance.
         """
-        effective_tail = fetch_tail if fetch_tail is not None else self._last_fetch_tail
         data = self._fetch_and_filter_sprints(include_active_sprint, board_id,
-                                              fetch_tail=effective_tail)
+                                              fetch_tail=self._last_fetch_tail)
         # _fetch_and_filter_sprints returns most-recent-first; sort ascending by startDate.
         ascending = sorted((s for s in data if s.get('startDate') and s.get('endDate')),
                            key=lambda x: x.get('startDate', ''))
@@ -62,18 +62,18 @@ class GetTeamSprints:
         for i in range(1, len(ascending)):
             prev = ascending[i - 1]
             curr = ascending[i]
+            sprint_id = curr.get('id')
+            if sprint_id is None:
+                continue
+            if relevant_sprint_ids is not None and str(sprint_id) not in relevant_sprint_ids:
+                continue
             prev_end_str = prev.get('endDate')
             prev_end = datetime.fromisoformat(prev_end_str.replace('Z', '+00:00'))
-            sprint_id = curr.get('id')
-            if sprint_id is not None:
-                effective_start_by_id[str(sprint_id)] = prev_end.timestamp() * 1000
-                # Log the predecessor that supplies each window start, including the gap being
-                # closed. For the earliest sprint in a -l N run this predecessor is an "extra"
-                # sprint outside the reported range, pulled in only for its end timestamp.
-                gap = datetime.fromisoformat(curr.get('startDate').replace('Z', '+00:00')) - prev_end
-                debug_print(f"sprint window back-fill: '{curr.get('name')}' (id {sprint_id}) start "
-                            f"<- predecessor '{prev.get('name')}' (id {prev.get('id')}) end {prev_end_str} "
-                            f"[closing {gap} gap]")
+            effective_start_by_id[str(sprint_id)] = prev_end.timestamp() * 1000
+            gap = datetime.fromisoformat(curr.get('startDate').replace('Z', '+00:00')) - prev_end
+            debug_print(f"sprint window back-fill: '{curr.get('name')}' (id {sprint_id}) start "
+                        f"<- predecessor '{prev.get('name')}' (id {prev.get('id')}) end {prev_end_str} "
+                        f"[closing {gap} gap]")
         return effective_start_by_id
 
     def get_recent_sprints(self, include_active_sprint: bool, board_id: str, limit_count: Optional[int]) -> List[dict]:
