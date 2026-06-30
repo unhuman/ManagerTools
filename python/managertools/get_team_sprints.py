@@ -43,17 +43,18 @@ class GetTeamSprints:
         self._fetch_cache[cache_key] = filtered_data
         return filtered_data
 
-    def get_effective_start_map(self, include_active_sprint: bool, board_id: str) -> dict:
+    def get_effective_start_map(self, include_active_sprint: bool, board_id: str,
+                               fetch_tail: Optional[int] = None) -> dict:
         """Map each board sprint id -> predecessor sprint's end time in epoch ms.
 
-        When called after get_recent_sprints on the same instance, reuses the cached sprint list
-        (fetch_tail = limit_count + 1) so no second network call is made. The N+1 tail is
-        sufficient: every reported sprint's predecessor is either within the N reported sprints or
-        is the one extra sprint fetched as a tail buffer. Falls back to a full board fetch when
-        _last_fetch_tail is not set (e.g. -s path) or when total is unavailable (Jira Server).
+        fetch_tail limits the sprint history fetched: pass len(sprint_ids)+1 so only the reported
+        sprints plus one predecessor are fetched. Falls back to _last_fetch_tail (set by
+        get_recent_sprints) if not provided, or to a full board fetch if neither is set.
+        When total is absent (Jira Server), the tail hint is ignored and all sprints are fetched.
         """
+        effective_tail = fetch_tail if fetch_tail is not None else self._last_fetch_tail
         data = self._fetch_and_filter_sprints(include_active_sprint, board_id,
-                                              fetch_tail=self._last_fetch_tail)
+                                              fetch_tail=effective_tail)
         # _fetch_and_filter_sprints returns most-recent-first; sort ascending by startDate.
         ascending = sorted((s for s in data if s.get('startDate') and s.get('endDate')),
                            key=lambda x: x.get('startDate', ''))

@@ -204,7 +204,8 @@ class AbstractSprintReport(ABC):
         if self.board_id and self.sprint_ids and not self.weeks:
             try:
                 self.effective_start_by_id = gts.get_effective_start_map(
-                    self.command_line_options.includeActive, self.board_id)
+                    self.command_line_options.includeActive, self.board_id,
+                    fetch_tail=len(self.sprint_ids) + 1)
             except Exception as e:
                 print(f"   [WARN] Could not build sprint predecessor map; windows fall back to "
                       f"start-of-day: {e}", file=sys.stderr)
