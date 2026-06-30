@@ -18,6 +18,7 @@ class GetTeamSprints:
         cache_key = (include_active_sprint, board_id, fetch_tail)
         if cache_key in self._fetch_cache:
             return self._fetch_cache[cache_key]
+        print("Fetching sprint history from Jira, please wait...", file=sys.stderr)
         data = self.jira_rest.get_sprints(board_id, fetch_tail=fetch_tail)
 
         # Filter out sprints not from this board
