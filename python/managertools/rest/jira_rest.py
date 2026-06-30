@@ -42,6 +42,7 @@ class JiraREST(RestService):
             response = self.get_request(uri,
                                        state="active,closed,future",
                                        startAt=str(start_at),
+                                       maxResults="250",
                                        _=now_ms)
 
             values.extend(response.get('values', []))
