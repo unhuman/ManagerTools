@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import List, Any
+from typing import Any, List, Optional
 from urllib.parse import urlencode, quote
 from http import HTTPStatus
 
@@ -21,16 +21,28 @@ class JiraREST(RestService):
         super().__init__(auth_info)
         self.jira_server = jira_server
 
-    def get_sprints(self, board_id: str) -> List[Any]:
+    def get_sprints(self, board_id: str, fetch_tail: Optional[int] = None) -> List[Any]:
+        uri = f"https://{self.jira_server}/rest/agile/1.0/board/{board_id}/sprint"
+        now_ms = str(int(datetime.now(timezone.utc).timestamp() * 1000))
         start_at = 0
-        values = []
 
+        if fetch_tail is not None:
+            # Probe with a 1-item request to read 'total' without pulling all data.
+            # If the API returns total (Jira Cloud), jump to near the tail so we only fetch
+            # the last fetch_tail * 2 sprints (2× buffer absorbs originBoardId-filtered entries).
+            # If total is absent (some Jira Server versions), fall through to a full fetch.
+            probe = self.get_request(uri, state="active,closed,future",
+                                     startAt="0", maxResults="1", _=now_ms)
+            total = probe.get('total')
+            if total is not None:
+                start_at = max(0, total - fetch_tail * 2)
+
+        values = []
         while True:
-            uri = f"https://{self.jira_server}/rest/agile/1.0/board/{board_id}/sprint"
             response = self.get_request(uri,
                                        state="active,closed,future",
                                        startAt=str(start_at),
-                                       _=str(int(datetime.now(timezone.utc).timestamp() * 1000)))
+                                       _=now_ms)
 
             values.extend(response.get('values', []))
             if response.get('isLast', True):

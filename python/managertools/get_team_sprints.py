@@ -11,12 +11,14 @@ class GetTeamSprints:
     def __init__(self, jira_rest: Optional[JiraREST] = None):
         self.jira_rest = jira_rest
         self._fetch_cache: dict = {}
+        self._last_fetch_tail: Optional[int] = None  # set by get_recent_sprints; reused by get_effective_start_map
 
-    def _fetch_and_filter_sprints(self, include_active_sprint: bool, board_id: str) -> List[dict]:
-        cache_key = (include_active_sprint, board_id)
+    def _fetch_and_filter_sprints(self, include_active_sprint: bool, board_id: str,
+                                   fetch_tail: Optional[int] = None) -> List[dict]:
+        cache_key = (include_active_sprint, board_id, fetch_tail)
         if cache_key in self._fetch_cache:
             return self._fetch_cache[cache_key]
-        data = self.jira_rest.get_sprints(board_id)
+        data = self.jira_rest.get_sprints(board_id, fetch_tail=fetch_tail)
 
         # Filter out sprints not from this board
         data = [sprint for sprint in data if str(sprint.get('originBoardId', '')) == board_id]
@@ -44,17 +46,14 @@ class GetTeamSprints:
     def get_effective_start_map(self, include_active_sprint: bool, board_id: str) -> dict:
         """Map each board sprint id -> predecessor sprint's end time in epoch ms.
 
-        Computed over the full board-wide sprint sequence (every sprint, not a -l N slice), so a
-        given sprint's predecessor — and therefore its back-filled window start — is identical
-        regardless of how many sprints a run requested (deterministic / cache-safe). Used to close
-        the ~1-day gaps Jira leaves between a sprint's start and the previous sprint's end, where
-        commits/activities would otherwise fall outside every window.
-
-        The absolute first sprint of the board has no predecessor and gets no entry (callers fall
-        back to start-of-day). _fetch_and_filter_sprints already fetches all board sprints, so the
-        predecessor of even the first reported sprint is available without an extra fetch.
+        When called after get_recent_sprints on the same instance, reuses the cached sprint list
+        (fetch_tail = limit_count + 1) so no second network call is made. The N+1 tail is
+        sufficient: every reported sprint's predecessor is either within the N reported sprints or
+        is the one extra sprint fetched as a tail buffer. Falls back to a full board fetch when
+        _last_fetch_tail is not set (e.g. -s path) or when total is unavailable (Jira Server).
         """
-        data = self._fetch_and_filter_sprints(include_active_sprint, board_id)
+        data = self._fetch_and_filter_sprints(include_active_sprint, board_id,
+                                              fetch_tail=self._last_fetch_tail)
         # _fetch_and_filter_sprints returns most-recent-first; sort ascending by startDate.
         ascending = sorted((s for s in data if s.get('startDate') and s.get('endDate')),
                            key=lambda x: x.get('startDate', ''))
@@ -77,7 +76,11 @@ class GetTeamSprints:
         return effective_start_by_id
 
     def get_recent_sprints(self, include_active_sprint: bool, board_id: str, limit_count: Optional[int]) -> List[dict]:
-        data = self._fetch_and_filter_sprints(include_active_sprint, board_id)
+        # Fetch one extra sprint beyond the limit so get_effective_start_map has the predecessor
+        # of the first reported sprint. Store the tail value so the same cache entry is reused.
+        fetch_tail = limit_count + 1 if limit_count is not None else None
+        self._last_fetch_tail = fetch_tail
+        data = self._fetch_and_filter_sprints(include_active_sprint, board_id, fetch_tail=fetch_tail)
 
         if limit_count is not None:
             data = data[:min(limit_count, len(data))]
