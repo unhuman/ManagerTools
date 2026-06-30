@@ -1295,7 +1295,7 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
             debug_print(f"PR {ticket}/{pr_id}: down-merge check title={pr_title!r} "
                         f"source={src_branch} -> {skip_reason or 'keep'}")
             if skip_reason:
-                marker_author = pr_author or pull_request.get('author') or 'unknown'
+                marker_author = pr_author or source_control_rest.map_user_to_jira_name(pull_request.get('author')) or 'unknown'
                 self._record_skipped_pr(sprint_name, ticket, pr_id, marker_author, pr_status,
                                         start_date, end_date, pr_title, skip_reason)
                 return
