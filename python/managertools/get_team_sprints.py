@@ -10,8 +10,12 @@ from managertools.rest.jira_rest import JiraREST
 class GetTeamSprints:
     def __init__(self, jira_rest: Optional[JiraREST] = None):
         self.jira_rest = jira_rest
+        self._fetch_cache: dict = {}
 
     def _fetch_and_filter_sprints(self, include_active_sprint: bool, board_id: str) -> List[dict]:
+        cache_key = (include_active_sprint, board_id)
+        if cache_key in self._fetch_cache:
+            return self._fetch_cache[cache_key]
         data = self.jira_rest.get_sprints(board_id)
 
         # Filter out sprints not from this board
@@ -34,6 +38,7 @@ class GetTeamSprints:
             else:
                 filtered_data.append(sprint)
 
+        self._fetch_cache[cache_key] = filtered_data
         return filtered_data
 
     def get_effective_start_map(self, include_active_sprint: bool, board_id: str) -> dict:

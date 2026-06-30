@@ -156,13 +156,14 @@ class AbstractSprintReport(ABC):
         elif self.command_line_options.limit:
             limit_raw = self.command_line_options.limit
 
+        gts = GetTeamSprints(self.jira_rest)
         if limit_raw is not None:
             limit_str = str(limit_raw).strip()
             if limit_str.lstrip('-').isdigit():
                 # Numeric path — existing behaviour
                 limit_int = int(limit_str)
                 try:
-                    sprint_data = GetTeamSprints(self.jira_rest).get_recent_sprints(
+                    sprint_data = gts.get_recent_sprints(
                         self.command_line_options.includeActive, self.board_id, limit_int)
                     self.sprint_ids = [str(s.get('id')) for s in sprint_data]
                 except RESTException as re:
@@ -174,7 +175,7 @@ class AbstractSprintReport(ABC):
                 # Date-based path — new behaviour
                 start_date, end_date = self._resolve_limit_date_range(limit_str)
                 try:
-                    sprint_data = GetTeamSprints(self.jira_rest).get_sprints_by_date_range(
+                    sprint_data = gts.get_sprints_by_date_range(
                         self.command_line_options.includeActive, self.board_id, start_date, end_date)
                     self.sprint_ids = [str(s.get('id')) for s in sprint_data]
                 except RESTException as re:
@@ -199,9 +200,10 @@ class AbstractSprintReport(ABC):
         # Build the board-wide predecessor-end map so SCRUM windows back-fill into inter-sprint
         # gaps (run-independent). Skip for Kanban (self.weeks set) and when no board is known
         # (e.g. -s with no board); the consumer then falls back to start-of-day.
+        # Reuses the same GetTeamSprints instance so _fetch_and_filter_sprints is not called twice.
         if self.board_id and self.sprint_ids and not self.weeks:
             try:
-                self.effective_start_by_id = GetTeamSprints(self.jira_rest).get_effective_start_map(
+                self.effective_start_by_id = gts.get_effective_start_map(
                     self.command_line_options.includeActive, self.board_id)
             except Exception as e:
                 print(f"   [WARN] Could not build sprint predecessor map; windows fall back to "
