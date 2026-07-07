@@ -104,6 +104,17 @@ class SprintReportIndividualAnalysis(SprintReportTeamAnalysis):
             if not team_dataframes:
                 continue
 
+            # Filter out stale users (those not in the current team roster)
+            valid_users = {u.casefold() for u in self.team_users}
+            stale_users = [u for u in team_dataframes if u.casefold() not in valid_users]
+            for stale_user in stale_users:
+                stale_filename = f"{prefix}-{team_name}-{stale_user}.csv"
+                self.stale_report_files.append(stale_filename)
+                del team_dataframes[stale_user]
+
+            if not team_dataframes:
+                continue
+
             # Generate team PNG
             try:
                 path = generate_team_png(team_name, team_dataframes, reports_dir)

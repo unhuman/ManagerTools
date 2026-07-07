@@ -52,6 +52,7 @@ class AbstractSprintReport(ABC):
         self.weeks = None
         self.kanban_start_date = None
         self.incomplete_sprints = []
+        self.stale_report_files = []
 
     @abstractmethod
     def aggregate_data(self, team_name: Optional[str], board_id: Optional[str], mode: Mode, sprint_ids: List[str], weeks: Optional[int], kanban_start_date: Optional[str] = None):
@@ -107,6 +108,13 @@ class AbstractSprintReport(ABC):
                 print(f"{_Y}   - {name}{_R}", file=sys.stderr)
             print(f"{_Y}Re-run the same command to retry fetching the missing issues.{_R}", file=sys.stderr)
             print(f"{_Y}Only the previously-failed issues will be re-fetched.{_R}", file=sys.stderr)
+
+        if self.stale_report_files:
+            _Y = "\033[93m"
+            _R = "\033[0m"
+            print(f"\n{_Y}*** WARNING: Found report file(s) for user(s) no longer on the team; excluded from the team report ***{_R}", file=sys.stderr)
+            for name in self.stale_report_files:
+                print(f"{_Y}   - {name}{_R}", file=sys.stderr)
 
         elapsed_seconds = int(time.time() - start_time)
         hours = elapsed_seconds // 3600
