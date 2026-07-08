@@ -135,6 +135,26 @@ class CommandLineHelper:
             True
         )
 
+    def get_backstage_server(self) -> str:
+        return self._prompt_and_store(
+            "Backstage Server (backstage.x.com)",
+            TextSecurity.NONE,
+            self.FQDN_PATTERN,
+            "backstageServer",
+            False,
+            "backstage.core.cvent.org"
+        )
+
+    def get_backstage_auth(self) -> str:
+        return self._prompt_and_store(
+            "Backstage Access Token or Cookies (optional, press enter to skip)",
+            TextSecurity.MASK,
+            self.ANY_MATCH_PATTERN,
+            "backstageAuth",
+            True,
+            ""
+        )
+
     def get_team_board_users(self, team_name: Optional[str], board_id: str) -> List[str]:
         if team_name:
             team_name = team_name.replace(".", "-")

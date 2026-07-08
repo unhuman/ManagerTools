@@ -75,7 +75,8 @@ class RestService(ABC):
                     "Content-Type": "application/json;charset=UTF-8"
                 }
                 auth_header_name, auth_header_value = self.auth_info.get_auth_header()
-                headers[auth_header_name] = auth_header_value
+                if auth_header_name is not None:
+                    headers[auth_header_name] = auth_header_value
 
                 # Prepare request kwargs
                 kwargs = {

@@ -8,6 +8,7 @@ class AuthType(Enum):
     Basic = "Basic"
     Cookies = "Cookies"
     Bearer = "Bearer"
+    NoAuth = "NoAuth"
 
 
 class AuthInfo:
@@ -19,13 +20,17 @@ class AuthInfo:
             self.auth_type = AuthType.Basic
             self.authentication = self._get_basic_auth(auth_type_or_username, password_or_token)
         elif isinstance(auth_type_or_username, AuthType):
-            # Constructor(AuthType, token_or_cookies)
-            if auth_type_or_username not in [AuthType.Cookies, AuthType.Bearer]:
+            # Constructor(AuthType, token_or_cookies) or Constructor(AuthType.NoAuth)
+            if auth_type_or_username == AuthType.NoAuth:
+                self.auth_type = AuthType.NoAuth
+                self.authentication = None
+            elif auth_type_or_username not in [AuthType.Cookies, AuthType.Bearer]:
                 raise RuntimeError(f"Invalid AuthType provided: {auth_type_or_username}")
-            self.auth_type = auth_type_or_username
-            self.authentication = (self._get_bearer(password_or_token)
-                                 if auth_type_or_username == AuthType.Bearer
-                                 else password_or_token)
+            else:
+                self.auth_type = auth_type_or_username
+                self.authentication = (self._get_bearer(password_or_token)
+                                     if auth_type_or_username == AuthType.Bearer
+                                     else password_or_token)
         else:
             raise TypeError("Invalid arguments to AuthInfo constructor")
 
@@ -36,7 +41,9 @@ class AuthInfo:
                 self.authentication = pattern.sub(f"{cookie_name}={cookie_value}", self.authentication)
 
     def get_auth_header(self) -> Tuple[str, str]:
-        if self.auth_type in [AuthType.Basic, AuthType.Bearer]:
+        if self.auth_type == AuthType.NoAuth:
+            return None, None
+        elif self.auth_type in [AuthType.Basic, AuthType.Bearer]:
             return "Authorization", self.authentication
         elif self.auth_type == AuthType.Cookies:
             return "Cookie", self.authentication
