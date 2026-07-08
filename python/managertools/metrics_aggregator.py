@@ -7,21 +7,26 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 from collections import defaultdict
+import sys
 
 
 class MetricsAggregator:
     """Aggregates individual sprint report CSVs into queryable metrics."""
 
-    def __init__(self, reports_dir: str = "."):
+    def __init__(self, reports_dir: str = ".", backstage_rest=None):
         """Initialize aggregator with path to individual report CSVs.
 
         Args:
             reports_dir: Directory containing individual-{Team}-{User}.csv files
+            backstage_rest: Optional BackstageREST client for loading role data
         """
         self.reports_dir = reports_dir
         self.data: List[Dict] = []
         self.teams: Dict[str, List[str]] = defaultdict(list)
+        self.backstage_rest = backstage_rest
+        self.role_map: Dict[Tuple[str, str], str] = {}  # (team, user) -> role
         self._load_reports()
+        self._load_roles()
 
     def _load_reports(self):
         """Load all individual report CSV files from reports directory."""
@@ -225,6 +230,103 @@ class MetricsAggregator:
         """Get all unique sprint names, sorted."""
         sprints = set(r['sprint'] for r in self.data if r.get('sprint'))
         return sorted(sprints)
+
+    def _load_roles(self) -> None:
+        """Load team member roles from Backstage if available."""
+        if not self.backstage_rest:
+            return
+
+        for team in self.teams.keys():
+            try:
+                roster = self.backstage_rest.get_team_roster(team)
+                for member in roster:
+                    user_ref = member.get('user_ref', '').casefold()
+                    raw_entity = member.get('raw_entity', {})
+                    role = raw_entity.get('spec', {}).get('profile', {}).get('role')
+                    if user_ref and role:
+                        # Store by case-insensitive user name
+                        self.role_map[(team, user_ref)] = role
+            except Exception as e:
+                print(f"[WARN] Failed to load roles for team {team}: {e}", file=sys.stderr)
+
+    def get_role(self, team: str, user: str) -> Optional[str]:
+        """Get a user's role/title by team and username.
+
+        Args:
+            team: Team name
+            user: Username (case-insensitive)
+
+        Returns:
+            Role string, or None if not found
+        """
+        return self.role_map.get((team, user.casefold()))
+
+    def get_users_by_title(self, title: str, start_date: Optional[str] = None,
+                         end_date: Optional[str] = None) -> List[Dict]:
+        """Get aggregated metrics for all users with a specific title/role.
+
+        Args:
+            title: Role title (e.g., "Architect", "Senior Software Engineer")
+            start_date: Optional filter
+            end_date: Optional filter
+
+        Returns:
+            List of metric dicts aggregated by person, filtered to matching titles
+        """
+        if not self.role_map:
+            return []
+
+        # Find all (team, user) pairs matching this title
+        matching_users = set()
+        for (team, user), role in self.role_map.items():
+            if role.lower() == title.lower():
+                matching_users.add((team, user))
+
+        if not matching_users:
+            return []
+
+        # Aggregate metrics for matching users
+        aggregated = defaultdict(lambda: {
+            'user': '',
+            'team': '',
+            'role': title,
+            'pr_added': 0,
+            'pr_removed': 0,
+            'commits': 0,
+            'approved': 0,
+            'commented_on_others': 0,
+            'others_commented': 0,
+            'tickets_closed': 0,
+            'prs_merged': 0,
+            'reviews_given': 0,
+            'code_volume': 0,
+            'sprint_count': 0,
+        })
+
+        filtered_data = self.data.copy()
+        if start_date or end_date:
+            filtered_data = self._filter_by_date(filtered_data, start_date, end_date)
+
+        for record in filtered_data:
+            team = record.get('team', '').casefold()
+            user = record.get('user', '').casefold()
+            if (team, user) in matching_users:
+                key = (team, user, record.get('user'))  # Use original case for display
+                aggregated[key]['user'] = record.get('user')
+                aggregated[key]['team'] = record.get('team')
+                aggregated[key]['pr_added'] += record.get('pr_added', 0)
+                aggregated[key]['pr_removed'] += record.get('pr_removed', 0)
+                aggregated[key]['commits'] += record.get('commits', 0)
+                aggregated[key]['approved'] += record.get('approved', 0)
+                aggregated[key]['commented_on_others'] += record.get('commented_on_others', 0)
+                aggregated[key]['others_commented'] += record.get('others_commented', 0)
+                aggregated[key]['tickets_closed'] += record.get('tickets_closed', 0)
+                aggregated[key]['prs_merged'] += record.get('prs_merged', 0)
+                aggregated[key]['reviews_given'] += record.get('reviews_given', 0)
+                aggregated[key]['code_volume'] += record.get('code_volume', 0)
+                aggregated[key]['sprint_count'] += 1
+
+        return list(aggregated.values())
 
     @staticmethod
     def _filter_by_date(data: List[Dict], start_date: Optional[str],

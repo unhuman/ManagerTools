@@ -14,12 +14,25 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from metrics_aggregator import MetricsAggregator
 from productivity_metrics import ProductivityMetrics
+from rest.backstage_rest import BackstageREST
+from util.backstage_cache import BackstageCache
+from util.command_line_helper import CommandLineHelper
 
 
 def init_aggregator(reports_dir: str) -> MetricsAggregator:
     """Initialize and cache the metrics aggregator."""
     if 'aggregator' not in st.session_state:
-        st.session_state.aggregator = MetricsAggregator(reports_dir)
+        # Try to initialize Backstage client for role data
+        backstage_rest = None
+        try:
+            config_helper = CommandLineHelper(".managerTools.cfg")
+            backstage_server = config_helper.get_backstage_server()
+            backstage_auth = config_helper.get_backstage_auth()
+            backstage_rest = BackstageREST(backstage_server, backstage_auth)
+        except Exception as e:
+            st.warning(f"Backstage not configured (title-level comparison unavailable): {e}")
+
+        st.session_state.aggregator = MetricsAggregator(reports_dir, backstage_rest)
     return st.session_state.aggregator
 
 
@@ -166,6 +179,120 @@ def render_team_view(agg: MetricsAggregator, team_name: str):
         st.plotly_chart(fig_radar, use_container_width=True)
 
 
+def render_title_comparison_view(agg: MetricsAggregator):
+    """Render org-wide comparison by job title/role."""
+    st.subheader("👔 Compare by Title/Role")
+
+    if not agg.role_map:
+        st.info("Role data not available. Ensure Backstage is configured and backstage_inspect found title fields.")
+        return
+
+    # Get unique titles across all teams/users
+    unique_titles = sorted(set(agg.role_map.values()))
+    if not unique_titles:
+        st.warning("No roles found in Backstage data")
+        return
+
+    # Let user pick a title
+    selected_title = st.selectbox(
+        "Select Role/Title:",
+        options=unique_titles
+    )
+
+    if not selected_title:
+        st.info("Select a title to compare")
+        return
+
+    # Get metrics for all users with this title
+    title_metrics = agg.get_users_by_title(selected_title)
+    if not title_metrics:
+        st.warning(f"No users found with title: {selected_title}")
+        return
+
+    st.markdown(f"#### {selected_title} ({len(title_metrics)} people)")
+
+    # KPIs
+    col1, col2, col3, col4, col5 = st.columns(5)
+    total_code_vol = sum(m.get('code_volume', 0) for m in title_metrics)
+    total_commits = sum(m.get('commits', 0) for m in title_metrics)
+    total_reviews = sum(m.get('reviews_given', 0) for m in title_metrics)
+    total_tickets = sum(m.get('tickets_closed', 0) for m in title_metrics)
+
+    with col1:
+        st.metric("Total Code Volume", f"{total_code_vol:,}")
+    with col2:
+        st.metric("Total Commits", total_commits)
+    with col3:
+        st.metric("Total Reviews", total_reviews)
+    with col4:
+        st.metric("Total Tickets", total_tickets)
+    with col5:
+        st.metric("Count", len(title_metrics))
+
+    st.divider()
+
+    # Individual metrics table
+    st.markdown("#### Individual Contribution")
+    display_data = []
+    for m in sorted(title_metrics, key=lambda x: x.get('code_volume', 0), reverse=True):
+        productivity = ProductivityMetrics.calculate_productivity_score(m)
+        review_quality = ProductivityMetrics.calculate_review_quality_score(m)
+        collab = ProductivityMetrics.calculate_collaboration_score(m)
+
+        display_data.append({
+            'User': m.get('user'),
+            'Team': m.get('team'),
+            'Code Volume': m.get('code_volume', 0),
+            'Commits': m.get('commits', 0),
+            'Reviews Given': m.get('reviews_given', 0),
+            'Tickets': m.get('tickets_closed', 0),
+            'Productivity': f"{productivity:.0f}",
+            'Review Quality': f"{review_quality:.0f}",
+            'Collaboration': f"{collab:.0f}",
+        })
+
+    df_display = pd.DataFrame(display_data)
+    st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    # Trend comparison for selected users
+    st.markdown("#### Productivity Trends")
+    selected_users = st.multiselect(
+        "Select people to compare trends:",
+        options=[m.get('user') for m in title_metrics],
+        default=[m.get('user') for m in title_metrics[:3]] if len(title_metrics) >= 3 else []
+    )
+
+    if selected_users:
+        fig_data = []
+        for user in selected_users:
+            # Find team+user combo
+            user_match = next((m for m in title_metrics if m.get('user') == user), None)
+            if user_match:
+                team = user_match.get('team')
+                history = agg.get_individual_history(team, user)
+                if history:
+                    sprints = [h.get('sprint', '') for h in history]
+                    code_vols = [h.get('code_volume', 0) for h in history]
+                    fig_data.append(go.Scatter(
+                        x=sprints, y=code_vols, mode='lines+markers',
+                        name=f"{user} ({team})",
+                        hovertemplate='<b>%{fullData.name}</b><br>%{x}<br>Code Volume: %{y}<extra></extra>'
+                    ))
+
+        if fig_data:
+            fig = go.Figure(data=fig_data)
+            fig.update_layout(
+                title=f"Code Volume Trends ({selected_title})",
+                xaxis_title="Sprint",
+                yaxis_title="Code Volume",
+                hovermode='x unified',
+                height=400
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+
 def render_org_view(agg: MetricsAggregator):
     """Render organization-wide metrics."""
     st.subheader("🏢 Organization-Wide Analytics")
@@ -261,7 +388,7 @@ def main():
 
     # Sidebar navigation
     st.sidebar.title("Navigation")
-    view = st.sidebar.radio("Select View:", ["Team Analysis", "Organization Overview"])
+    view = st.sidebar.radio("Select View:", ["Team Analysis", "Organization Overview", "Compare by Title"])
 
     if view == "Team Analysis":
         st.sidebar.divider()
@@ -273,6 +400,9 @@ def main():
 
     elif view == "Organization Overview":
         render_org_view(agg)
+
+    elif view == "Compare by Title":
+        render_title_comparison_view(agg)
 
     # Footer
     st.divider()
