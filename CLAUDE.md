@@ -53,6 +53,26 @@ bd close <id>         # Complete work
 
 ## Running Tools
 
+### Dashboard
+
+Run the interactive Streamlit dashboard from the `python/` directory:
+```bash
+streamlit run managertools/dashboard.py
+```
+
+The dashboard requires:
+- Individual sprint report CSVs in the current directory (format: `individual-{Team}-{User}.csv`)
+- Configuration in `~/.managerTools.cfg` with Jira, Bitbucket, and GitHub credentials
+- **Optional**: Backstage configuration (`backstageServer`, `backstageAuth`) for role/title comparison
+
+Features:
+- **Team Analysis**: Individual contributor metrics, trends, radar charts
+- **Organization Overview**: Team comparison, top contributors, KPIs
+- **Compare by Title**: Cross-team peer comparison by job title (requires Backstage)
+- **Export**: Performance reviews in JSON, Markdown, PNG, PDF/HTML formats
+
+See `DASHBOARD_SETUP.md` for detailed setup and troubleshooting.
+
 ### Sprint Report Tools
 
 All sprint analysis tools are Python modules that can be run with `python -m`:
@@ -144,3 +164,30 @@ grep -rl '"version": "1.0"' python/cacheData/ --include="*.json"
 grep -rl '"version": "1.0"' python/cacheData/ --include="*.json" | xargs rm
 ```
 Replace `1.0` with the version being superseded.
+
+### Backstage Integration
+
+The dashboard integrates with Backstage (the internal developer catalog) to load team member role/title data, enabling cross-team peer comparison by job title.
+
+**Configuration:**
+- `backstageServer` — Server FQDN (e.g., `"backstage.core.cvent.org"`)
+- `backstageAuth` — Optional authentication (can be empty for unauthenticated access)
+- `backstageCacheDays` — Cache TTL in days (default 7)
+
+**How it Works:**
+1. On dashboard startup, `MetricsAggregator` initializes a `BackstageREST` client if `backstageServer` is configured
+2. For each team in the loaded sprint reports, team roster data is fetched from Backstage
+3. Role/title data is extracted from each team member's Backstage user entity and cached locally in `cacheData/backstage/`
+4. The `MetricsAggregator.role_map` dictionary maps `(team, user)` tuples to role titles
+5. The "Compare by Title" dashboard view queries `get_users_by_title()` to aggregate metrics across all people with the same title
+
+**Graceful Degradation:**
+- If Backstage is not configured or unavailable, the dashboard still works without role data
+- The "Compare by Title" view shows an info message if role data is unavailable
+- All other dashboard views (Team Analysis, Organization Overview) work normally
+
+**Implementation Details:**
+- `BackstageREST` (rest/backstage_rest.py): REST client for catalog API, with camelCase-to-kebab-case team name conversion
+- `BackstageCache` (util/backstage_cache.py): Local file-based cache with TTL validation
+- `MetricsAggregator._load_roles()`: Populates role_map by fetching rosters for all teams
+- `MetricsAggregator.get_users_by_title()`: Aggregates metrics for all users with a given title
