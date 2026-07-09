@@ -144,13 +144,17 @@ class BackstageREST(RestService):
         if not group:
             return []
 
-        # Extract member refs from spec.members (format: "user:default/{name}")
+        # Extract member refs from spec.members (format: "user:default/{name}" or bare username)
         members = group.get('spec', {}).get('members', [])
         member_refs = []
         for member_ref in members:
             if member_ref.startswith('user:default/'):
+                # Full format: "user:default/{name}"
                 user_ref = member_ref.split('/')[-1]
                 member_refs.append(user_ref)
+            elif member_ref and not ':' in member_ref:
+                # Bare username: "agreene"
+                member_refs.append(member_ref)
 
         if not member_refs:
             return []
