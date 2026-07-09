@@ -108,8 +108,9 @@ class SprintReportIndividualAnalysis(SprintReportTeamAnalysis):
                 continue
 
             # Filter out stale users (those not in the current team roster)
-            valid_users = {u.casefold() for u in self.team_users}
-            stale_users = [u for u in team_dataframes if u.casefold() not in valid_users]
+            # Apply sanitization (hyphen -> period) to match users as they appear in generated files
+            valid_users = {self.sanitize_name_for_index(u).casefold() for u in self.team_users}
+            stale_users = [u for u in team_dataframes if self.sanitize_name_for_index(u).casefold() not in valid_users]
             for stale_user in stale_users:
                 stale_filename = f"{prefix}-{team_name}-{stale_user}.csv"
                 self.stale_report_files.append(stale_filename)
