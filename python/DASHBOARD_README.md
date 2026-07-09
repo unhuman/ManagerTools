@@ -24,8 +24,9 @@ A simple, interactive Streamlit dashboard for analyzing team and organization-wi
 3. **`dashboard.py`** — Interactive Streamlit app
    - **Team Analysis View**: Individual contribution breakdown, trends, radar charts
    - **Organization Overview**: Team comparison, top contributors, KPIs
+   - **Compare by Title/Role**: Cross-team peer comparison by job title (Backstage integration)
+   - **Export functionality**: JSON, Markdown, PNG, PDF/HTML performance review export
    - Responsive to multiple metrics
-   - Ready for export functionality (next phase)
 
 ## Getting Started
 
@@ -60,6 +61,14 @@ The dashboard will open in your browser at `http://localhost:8501`
 - **Org-wide KPIs**: Total headcount, aggregate metrics
 - **Team Comparison Table**: Side-by-side team metrics
 - **Top Contributors**: Ranked lists by code volume, commits, reviews
+
+### Compare by Title/Role (Backstage Integration)
+
+- **Peer Metrics by Title**: Compare productivity, review quality, and collaboration across all people with the same job title
+- **Cross-team Insights**: Identify high performers in specific roles regardless of team assignment
+- **Title Trends**: View productivity trends for all people in a given role
+- **Export Peer Reviews**: Export comparison reports for peer feedback and calibration
+- Requires Backstage catalog to be configured in `~/.managerTools.cfg`
 
 ## Productivity Metrics Explained
 
@@ -116,8 +125,9 @@ Each CSV contains sprint-by-sprint metrics for a person:
 
 ## Next Steps (Planned)
 
-- **Task #4**: Org-wide and title-level comparison views
-- **Task #5**: Configurable export module (JSON/Markdown/PDF) for performance reviews
+- Backstage integration enhancements (custom field mapping, auth types)
+- Export template customization
+- Real-time dashboard updates via webhook integration
 
 ## Architecture Notes
 
@@ -135,12 +145,26 @@ The `MetricsAggregator` class:
 
 The aggregator is cached in Streamlit's `session_state` to avoid reloading CSVs on every interaction.
 
+### Backstage Role/Title Data
+
+The dashboard loads team member role/title data from Backstage (the internal developer catalog) to enable cross-team peer comparison by job title. This requires configuration:
+
+**Setup:**
+1. Add `backstageServer` to `~/.managerTools.cfg` (e.g., `"backstage.core.cvent.org"`)
+2. Optionally add `backstageAuth` for authentication (can be empty for unauthenticated access)
+3. Optionally configure `backstageCacheDays` (default 7) for roster cache TTL
+
+**Graceful Degradation:**
+- If Backstage is not configured, the dashboard still works with team/org views
+- The "Compare by Title" view shows a helpful message if role data is unavailable
+- Role data is cached locally in `cacheData/backstage/{team}.json` to minimize API calls
+
 ## Known Limitations
 
-1. **Title/Role Mapping**: Currently no role inference; next phase will add title-level comparison
+1. **Title/Role Mapping**: Requires Backstage configuration; gracefully degrades if unavailable
 2. **Date Filtering**: Supports sprint names or YYYY-MM-DD format; sprint name detection is heuristic
-3. **Export Not Yet Implemented**: Task #5 will add JSON/Markdown/PDF export
-4. **No Real-time Data**: Loads snapshot of CSVs; requires manual re-run for new data
+3. **No Real-time Data**: Loads snapshot of CSVs; requires manual re-run for new data
+4. **PNG Export**: Requires Pillow; other export formats work without it
 
 ## Future Enhancements
 
