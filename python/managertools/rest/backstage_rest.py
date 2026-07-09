@@ -2,6 +2,8 @@
 
 from typing import Any, Dict, List, Optional
 from concurrent.futures import ThreadPoolExecutor
+import json
+import os
 
 from .rest_service import RestService
 from .auth_info import AuthInfo, AuthType
@@ -9,6 +11,8 @@ from .auth_info import AuthInfo, AuthType
 
 class BackstageREST(RestService):
     """REST client for Backstage software catalog API."""
+
+    TEAM_NAME_CACHE_FILE = "cacheData/backstage_team_names.json"
 
     def __init__(self, backstage_server: str, auth_token: Optional[str] = None):
         """Initialize Backstage client.
@@ -26,6 +30,31 @@ class BackstageREST(RestService):
 
         super().__init__(auth_info)
         self.backstage_server = backstage_server
+        self._team_name_cache = self._load_team_name_cache()
+
+    @staticmethod
+    def _load_team_name_cache() -> Dict[str, str]:
+        """Load cached team name mappings (original -> successful variant).
+
+        Returns:
+            Dict mapping team names to their working Backstage names
+        """
+        if os.path.exists(BackstageREST.TEAM_NAME_CACHE_FILE):
+            try:
+                with open(BackstageREST.TEAM_NAME_CACHE_FILE, 'r') as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, IOError):
+                return {}
+        return {}
+
+    def _save_team_name_cache(self):
+        """Save team name mappings to cache file."""
+        os.makedirs(os.path.dirname(self.TEAM_NAME_CACHE_FILE), exist_ok=True)
+        try:
+            with open(self.TEAM_NAME_CACHE_FILE, 'w') as f:
+                json.dump(self._team_name_cache, f, indent=2)
+        except IOError:
+            pass  # Silent fail if can't write cache
 
     @staticmethod
     def _camel_to_kebab(name: str) -> str:
@@ -47,7 +76,17 @@ class BackstageREST(RestService):
         """
         import sys
 
-        # Try the team name as provided first
+        # Check cache first
+        if team_name in self._team_name_cache:
+            cached_name = self._team_name_cache[team_name]
+            uri = f"https://{self.backstage_server}/api/catalog/entities/by-name/group/default/{cached_name}"
+            try:
+                return self.get_request(uri)
+            except Exception:
+                # Cache was stale, fall through to retry
+                pass
+
+        # Try the team name as provided
         uri = f"https://{self.backstage_server}/api/catalog/entities/by-name/group/default/{team_name}"
         try:
             return self.get_request(uri)
@@ -59,10 +98,14 @@ class BackstageREST(RestService):
                 if kebab_name != team_name:
                     uri_kebab = f"https://{self.backstage_server}/api/catalog/entities/by-name/group/default/{kebab_name}"
                     try:
-                        return self.get_request(uri_kebab)
-                    except Exception as e2:
-                        print(f"[WARN] Failed to fetch group {team_name} (tried {kebab_name}): {e2}", file=sys.stderr)
-                        return None
+                        result = self.get_request(uri_kebab)
+                        # Cache the successful variant
+                        self._team_name_cache[team_name] = kebab_name
+                        self._save_team_name_cache()
+                        print(f"[INFO] Team '{team_name}' found as '{kebab_name}' (cached for future use)", file=sys.stderr)
+                        return result
+                    except Exception:
+                        pass
 
             print(f"[WARN] Failed to fetch group {team_name}: {e}", file=sys.stderr)
             return None
