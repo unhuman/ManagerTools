@@ -24,15 +24,19 @@ from review_exporters import ReviewExporterFactory
 def init_aggregator(reports_dir: str) -> MetricsAggregator:
     """Initialize and cache the metrics aggregator."""
     if 'aggregator' not in st.session_state:
-        # Try to initialize Backstage client for role data
+        # Try to initialize Backstage client for role data (only if already configured, no prompting)
         backstage_rest = None
         try:
-            config_helper = CommandLineHelper(".managerTools.cfg")
-            backstage_server = config_helper.get_backstage_server()
-            backstage_auth = config_helper.get_backstage_auth()
-            backstage_rest = BackstageREST(backstage_server, backstage_auth)
+            config_helper = CommandLineHelper(".managerTools.cfg", quiet_mode=True)
+            # Check if Backstage is configured WITHOUT prompting
+            config_mgr = config_helper.get_config_file_manager()
+            if config_mgr and config_mgr.contains_key("backstageServer"):
+                backstage_server = config_mgr.get_value("backstageServer")
+                backstage_auth = config_mgr.get_value("backstageAuth") if config_mgr.contains_key("backstageAuth") else ""
+                backstage_rest = BackstageREST(backstage_server, backstage_auth)
         except Exception as e:
-            st.warning(f"Backstage not configured (title-level comparison unavailable): {e}")
+            # Silent failure - Backstage is optional
+            pass
 
         st.session_state.aggregator = MetricsAggregator(reports_dir, backstage_rest)
     return st.session_state.aggregator
