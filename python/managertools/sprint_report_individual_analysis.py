@@ -49,7 +49,10 @@ class SprintReportIndividualAnalysis(SprintReportTeamAnalysis):
         if self.team_users:
             resolved = []
             for specified in self.team_users:
-                matched = [u for u in users if u.casefold() == specified.casefold()]
+                # Apply sanitization to match users as they appear in the database
+                # (hyphens in usernames are converted to periods during indexing)
+                sanitized_specified = self.sanitize_name_for_index(specified)
+                matched = [u for u in users if self.sanitize_name_for_index(u).casefold() == sanitized_specified.casefold()]
                 resolved.append(matched[0] if matched else specified)
             users = resolved
 
