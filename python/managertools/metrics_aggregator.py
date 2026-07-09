@@ -242,6 +242,28 @@ class MetricsAggregator:
         sprints = set(r['sprint'] for r in self.data if r.get('sprint'))
         return sorted(sprints)
 
+    @staticmethod
+    def _normalize_title(title: str) -> str:
+        """Normalize title by removing contractor markers and standardizing capitalization.
+
+        Args:
+            title: Raw title from Backstage
+
+        Returns:
+            Normalized title with [C] removed and first word capitalized
+        """
+        if not title:
+            return title
+
+        # Remove contractor marker " [C]" and any trailing whitespace
+        normalized = title.replace(' [C]', '').strip()
+
+        # Capitalize first character, keep rest as-is for consistency
+        if normalized:
+            normalized = normalized[0].upper() + normalized[1:] if len(normalized) > 1 else normalized.upper()
+
+        return normalized
+
     def _load_roles(self) -> None:
         """Load team member roles from Backstage if available (cached with TTL)."""
         if not self.backstage_rest:
@@ -273,8 +295,11 @@ class MetricsAggregator:
                     raw_entity = member.get('raw_entity', {})
                     role = raw_entity.get('spec', {}).get('profile', {}).get('role')
                     if user_ref and role:
-                        # Store by case-insensitive user name
-                        self.role_map[(team, user_ref)] = role
+                        # Normalize title: remove [C], standardize capitalization
+                        normalized_role = self._normalize_title(role)
+                        if normalized_role:
+                            # Store by case-insensitive user name with normalized role
+                            self.role_map[(team, user_ref)] = normalized_role
             except Exception as e:
                 print(f"[WARN] Failed to load roles for team {team}: {e}", file=sys.stderr)
 
