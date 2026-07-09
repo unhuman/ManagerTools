@@ -32,13 +32,18 @@ def init_aggregator(reports_dir: str) -> MetricsAggregator:
             config_helper = CommandLineHelper(".managerTools.cfg")
             # Check if Backstage is configured WITHOUT prompting
             config_mgr = config_helper.get_config_file_manager()
-            if config_mgr and config_mgr.contains_key("backstageServer"):
-                backstage_server = config_mgr.get_value("backstageServer")
-                backstage_auth = config_mgr.get_value("backstageAuth") if config_mgr.contains_key("backstageAuth") else ""
-                backstage_rest = BackstageREST(backstage_server, backstage_auth)
-                print(f"[DEBUG] Backstage initialized: {backstage_server}")
+            print(f"[DEBUG] Config manager: {config_mgr}")
+            if config_mgr:
+                print(f"[DEBUG] Config file exists, checking for backstageServer key")
+                if config_mgr.contains_key("backstageServer"):
+                    backstage_server = config_mgr.get_value("backstageServer")
+                    backstage_auth = config_mgr.get_value("backstageAuth") if config_mgr.contains_key("backstageAuth") else ""
+                    backstage_rest = BackstageREST(backstage_server, backstage_auth)
+                    print(f"[DEBUG] Backstage initialized: {backstage_server}")
+                else:
+                    print("[DEBUG] backstageServer key not found in config file")
             else:
-                print("[DEBUG] Backstage not configured in config file")
+                print("[DEBUG] Config file not found or not readable")
         except Exception as e:
             # Silent failure - Backstage is optional
             print(f"[DEBUG] Backstage initialization failed: {e}")
