@@ -245,6 +245,8 @@ class CommandLineHelper:
             input_value = self._perform_prompt(prompt_text, text_security, self.ANY_MATCH_PATTERN).strip()
 
             if not input_value and use_default_value:
+                if default_value_config_key and self.config_file_manager:
+                    self.config_file_manager.update_value(default_value_config_key, use_default_value)
                 return use_default_value
             elif validation_pattern.match(input_value):
                 if default_value_config_key and self.config_file_manager:
