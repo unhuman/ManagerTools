@@ -232,9 +232,10 @@ class CommandLineHelper:
                 config_value = self.config_file_manager.get_value(default_value_config_key)
                 if config_value:
                     use_default_value = config_value
-                if not prompt_for_existing_value:
-                    print(f"Found {default_value_config_key} configuration value - {use_default_value}")
-                    return use_default_value
+                    # Use existing config value silently (no prompt)
+                    # Only prompt if validation fails or value is missing
+                    if validation_pattern.match(use_default_value):
+                        return use_default_value
 
         if use_default_value:
             masked = "****" if text_security != TextSecurity.NONE else use_default_value
