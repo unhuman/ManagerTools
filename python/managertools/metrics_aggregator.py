@@ -298,16 +298,14 @@ class MetricsAggregator:
         Returns:
             Sorted list of titles with actual representation in the data
         """
-        if not self.role_map or not self.data:
+        if not self.role_map or not self.teams:
             return []
 
-        # Build set of (team, user) pairs that exist in loaded data
+        # Build set of (team, user) pairs from loaded CSV reports
         loaded_users = set()
-        for record in self.data:
-            team = record.get('team', '').casefold()
-            user = record.get('user', '').casefold()
-            if team and user:
-                loaded_users.add((team, user))
+        for team, users in self.teams.items():
+            for user in users:
+                loaded_users.add((team.casefold(), user.casefold()))
 
         # Find titles where at least one user has loaded data
         representable_titles = set()
