@@ -27,20 +27,43 @@ class BackstageREST(RestService):
         super().__init__(auth_info)
         self.backstage_server = backstage_server
 
+    @staticmethod
+    def _camel_to_kebab(name: str) -> str:
+        """Convert camelCase to kebab-case.
+
+        Example: DumbledoreArmy -> Dumbledore-Army
+        """
+        import re
+        return re.sub(r'([a-z])([A-Z])', r'\1-\2', name)
+
     def get_group(self, team_name: str) -> Optional[Dict[str, Any]]:
         """Fetch a group entity from the catalog.
 
         Args:
-            team_name: Group name (e.g., "Rebel-Intelligence")
+            team_name: Group name (e.g., "Rebel-Intelligence" or "DumbledoreArmy")
 
         Returns:
             Raw group entity JSON, or None if not found / auth failed
         """
+        import sys
+
+        # Try the team name as provided first
         uri = f"https://{self.backstage_server}/api/catalog/entities/by-name/group/default/{team_name}"
         try:
             return self.get_request(uri)
         except Exception as e:
-            import sys
+            error_msg = str(e)
+            # If 404, try converting camelCase to kebab-case
+            if '404' in error_msg or 'Not Found' in error_msg:
+                kebab_name = self._camel_to_kebab(team_name)
+                if kebab_name != team_name:
+                    uri_kebab = f"https://{self.backstage_server}/api/catalog/entities/by-name/group/default/{kebab_name}"
+                    try:
+                        return self.get_request(uri_kebab)
+                    except Exception as e2:
+                        print(f"[WARN] Failed to fetch group {team_name} (tried {kebab_name}): {e2}", file=sys.stderr)
+                        return None
+
             print(f"[WARN] Failed to fetch group {team_name}: {e}", file=sys.stderr)
             return None
 
