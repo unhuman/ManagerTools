@@ -310,7 +310,8 @@ class MetricsAggregator:
         # Find titles where at least one user has loaded data
         representable_titles = set()
         for (team, user), title in self.role_map.items():
-            if (team, user) in loaded_users:
+            check_key = (team.casefold(), user.casefold())
+            if check_key in loaded_users:
                 representable_titles.add(title)
 
         return sorted(representable_titles)
