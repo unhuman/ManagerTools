@@ -103,7 +103,7 @@ def render_team_view(agg: MetricsAggregator, team_name: str):
         })
 
     df_display = pd.DataFrame(display_data)
-    st.dataframe(df_display, use_container_width=True, hide_index=True)
+    st.dataframe(df_display, width='stretch', hide_index=True)
 
     # Productivity trend line chart
     st.markdown("#### Productivity Trends by Member")
@@ -139,7 +139,7 @@ def render_team_view(agg: MetricsAggregator, team_name: str):
                     hovermode='x unified',
                     height=400
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
 
     st.divider()
 
@@ -221,6 +221,10 @@ def render_team_view(agg: MetricsAggregator, team_name: str):
             ProductivityMetrics.calculate_collaboration_score(selected_metrics),
         ]
 
+        # Debug: show the actual values and underlying metrics
+        st.write(f"**Debug - {selected_for_radar}:** Productivity={values[0]}, Review Quality={values[1]}, Collaboration={values[2]}")
+        st.write(f"  Underlying: code_volume={selected_metrics.get('code_volume', 0)}, commits={selected_metrics.get('commits', 0)}, reviews_given={selected_metrics.get('reviews_given', 0)}, others_commented={selected_metrics.get('others_commented', 0)}")
+
         fig_radar = go.Figure(data=go.Scatterpolar(
             r=values,
             theta=categories,
@@ -233,7 +237,7 @@ def render_team_view(agg: MetricsAggregator, team_name: str):
             height=400,
             showlegend=False
         )
-        st.plotly_chart(fig_radar, use_container_width=True)
+        st.plotly_chart(fig_radar, width='stretch')
 
 
 def render_title_comparison_view(agg: MetricsAggregator):
@@ -309,7 +313,7 @@ def render_title_comparison_view(agg: MetricsAggregator):
         })
 
     df_display = pd.DataFrame(display_data)
-    st.dataframe(df_display, use_container_width=True, hide_index=True)
+    st.dataframe(df_display, width='stretch', hide_index=True)
 
     st.divider()
 
@@ -407,7 +411,7 @@ def render_title_comparison_view(agg: MetricsAggregator):
                 hovermode='x unified',
                 height=400
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
 
 def render_org_view(agg: MetricsAggregator):
@@ -459,7 +463,7 @@ def render_org_view(agg: MetricsAggregator):
             })
 
     df_teams = pd.DataFrame(team_comparison)
-    st.dataframe(df_teams, use_container_width=True, hide_index=True)
+    st.dataframe(df_teams, width='stretch', hide_index=True)
 
     st.divider()
 
