@@ -58,12 +58,14 @@ class BackstageREST(RestService):
 
     @staticmethod
     def _camel_to_kebab(name: str) -> str:
-        """Convert camelCase to kebab-case.
+        """Convert camelCase to kebab-case (all lowercase).
 
-        Example: DumbledoreArmy -> Dumbledore-Army
+        Example: DumbledoreArmy -> dumbledore-army
+        Example: RedEmption -> red-emption
         """
         import re
-        return re.sub(r'([a-z])([A-Z])', r'\1-\2', name)
+        # Insert dash before uppercase, then convert to lowercase
+        return re.sub(r'([a-z])([A-Z])', r'\1-\2', name).lower()
 
     def get_group(self, team_name: str) -> Optional[Dict[str, Any]]:
         """Fetch a group entity from the catalog.
