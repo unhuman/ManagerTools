@@ -306,7 +306,7 @@ def render_team_view(agg: MetricsAggregator, team_name: str):
                 margin=dict(l=50, r=50, t=50, b=50),
                 hoverlabel=dict(namelength=-1)
             )
-            st.plotly_chart(fig_radar, use_container_width=True)
+            st.plotly_chart(fig_radar)
 
 
 def render_title_comparison_view(agg: MetricsAggregator):

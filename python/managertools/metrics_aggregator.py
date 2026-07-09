@@ -261,9 +261,10 @@ class MetricsAggregator:
         # Apply title case (capitalize each word)
         if normalized:
             normalized = normalized.title()
-            # Handle consecutive I's (like III, II, etc.) - make them all caps
+            # Handle consecutive I's (like III, II, etc.) - convert "Ii+" to all caps
             import re
-            normalized = re.sub(r'\bI+\b', lambda m: m.group(0).upper(), normalized)
+            # Match capital I followed by one or more lowercase i's and make all uppercase
+            normalized = re.sub(r'Ii+', lambda m: m.group(0).upper(), normalized)
 
         return normalized
 
