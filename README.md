@@ -144,6 +144,23 @@ Configuration is stored in `~/.managerTools.cfg` as a JSON file. The following o
   "downMergeTrunkBranches": ["main", "master", "develop", "release/.*"]
   ```
 
+#### Backstage Catalog Integration
+
+- **`backstageServer`** — Backstage software catalog server FQDN for fetching team member role/title data. Used by the dashboard to enable "Compare by Title" peer analysis across the organization. Example: `"backstage.core.cvent.org"`. No default; if not configured, Backstage integration is skipped gracefully.
+  ```json
+  "backstageServer": "backstage.core.cvent.org"
+  ```
+
+- **`backstageAuth`** — Optional authentication token or cookies for Backstage API access. Can be empty for unauthenticated access. Auto-detects Bearer token (standard format) vs. Cookies (format: `key=value`). If both `backstageServer` and `backstageAuth` are configured, the dashboard will load role data for cross-team peer comparison.
+  ```json
+  "backstageAuth": ""
+  ```
+
+- **`backstageCacheDays`** — TTL in days for cached Backstage roster data. Role data changes infrequently, so caching reduces API calls on dashboard startup. Default: `7`.
+  ```json
+  "backstageCacheDays": 7
+  ```
+
 #### GitHub API Rate Limiting
 
 - **`graphqlPointsReserved`** — Number of GraphQL rate-limit points to keep in reserve. When the remaining point count drops to or below this value, processing pauses (with a countdown display) until the rate-limit window resets. Increase this value when running multiple simultaneous processes that share the same GitHub token. Default: `5`.
@@ -164,6 +181,9 @@ When the same setting is provided in both the configuration file and CLI flags:
 {
   "jiraServer": "https://jira.company.com",
   "bitbucketServer": "https://bitbucket.company.com",
+  "backstageServer": "backstage.core.cvent.org",
+  "backstageAuth": "",
+  "backstageCacheDays": 7,
   "workSource": "pr",
   "maxCommitSize": 2000,
   "maxFileChangeSize": 5000,
