@@ -228,20 +228,20 @@ def render_team_view(agg: MetricsAggregator, team_name: str):
     # Add legend explaining what each axis represents
     with st.expander("📊 What do these metrics mean?", expanded=False):
         st.markdown("""
-        **Productivity Score (0-100)** — Composite measure of output volume:
-        - Code Volume: Lines added + removed (max 50k = 33 pts)
-        - Commits: Number of commits authored (max 400 = 33 pts)
-        - Tickets Closed: Jira issues resolved (max 30 = 34 pts)
+        **Code Volume** (0-100) — Lines added + removed (normalized to 50k max)
 
-        **Review Quality Score (0-100)** — Depth of code review engagement:
-        - Measures ratio of detailed reviews (with comments) vs. simple approvals
+        **Commits** (0-100) — Number of commits authored (normalized to 400 max)
+
+        **Tickets Closed** (0-100) — Jira issues resolved (normalized to 30 max)
+
+        **Review Quality** (0-100) — Depth of code review engagement:
+        - Ratio of detailed reviews (with comments) vs. simple approvals
         - High score = thorough, feedback-oriented reviews
         - Low score = approval-only or minimal engagement
 
-        **Collaboration Score (0-100)** — Team engagement breadth:
-        - Reviews Given: How many PRs this person reviewed
-        - Engagement Received: How many others reviewed their work
-        - Combined normalized to 400 (so 200+ interactions = 50/100)
+        **Reviews Given** (0-100) — How many PRs this person reviewed (normalized to 200 max)
+
+        **Reviews Received** (0-100) — How many others reviewed their work (normalized to 200 max)
         """)
 
     col_sort = st.columns(1)[0]
@@ -268,18 +268,25 @@ def render_team_view(agg: MetricsAggregator, team_name: str):
         with cols[idx % 2]:
             user = member_metrics.get('user')
 
-            categories = ['Productivity', 'Review Quality', 'Collaboration']
-            values = [
-                ProductivityMetrics.calculate_productivity_score(member_metrics),
-                ProductivityMetrics.calculate_review_quality_score(member_metrics),
-                ProductivityMetrics.calculate_collaboration_score(member_metrics),
-            ]
+            # Normalize individual metrics to 0-100 scale
+            code_vol = min(member_metrics.get('code_volume', 0) / 50000, 1.0) * 100
+            commits = min(member_metrics.get('commits', 0) / 400, 1.0) * 100
+            tickets = min(member_metrics.get('tickets_closed', 0) / 30, 1.0) * 100
+            review_quality = ProductivityMetrics.calculate_review_quality_score(member_metrics)
+            reviews_given = min(member_metrics.get('reviews_given', 0) / 200, 1.0) * 100
+            reviews_received = min(member_metrics.get('others_commented', 0) / 200, 1.0) * 100
 
-            # Create hover text with underlying metrics
+            categories = ['Code Volume', 'Commits', 'Tickets', 'Review Quality', 'Reviews Given', 'Reviews Received']
+            values = [code_vol, commits, tickets, review_quality, reviews_given, reviews_received]
+
+            # Create hover text with actual metric values
             hover_text = [
-                f"<b>Productivity</b><br>Code: {member_metrics.get('code_volume', 0):,} lines<br>Commits: {member_metrics.get('commits', 0)}<br>Tickets: {member_metrics.get('tickets_closed', 0)}",
-                f"<b>Review Quality</b><br>Comments: {member_metrics.get('commented_on_others', 0)}<br>Approvals: {member_metrics.get('approved', 0)}<br>Ratio: {member_metrics.get('commented_on_others', 0) / max(member_metrics.get('approved', 1) + member_metrics.get('commented_on_others', 1), 1) * 100:.0f}%",
-                f"<b>Collaboration</b><br>Reviews Given: {member_metrics.get('reviews_given', 0)}<br>Reviews Received: {member_metrics.get('others_commented', 0)}<br>Total: {member_metrics.get('reviews_given', 0) + member_metrics.get('others_commented', 0)}"
+                f"<b>Code Volume</b><br>{member_metrics.get('code_volume', 0):,} lines",
+                f"<b>Commits</b><br>{member_metrics.get('commits', 0)} commits",
+                f"<b>Tickets Closed</b><br>{member_metrics.get('tickets_closed', 0)} tickets",
+                f"<b>Review Quality</b><br>Comments: {member_metrics.get('commented_on_others', 0)}<br>Approvals: {member_metrics.get('approved', 0)}",
+                f"<b>Reviews Given</b><br>{member_metrics.get('reviews_given', 0)} reviews",
+                f"<b>Reviews Received</b><br>{member_metrics.get('others_commented', 0)} reviews"
             ]
 
             fig_radar = go.Figure(data=go.Scatterpolar(
@@ -294,7 +301,7 @@ def render_team_view(agg: MetricsAggregator, team_name: str):
             fig_radar.update_layout(
                 title=dict(text=user, font=dict(size=14)),
                 polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
-                height=350,
+                height=400,
                 showlegend=False,
                 margin=dict(l=50, r=50, t=50, b=50),
                 hoverlabel=dict(namelength=-1)
