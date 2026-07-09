@@ -17,6 +17,8 @@ from productivity_metrics import ProductivityMetrics
 from rest.backstage_rest import BackstageREST
 from util.backstage_cache import BackstageCache
 from util.command_line_helper import CommandLineHelper
+from review_generator import PerformanceReviewGenerator
+from review_exporters import ReviewExporterFactory
 
 
 def init_aggregator(reports_dir: str) -> MetricsAggregator:
@@ -141,6 +143,54 @@ def render_team_view(agg: MetricsAggregator, team_name: str):
 
     st.divider()
 
+    # Export performance review
+    st.markdown("#### Export Performance Review")
+    export_user = st.selectbox(
+        "Select team member for export:",
+        options=[m.get('user') for m in team_metrics],
+        key="team_export_user"
+    )
+
+    if export_user:
+        col_fmt, col_btn = st.columns([1, 1])
+        with col_fmt:
+            export_format = st.selectbox(
+                "Format:",
+                options=ReviewExporterFactory.supported_formats(),
+                key="team_export_format"
+            )
+
+        with col_btn:
+            if st.button("Generate Export", key="team_export_btn"):
+                try:
+                    generator = PerformanceReviewGenerator(agg, export_user, team_name, "Current")
+                    review_data = generator.generate()
+
+                    if 'error' not in review_data:
+                        exporter = ReviewExporterFactory.create(export_format)
+                        exported = exporter.export(review_data)
+
+                        # Prepare download filename
+                        filename = f"{team_name}-{export_user}-review.{export_format}"
+                        if export_format == 'pdf':
+                            filename = filename.replace('.pdf', '.html')
+
+                        st.success(f"✓ Review generated ({export_format})")
+                        st.download_button(
+                            label=f"Download {export_format.upper()}",
+                            data=exported,
+                            file_name=filename,
+                            mime="application/json" if export_format == "json" else
+                                  "text/markdown" if export_format == "markdown" else
+                                  "text/html"
+                        )
+                    else:
+                        st.error(f"Failed to generate review: {review_data.get('error')}")
+                except Exception as e:
+                    st.error(f"Export failed: {e}")
+
+    st.divider()
+
     # Radar chart comparison (productivity aspects)
     st.markdown("#### Team Performance Radar")
     col_radar1, col_radar2 = st.columns(2)
@@ -253,6 +303,59 @@ def render_title_comparison_view(agg: MetricsAggregator):
 
     df_display = pd.DataFrame(display_data)
     st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    # Export performance review
+    st.markdown("#### Export Performance Review")
+    export_user = st.selectbox(
+        "Select person for export:",
+        options=[m.get('user') for m in title_metrics],
+        key="title_export_user"
+    )
+
+    if export_user:
+        # Find team for this user
+        user_match = next((m for m in title_metrics if m.get('user') == export_user), None)
+        if user_match:
+            user_team = user_match.get('team')
+
+            col_fmt, col_btn = st.columns([1, 1])
+            with col_fmt:
+                export_format = st.selectbox(
+                    "Format:",
+                    options=ReviewExporterFactory.supported_formats(),
+                    key="title_export_format"
+                )
+
+            with col_btn:
+                if st.button("Generate Export", key="title_export_btn"):
+                    try:
+                        generator = PerformanceReviewGenerator(agg, export_user, user_team, f"{selected_title} Peer Comparison")
+                        review_data = generator.generate()
+
+                        if 'error' not in review_data:
+                            exporter = ReviewExporterFactory.create(export_format)
+                            exported = exporter.export(review_data)
+
+                            # Prepare download filename
+                            filename = f"{export_user}-review-{selected_title}.{export_format}"
+                            if export_format == 'pdf':
+                                filename = filename.replace('.pdf', '.html')
+
+                            st.success(f"✓ Review generated ({export_format})")
+                            st.download_button(
+                                label=f"Download {export_format.upper()}",
+                                data=exported,
+                                file_name=filename,
+                                mime="application/json" if export_format == "json" else
+                                      "text/markdown" if export_format == "markdown" else
+                                      "text/html"
+                            )
+                        else:
+                            st.error(f"Failed to generate review: {review_data.get('error')}")
+                    except Exception as e:
+                        st.error(f"Export failed: {e}")
 
     st.divider()
 
