@@ -250,7 +250,7 @@ class MetricsAggregator:
             title: Raw title from Backstage
 
         Returns:
-            Normalized title with [C] removed and consistent capitalization
+            Normalized title with [C] removed and title case (Capitalize Each Word)
         """
         if not title:
             return title
@@ -258,10 +258,12 @@ class MetricsAggregator:
         # Remove contractor marker " [C]" and any trailing whitespace
         normalized = title.replace(' [C]', '').strip()
 
-        # Lowercase everything, then capitalize just the first character
+        # Apply title case (capitalize each word)
         if normalized:
-            normalized = normalized.lower()
-            normalized = normalized[0].upper() + normalized[1:] if len(normalized) > 1 else normalized.upper()
+            normalized = normalized.title()
+            # Handle consecutive I's (like III, II, etc.) - make them all caps
+            import re
+            normalized = re.sub(r'\bI+\b', lambda m: m.group(0).upper(), normalized)
 
         return normalized
 
