@@ -100,13 +100,24 @@ class MetricsAggregator:
             }
 
             for _, row in group.iterrows():
-                metrics['pr_added'] += int(row['PR_ADDED']) if pd.notna(row['PR_ADDED']) and str(row['PR_ADDED']).replace('*', '').strip() else 0
-                metrics['pr_removed'] += int(row['PR_REMOVED']) if pd.notna(row['PR_REMOVED']) and str(row['PR_REMOVED']).replace('*', '').strip() else 0
-                metrics['commits'] += int(row['COMMITS']) if pd.notna(row['COMMITS']) else 0
-                metrics['approved'] += int(row['APPROVED']) if pd.notna(row['APPROVED']) else 0
-                metrics['commented_on_others'] += int(row['COMMENTED_ON_OTHERS']) if pd.notna(row['COMMENTED_ON_OTHERS']) else 0
-                metrics['others_commented'] += int(row['OTHERS_COMMENTED']) if pd.notna(row['OTHERS_COMMENTED']) else 0
-                metrics['tickets_closed'] += int(row['TICKETS_CLOSED']) if pd.notna(row['TICKETS_CLOSED']) else 0
+                # Helper to safely parse integers, handling spaces and empty values
+                def safe_int(val, default=0):
+                    if pd.notna(val):
+                        cleaned = str(val).replace('*', '').strip()
+                        if cleaned:
+                            try:
+                                return int(cleaned)
+                            except ValueError:
+                                return default
+                    return default
+
+                metrics['pr_added'] += safe_int(row['PR_ADDED'])
+                metrics['pr_removed'] += safe_int(row['PR_REMOVED'])
+                metrics['commits'] += safe_int(row['COMMITS'])
+                metrics['approved'] += safe_int(row['APPROVED'])
+                metrics['commented_on_others'] += safe_int(row['COMMENTED_ON_OTHERS'])
+                metrics['others_commented'] += safe_int(row['OTHERS_COMMENTED'])
+                metrics['tickets_closed'] += safe_int(row['TICKETS_CLOSED'])
 
                 # Count unique merged PRs
                 if pd.notna(row['PR_STATUS']) and row['PR_STATUS'].upper() == 'MERGED':
