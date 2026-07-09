@@ -230,12 +230,10 @@ class CommandLineHelper:
         if default_value_config_key and self.config_file_manager:
             if self.config_file_manager.contains_key(default_value_config_key):
                 config_value = self.config_file_manager.get_value(default_value_config_key)
-                if config_value:
-                    use_default_value = config_value
-                    # Use existing config value silently (no prompt)
-                    # Only prompt if validation fails or value is missing
-                    if validation_pattern.match(use_default_value):
-                        return use_default_value
+                # Use existing config value silently (even if empty string for optional fields)
+                # Only prompt if validation fails
+                if config_value is not None and validation_pattern.match(str(config_value)):
+                    return config_value
 
         if use_default_value:
             masked = "****" if text_security != TextSecurity.NONE else use_default_value
