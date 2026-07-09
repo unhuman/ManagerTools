@@ -19,10 +19,11 @@ class ProductivityMetrics:
         commits = metrics.get('commits', 0)
         tickets = metrics.get('tickets_closed', 0)
 
-        # Normalize (simple: cap high values)
-        code_score = min(code_vol / 1000, 1.0) * 33  # up to 1000 lines = 33 pts
-        commit_score = min(commits / 20, 1.0) * 33   # up to 20 commits = 33 pts
-        ticket_score = min(tickets / 10, 1.0) * 34   # up to 10 tickets = 34 pts
+        # Normalize based on realistic org thresholds (P50/P75 range)
+        # These should differentiate across your actual team distribution
+        code_score = min(code_vol / 50000, 1.0) * 33  # up to 50k lines = 33 pts
+        commit_score = min(commits / 400, 1.0) * 33   # up to 400 commits = 33 pts
+        ticket_score = min(tickets / 30, 1.0) * 34    # up to 30 tickets = 34 pts
 
         return round(code_score + commit_score + ticket_score, 1)
 
@@ -53,8 +54,9 @@ class ProductivityMetrics:
         reviews = metrics.get('reviews_given', 0)
         engagement = metrics.get('others_commented', 0)
 
-        # Simple: reviews + engagement, normalized
-        collab = min((reviews + engagement) / 20, 1.0) * 100
+        # Normalize: reviews + engagement, with realistic threshold
+        # P50 for active participants is typically 50-100 combined
+        collab = min((reviews + engagement) / 150, 1.0) * 100
 
         return round(collab, 1)
 
