@@ -73,21 +73,20 @@ class JiraREST(RestService):
                                _=str(int(datetime.now(timezone.utc).timestamp() * 1000)))
 
     def get_kanban_cycle(self, team: str, cycle: int, cycles: int, cycle_length: int) -> Any:
-        # Calculate start and end dates
+        # Calculate start and end dates for response formatting
         today = datetime.now().date()
         start_date = today - timedelta(weeks=(cycles - cycle) * cycle_length)
         # Find Monday of that week
         start_date = start_date - timedelta(days=start_date.weekday())
         end_date = start_date + timedelta(days=7 * cycle_length - 1)
 
-        start_date_str = start_date.strftime("%Y-%m-%d")
-        end_date_str = end_date.strftime("%Y-%m-%d")
-
+        # Use Jira date functions for more reliable filtering across all Jira instances
+        # startOfYear() and now() are timezone-safe and don't depend on calculation precision
         jql = (f'"Sprint Team" = "{team}" '
                f'AND issueType NOT IN subTaskIssueTypes() '
-               f'AND ((resolutiondate >= {start_date_str} AND resolutiondate <= {end_date_str}) '
-               f'OR (resolved >= {start_date_str} AND resolved <= {end_date_str}) '
-               f'OR ("Resolved Date" >= {start_date_str} AND "Resolved Date" <= {end_date_str}))')
+               f'AND ((resolutiondate >= startOfYear() AND resolutiondate <= now()) '
+               f'OR (resolved >= startOfYear() AND resolved <= now()) '
+               f'OR ("Resolved Date" >= startOfYear() AND "Resolved Date" <= now()))')
 
         response = self.jql_summary_query(jql)
 
