@@ -3,6 +3,13 @@
 import json
 from typing import Dict, Any, List
 from abc import ABC, abstractmethod
+from io import BytesIO
+
+try:
+    from PIL import Image, ImageDraw, ImageFont
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
 
 
 class ReviewExporter(ABC):
@@ -310,6 +317,120 @@ class PDFExporter(ReviewExporter):
         return "\n        ".join(items)
 
 
+class PNGExporter(ReviewExporter):
+    """Export review data as PNG image."""
+
+    def export(self, review_data: Dict[str, Any]) -> bytes:
+        """Export to PNG image (returns binary data)."""
+        if not HAS_PIL:
+            raise ImportError("Pillow is required for PNG export. Install with: pip install Pillow")
+
+        person = review_data.get('person', {})
+        name = person.get('name', 'Unknown')
+        team = person.get('team', 'Unknown')
+        role = person.get('role', 'Unknown')
+        metrics = review_data.get('metrics', {})
+
+        # Create image
+        width, height = 800, 1000
+        img = Image.new('RGB', (width, height), color='white')
+        draw = ImageDraw.Draw(img)
+
+        # Try to use system fonts, fall back to default
+        try:
+            title_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 24)
+            header_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 14)
+            text_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 12)
+            small_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 10)
+        except (OSError, IOError):
+            # Fallback for systems without Helvetica
+            title_font = ImageFont.load_default()
+            header_font = ImageFont.load_default()
+            text_font = ImageFont.load_default()
+            small_font = ImageFont.load_default()
+
+        y = 20
+        margin = 20
+
+        # Title
+        draw.text((margin, y), f"Performance Review", font=title_font, fill='#0066cc')
+        y += 40
+
+        # Person info
+        draw.text((margin, y), f"Name: {name}", font=header_font, fill='#333')
+        y += 25
+        draw.text((margin, y), f"Team: {team}", font=header_font, fill='#333')
+        y += 25
+        draw.text((margin, y), f"Role: {role}", font=header_font, fill='#333')
+        y += 35
+
+        # Divider
+        draw.line([(margin, y), (width - margin, y)], fill='#ddd', width=2)
+        y += 20
+
+        # Key metrics
+        draw.text((margin, y), "Key Metrics", font=header_font, fill='#0066cc')
+        y += 25
+
+        metrics_data = [
+            ('Productivity Score', f"{metrics.get('productivity_score', 0):.0f}/100"),
+            ('Code Volume', f"{metrics.get('code_volume', 0):,} lines"),
+            ('Commits', f"{metrics.get('commits', 0)}"),
+            ('PRs Merged', f"{metrics.get('prs_merged', 0)}"),
+            ('Reviews Given', f"{metrics.get('reviews_given', 0)}"),
+        ]
+
+        for label, value in metrics_data:
+            draw.text((margin + 10, y), f"{label}:", font=text_font, fill='#333')
+            draw.text((width - margin - 150, y), value, font=text_font, fill='#0066cc')
+            y += 22
+
+        y += 15
+
+        # Divider
+        draw.line([(margin, y), (width - margin, y)], fill='#ddd', width=2)
+        y += 20
+
+        # Strengths
+        draw.text((margin, y), "Strengths", font=header_font, fill='#00aa00')
+        y += 25
+
+        strengths = review_data.get('strengths', [])
+        for strength in strengths[:3]:  # Max 3 to fit on page
+            draw.text((margin + 10, y), f"• {strength[:50]}", font=small_font, fill='#333')
+            y += 18
+
+        y += 10
+
+        # Risks
+        draw.text((margin, y), "Risks & Concerns", font=header_font, fill='#cc0000')
+        y += 25
+
+        risks = review_data.get('risks', [])
+        for risk in risks[:2]:  # Max 2 to fit
+            draw.text((margin + 10, y), f"⚠ {risk[:50]}", font=small_font, fill='#333')
+            y += 18
+
+        y += 15
+
+        # Divider
+        draw.line([(margin, y), (width - margin, y)], fill='#ddd', width=2)
+        y += 20
+
+        # Top recommendation
+        recommendations = review_data.get('recommendations', [])
+        if recommendations:
+            draw.text((margin, y), "Top Recommendation", font=header_font, fill='#0066cc')
+            y += 25
+            rec_text = recommendations[0][:70]
+            draw.text((margin + 10, y), f"→ {rec_text}", font=text_font, fill='#333')
+
+        # Convert to bytes
+        output = BytesIO()
+        img.save(output, format='PNG')
+        return output.getvalue()
+
+
 class ReviewExporterFactory:
     """Factory for creating review exporters."""
 
@@ -318,6 +439,10 @@ class ReviewExporterFactory:
         'markdown': MarkdownExporter,
         'pdf': PDFExporter,
     }
+
+    # Add PNG if Pillow is available
+    if HAS_PIL:
+        _exporters['png'] = PNGExporter
 
     @classmethod
     def create(cls, format_type: str) -> ReviewExporter:

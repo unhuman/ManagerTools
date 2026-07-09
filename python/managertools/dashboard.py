@@ -170,19 +170,26 @@ def render_team_view(agg: MetricsAggregator, team_name: str):
                         exporter = ReviewExporterFactory.create(export_format)
                         exported = exporter.export(review_data)
 
-                        # Prepare download filename
+                        # Prepare download filename and MIME type
                         filename = f"{team_name}-{export_user}-review.{export_format}"
                         if export_format == 'pdf':
                             filename = filename.replace('.pdf', '.html')
+                            mime_type = "text/html"
+                        elif export_format == 'json':
+                            mime_type = "application/json"
+                        elif export_format == 'markdown':
+                            mime_type = "text/markdown"
+                        elif export_format == 'png':
+                            mime_type = "image/png"
+                        else:
+                            mime_type = "application/octet-stream"
 
                         st.success(f"✓ Review generated ({export_format})")
                         st.download_button(
                             label=f"Download {export_format.upper()}",
                             data=exported,
                             file_name=filename,
-                            mime="application/json" if export_format == "json" else
-                                  "text/markdown" if export_format == "markdown" else
-                                  "text/html"
+                            mime=mime_type
                         )
                     else:
                         st.error(f"Failed to generate review: {review_data.get('error')}")
@@ -338,19 +345,26 @@ def render_title_comparison_view(agg: MetricsAggregator):
                             exporter = ReviewExporterFactory.create(export_format)
                             exported = exporter.export(review_data)
 
-                            # Prepare download filename
+                            # Prepare download filename and MIME type
                             filename = f"{export_user}-review-{selected_title}.{export_format}"
                             if export_format == 'pdf':
                                 filename = filename.replace('.pdf', '.html')
+                                mime_type = "text/html"
+                            elif export_format == 'json':
+                                mime_type = "application/json"
+                            elif export_format == 'markdown':
+                                mime_type = "text/markdown"
+                            elif export_format == 'png':
+                                mime_type = "image/png"
+                            else:
+                                mime_type = "application/octet-stream"
 
                             st.success(f"✓ Review generated ({export_format})")
                             st.download_button(
                                 label=f"Download {export_format.upper()}",
                                 data=exported,
                                 file_name=filename,
-                                mime="application/json" if export_format == "json" else
-                                      "text/markdown" if export_format == "markdown" else
-                                      "text/html"
+                                mime=mime_type
                             )
                         else:
                             st.error(f"Failed to generate review: {review_data.get('error')}")
