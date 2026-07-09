@@ -27,7 +27,9 @@ def init_aggregator(reports_dir: str) -> MetricsAggregator:
         # Try to initialize Backstage client for role data (only if already configured, no prompting)
         backstage_rest = None
         try:
-            config_helper = CommandLineHelper(".managerTools.cfg", quiet_mode=True)
+            # Suppress prompts by setting quiet mode
+            CommandLineHelper.set_quiet_mode_no_prompts()
+            config_helper = CommandLineHelper(".managerTools.cfg")
             # Check if Backstage is configured WITHOUT prompting
             config_mgr = config_helper.get_config_file_manager()
             if config_mgr and config_mgr.contains_key("backstageServer"):
