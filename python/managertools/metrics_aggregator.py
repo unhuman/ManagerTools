@@ -311,7 +311,7 @@ class MetricsAggregator:
         matching_users = set()
         for (team, user), role in self.role_map.items():
             if role.lower() == title.lower():
-                matching_users.add((team, user))
+                matching_users.add((team.casefold(), user))
 
         if not matching_users:
             return []
