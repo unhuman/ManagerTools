@@ -34,9 +34,12 @@ def init_aggregator(reports_dir: str) -> MetricsAggregator:
                 backstage_server = config_mgr.get_value("backstageServer")
                 backstage_auth = config_mgr.get_value("backstageAuth") if config_mgr.contains_key("backstageAuth") else ""
                 backstage_rest = BackstageREST(backstage_server, backstage_auth)
+                print(f"[DEBUG] Backstage initialized: {backstage_server}")
+            else:
+                print("[DEBUG] Backstage not configured in config file")
         except Exception as e:
             # Silent failure - Backstage is optional
-            pass
+            print(f"[DEBUG] Backstage initialization failed: {e}")
 
         st.session_state.aggregator = MetricsAggregator(reports_dir, backstage_rest)
     return st.session_state.aggregator
