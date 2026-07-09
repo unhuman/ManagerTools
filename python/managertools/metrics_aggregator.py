@@ -245,20 +245,28 @@ class MetricsAggregator:
     def _load_roles(self) -> None:
         """Load team member roles from Backstage if available (cached with TTL)."""
         if not self.backstage_rest:
+            print("[DEBUG] Backstage REST client not initialized")
             return
 
         from .util.backstage_cache import BackstageCache
         cache = BackstageCache()
+        print(f"[DEBUG] Starting role loading for {len(self.teams)} teams")
 
         for team in self.teams.keys():
             try:
                 # Check cache first
                 roster = cache.get(team)
                 if roster is None:
+                    print(f"[DEBUG] No cache for {team}, fetching from Backstage...")
                     # Fetch from Backstage and cache
                     roster = self.backstage_rest.get_team_roster(team)
                     if roster:
+                        print(f"[DEBUG] Got {len(roster)} members for {team}, caching...")
                         cache.put(team, roster)
+                    else:
+                        print(f"[DEBUG] No roster found for {team}")
+                else:
+                    print(f"[DEBUG] Using cached roster for {team} ({len(roster)} members)")
 
                 for member in roster or []:
                     user_ref = member.get('user_ref', '').casefold()
@@ -269,6 +277,8 @@ class MetricsAggregator:
                         self.role_map[(team, user_ref)] = role
             except Exception as e:
                 print(f"[WARN] Failed to load roles for team {team}: {e}", file=sys.stderr)
+
+        print(f"[DEBUG] Role loading complete: {len(self.role_map)} roles loaded")
 
     def get_role(self, team: str, user: str) -> Optional[str]:
         """Get a user's role/title by team and username.
