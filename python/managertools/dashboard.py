@@ -222,46 +222,55 @@ def render_team_view(agg: MetricsAggregator, team_name: str):
 
     st.divider()
 
-    # Radar chart comparison (productivity aspects)
-    st.markdown("#### Team Performance Radar")
-    col_radar1, col_radar2 = st.columns(2)
+    # Radar chart grid for all team members
+    st.markdown("#### Team Performance Radar (All Members)")
 
-    with col_radar1:
-        selected_for_radar = st.selectbox(
-            "Select member to compare:",
-            options=[m.get('user') for m in team_metrics]
+    col_sort = st.columns(1)[0]
+    with col_sort:
+        sort_by = st.selectbox(
+            "Sort by:",
+            options=['Productivity Score', 'Code Volume', 'Reviews Given', 'Collaboration'],
+            key="radar_sort"
         )
 
-    with col_radar2:
-        st.empty()
+    # Sort team_metrics based on selection
+    if sort_by == 'Code Volume':
+        sorted_metrics = sorted(team_metrics, key=lambda x: x.get('code_volume', 0), reverse=True)
+    elif sort_by == 'Reviews Given':
+        sorted_metrics = sorted(team_metrics, key=lambda x: x.get('reviews_given', 0), reverse=True)
+    elif sort_by == 'Collaboration':
+        sorted_metrics = sorted(team_metrics, key=lambda x: ProductivityMetrics.calculate_collaboration_score(x), reverse=True)
+    else:  # Productivity Score (default)
+        sorted_metrics = sorted(team_metrics, key=lambda x: ProductivityMetrics.calculate_productivity_score(x), reverse=True)
 
-    if selected_for_radar:
-        selected_metrics = [m for m in team_metrics if m.get('user') == selected_for_radar][0]
+    # Display radars in a 2-column grid
+    cols = st.columns(2)
+    for idx, member_metrics in enumerate(sorted_metrics):
+        with cols[idx % 2]:
+            user = member_metrics.get('user')
 
-        categories = ['Productivity', 'Review Quality', 'Collaboration']
-        values = [
-            ProductivityMetrics.calculate_productivity_score(selected_metrics),
-            ProductivityMetrics.calculate_review_quality_score(selected_metrics),
-            ProductivityMetrics.calculate_collaboration_score(selected_metrics),
-        ]
+            categories = ['Productivity', 'Review Quality', 'Collaboration']
+            values = [
+                ProductivityMetrics.calculate_productivity_score(member_metrics),
+                ProductivityMetrics.calculate_review_quality_score(member_metrics),
+                ProductivityMetrics.calculate_collaboration_score(member_metrics),
+            ]
 
-        # Debug: show the actual values and underlying metrics
-        st.write(f"**Debug - {selected_for_radar}:** Productivity={values[0]}, Review Quality={values[1]}, Collaboration={values[2]}")
-        st.write(f"  Underlying: code_volume={selected_metrics.get('code_volume', 0)}, commits={selected_metrics.get('commits', 0)}, reviews_given={selected_metrics.get('reviews_given', 0)}, others_commented={selected_metrics.get('others_commented', 0)}")
+            fig_radar = go.Figure(data=go.Scatterpolar(
+                r=values,
+                theta=categories,
+                fill='toself',
+                name=user
+            ))
 
-        fig_radar = go.Figure(data=go.Scatterpolar(
-            r=values,
-            theta=categories,
-            fill='toself',
-            name=selected_for_radar
-        ))
-
-        fig_radar.update_layout(
-            polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
-            height=400,
-            showlegend=False
-        )
-        st.plotly_chart(fig_radar, width='stretch')
+            fig_radar.update_layout(
+                title=dict(text=user, font=dict(size=14)),
+                polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
+                height=350,
+                showlegend=False,
+                margin=dict(l=50, r=50, t=50, b=50)
+            )
+            st.plotly_chart(fig_radar, use_container_width=True)
 
 
 def render_title_comparison_view(agg: MetricsAggregator):
