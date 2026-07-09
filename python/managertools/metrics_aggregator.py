@@ -243,14 +243,24 @@ class MetricsAggregator:
         return sorted(sprints)
 
     def _load_roles(self) -> None:
-        """Load team member roles from Backstage if available."""
+        """Load team member roles from Backstage if available (cached with TTL)."""
         if not self.backstage_rest:
             return
 
+        from .util.backstage_cache import BackstageCache
+        cache = BackstageCache()
+
         for team in self.teams.keys():
             try:
-                roster = self.backstage_rest.get_team_roster(team)
-                for member in roster:
+                # Check cache first
+                roster = cache.get(team)
+                if roster is None:
+                    # Fetch from Backstage and cache
+                    roster = self.backstage_rest.get_team_roster(team)
+                    if roster:
+                        cache.put(team, roster)
+
+                for member in roster or []:
                     user_ref = member.get('user_ref', '').casefold()
                     raw_entity = member.get('raw_entity', {})
                     role = raw_entity.get('spec', {}).get('profile', {}).get('role')
