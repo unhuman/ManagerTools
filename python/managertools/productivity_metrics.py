@@ -55,8 +55,8 @@ class ProductivityMetrics:
         engagement = metrics.get('others_commented', 0)
 
         # Normalize: reviews + engagement, with realistic threshold
-        # P50 for active participants is typically 50-100 combined
-        collab = min((reviews + engagement) / 150, 1.0) * 100
+        # Range typically 50-400+ combined; use 400 to differentiate
+        collab = min((reviews + engagement) / 400, 1.0) * 100
 
         return round(collab, 1)
 
