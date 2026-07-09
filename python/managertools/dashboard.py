@@ -225,6 +225,25 @@ def render_team_view(agg: MetricsAggregator, team_name: str):
     # Radar chart grid for all team members
     st.markdown("#### Team Performance Radar (All Members)")
 
+    # Add legend explaining what each axis represents
+    with st.expander("📊 What do these metrics mean?", expanded=False):
+        st.markdown("""
+        **Productivity Score (0-100)** — Composite measure of output volume:
+        - Code Volume: Lines added + removed (max 50k = 33 pts)
+        - Commits: Number of commits authored (max 400 = 33 pts)
+        - Tickets Closed: Jira issues resolved (max 30 = 34 pts)
+
+        **Review Quality Score (0-100)** — Depth of code review engagement:
+        - Measures ratio of detailed reviews (with comments) vs. simple approvals
+        - High score = thorough, feedback-oriented reviews
+        - Low score = approval-only or minimal engagement
+
+        **Collaboration Score (0-100)** — Team engagement breadth:
+        - Reviews Given: How many PRs this person reviewed
+        - Engagement Received: How many others reviewed their work
+        - Combined normalized to 400 (so 200+ interactions = 50/100)
+        """)
+
     col_sort = st.columns(1)[0]
     with col_sort:
         sort_by = st.selectbox(
@@ -256,11 +275,20 @@ def render_team_view(agg: MetricsAggregator, team_name: str):
                 ProductivityMetrics.calculate_collaboration_score(member_metrics),
             ]
 
+            # Create hover text with underlying metrics
+            hover_text = [
+                f"<b>Productivity</b><br>Code: {member_metrics.get('code_volume', 0):,} lines<br>Commits: {member_metrics.get('commits', 0)}<br>Tickets: {member_metrics.get('tickets_closed', 0)}",
+                f"<b>Review Quality</b><br>Comments: {member_metrics.get('commented_on_others', 0)}<br>Approvals: {member_metrics.get('approved', 0)}<br>Ratio: {member_metrics.get('commented_on_others', 0) / max(member_metrics.get('approved', 1) + member_metrics.get('commented_on_others', 1), 1) * 100:.0f}%",
+                f"<b>Collaboration</b><br>Reviews Given: {member_metrics.get('reviews_given', 0)}<br>Reviews Received: {member_metrics.get('others_commented', 0)}<br>Total: {member_metrics.get('reviews_given', 0) + member_metrics.get('others_commented', 0)}"
+            ]
+
             fig_radar = go.Figure(data=go.Scatterpolar(
                 r=values,
                 theta=categories,
                 fill='toself',
-                name=user
+                name=user,
+                hovertext=hover_text,
+                hoverinfo='text'
             ))
 
             fig_radar.update_layout(
@@ -268,7 +296,8 @@ def render_team_view(agg: MetricsAggregator, team_name: str):
                 polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
                 height=350,
                 showlegend=False,
-                margin=dict(l=50, r=50, t=50, b=50)
+                margin=dict(l=50, r=50, t=50, b=50),
+                hoverlabel=dict(namelength=-1)
             )
             st.plotly_chart(fig_radar, use_container_width=True)
 
