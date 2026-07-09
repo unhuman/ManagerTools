@@ -258,11 +258,15 @@ class MetricsAggregator:
         # Remove contractor marker " [C]" and any trailing whitespace
         normalized = title.replace(' [C]', '').strip()
 
+        # Consolidate all Intern titles to just "Intern"
+        import re
+        if re.search(r'\bintern\b', normalized, re.IGNORECASE):
+            return "Intern"
+
         # Apply title case (capitalize each word)
         if normalized:
             normalized = normalized.title()
             # Handle consecutive I's (like III, II, etc.) - convert "Ii+" to all caps
-            import re
             # Match capital I followed by one or more lowercase i's and make all uppercase
             normalized = re.sub(r'Ii+', lambda m: m.group(0).upper(), normalized)
 
