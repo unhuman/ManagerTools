@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
-"""Interactive Streamlit dashboard for team metrics and productivity analysis."""
+"""Interactive Streamlit dashboard for team metrics, productivity analysis, and peer comparison.
+
+Features:
+- Team productivity: View metrics for individual team members (code volume, reviews, etc.)
+- Organization overview: Aggregate metrics across all teams
+- Compare by title: View same-title peer metrics across the organization (requires Backstage integration)
+- Performance reviews: Generate and export team member performance reviews
+
+Requires backstageServer config for role/title data (optional; dashboard works without it but
+"Compare by Title" view won't be available).
+"""
 
 import streamlit as st
 import pandas as pd
