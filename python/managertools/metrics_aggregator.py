@@ -248,7 +248,7 @@ class MetricsAggregator:
             print("[DEBUG] Backstage REST client not initialized")
             return
 
-        from .util.backstage_cache import BackstageCache
+        from util.backstage_cache import BackstageCache
         cache = BackstageCache()
         print(f"[DEBUG] Starting role loading for {len(self.teams)} teams")
 
