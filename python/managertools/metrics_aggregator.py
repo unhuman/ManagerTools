@@ -292,6 +292,31 @@ class MetricsAggregator:
         """
         return self.role_map.get((team, user.casefold()))
 
+    def get_representable_titles(self) -> List[str]:
+        """Get titles that have at least one user with data in loaded reports.
+
+        Returns:
+            Sorted list of titles with actual representation in the data
+        """
+        if not self.role_map or not self.data:
+            return []
+
+        # Build set of (team, user) pairs that exist in loaded data
+        loaded_users = set()
+        for record in self.data:
+            team = record.get('team', '').casefold()
+            user = record.get('user', '').casefold()
+            if team and user:
+                loaded_users.add((team, user))
+
+        # Find titles where at least one user has loaded data
+        representable_titles = set()
+        for (team, user), title in self.role_map.items():
+            if (team, user) in loaded_users:
+                representable_titles.add(title)
+
+        return sorted(representable_titles)
+
     def get_users_by_title(self, title: str, start_date: Optional[str] = None,
                          end_date: Optional[str] = None) -> List[Dict]:
         """Get aggregated metrics for all users with a specific title/role.

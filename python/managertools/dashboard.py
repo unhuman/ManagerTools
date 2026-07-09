@@ -272,16 +272,16 @@ def render_title_comparison_view(agg: MetricsAggregator):
         st.info("Role data not available. Ensure Backstage is configured and backstage_inspect found title fields.")
         return
 
-    # Get unique titles across all teams/users
-    unique_titles = sorted(set(agg.role_map.values()))
-    if not unique_titles:
-        st.warning("No roles found in Backstage data")
+    # Get titles that have representation in loaded reports (filter out titles with no users in data)
+    representable_titles = agg.get_representable_titles()
+    if not representable_titles:
+        st.warning("No roles found in loaded team data. Ensure sprint reports are loaded for teams with Backstage data.")
         return
 
     # Let user pick a title
     selected_title = st.selectbox(
         "Select Role/Title:",
-        options=unique_titles
+        options=representable_titles
     )
 
     if not selected_title:
