@@ -202,6 +202,16 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
                                 all_issues.append(issue)
 
                         sprint_name = data.get('sprint', {}).get('name', '')
+
+                        # CRITICAL: Ensure sprint_name is never empty to prevent rows from being indexed under empty SPRINT
+                        if not sprint_name or not sprint_name.strip():
+                            sprint_id = data.get('sprint', {}).get('id')
+                            if sprint_id:
+                                sprint_name = f"Sprint {sprint_id}"
+                            else:
+                                print(f"[WARNING] Sprint name is empty and no sprint ID available; skipping", file=sys.stderr)
+                                continue
+
                         sprint_state = data.get('sprint', {}).get('state', '').lower()
                         is_completed = sprint_state == 'closed'
                         start_date = self.clean_date(data.get('sprint', {}).get('startDate', ''))
