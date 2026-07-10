@@ -66,7 +66,27 @@ class FlexiDB:
 
     def find_rows(self, column_filters: Collection[FlexiDBQueryColumn], allow_multiple: bool) -> List[FlexiDBRow]:
         with self._lock:
-            return self._find_rows(column_filters, allow_multiple)
+            rows = self._find_rows(column_filters, allow_multiple)
+            # Validate that returned rows actually match all filters
+            for row in rows:
+                for column_filter in column_filters:
+                    col_name = column_filter.get_name()
+                    filter_value = column_filter.get_match_value()
+                    row_value = row.get(col_name)
+
+                    # Normalize for comparison
+                    if self.case_insensitive_index and isinstance(filter_value, str) and isinstance(row_value, str):
+                        filter_value_norm = filter_value.lower()
+                        row_value_norm = row_value.lower()
+                    else:
+                        filter_value_norm = filter_value
+                        row_value_norm = row_value
+
+                    if filter_value_norm != row_value_norm:
+                        raise UnexpectedSituationException(
+                            f"Row does not match filter: {col_name}={filter_value} but row has {row_value}"
+                        )
+            return rows
 
     def increment_field(self, column_filters: Collection[FlexiDBQueryColumn], increment_field: str, increment: int = 1) -> int:
         with self._lock:
@@ -152,6 +172,9 @@ class FlexiDB:
             raise InvalidRequestException(f"Found {found_count} of {self.indexed_column_count} required filters")
 
         found_rows = None
+        # DEBUG: Log query if SPRINT filter is present
+        debug_sprint_query = any(cf.get_name() == 'SPRINT' for cf in column_filters)
+
         for column_filter in column_filters:
             desired_column_name = column_filter.get_name()
             desired_column_value = column_filter.get_match_value()
@@ -159,11 +182,19 @@ class FlexiDB:
             index_key = self._create_flexidb_index_key(desired_column_name, desired_column_value)
             filter_rows = self.indexes.get(index_key, [])
 
+            if debug_sprint_query and desired_column_name == 'SPRINT':
+                import sys
+                print(f"[DEBUG] Query {desired_column_name}={desired_column_value} found {len(filter_rows)} rows in index", file=sys.stderr)
+
             if found_rows is None:
                 found_rows = list(filter_rows)
             else:
                 filter_set = set(filter_rows)
                 found_rows = [r for r in found_rows if r in filter_set]
+
+            if debug_sprint_query:
+                import sys
+                print(f"[DEBUG] After {desired_column_name} filter: {len(found_rows)} rows", file=sys.stderr)
 
             if not found_rows:
                 break
@@ -187,6 +218,9 @@ class FlexiDB:
             return found_rows[0]
 
         row = FlexiDBRow()
+        # DEBUG: Track which indexes this row is added to
+        index_keys_added = []
+
         for column_filter in column_filters:
             column_name = column_filter.get_name()
             match_value = column_filter.get_match_value()
@@ -194,6 +228,7 @@ class FlexiDB:
             row[column_name] = match_value
 
             index_key = self._create_flexidb_index_key(column_name, match_value)
+            index_keys_added.append(f"{column_name}={match_value}")
 
             if index_key not in self.indexes:
                 self.indexes[index_key] = []
@@ -201,6 +236,11 @@ class FlexiDB:
             self.indexes[index_key].append(row)
 
         self.database.append(row)
+
+        # DEBUG: Log row creation if SPRINT is in the filters
+        if any('SPRINT' in str(ik) for ik in index_keys_added):
+            import sys
+            print(f"[DEBUG] Created row with indexes: {index_keys_added}", file=sys.stderr)
 
         return row
 

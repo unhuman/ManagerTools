@@ -493,6 +493,18 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         cache hit needs no Jira/SCM calls.
         """
         db_sprint_name = sprint_simulation.get('name', '')
+
+        # CRITICAL: Ensure sprint_name is never empty to prevent rows from being indexed under empty SPRINT
+        if not db_sprint_name or not db_sprint_name.strip():
+            # For SCRUM mode, try to use sprint ID; for Kanban, generate from dates
+            if mode == Mode.SCRUM and 'id' in sprint_simulation:
+                db_sprint_name = f"Sprint {sprint_simulation['id']}"
+            elif 'startDate' in sprint_simulation:
+                db_sprint_name = f"{sprint_simulation.get('startDate', 'Unknown')}-{sprint_simulation.get('endDate', 'Unknown')}"
+            else:
+                print(f"[WARNING] Sprint name is empty and cannot be recovered from sprint_simulation: {sprint_simulation}", file=sys.stderr)
+                return  # Skip this sprint rather than create rows with empty SPRINT
+
         required = self._sources_for(self.work_source)
         debug_print(f"Processing {db_sprint_name}: workSource={self.work_source.value}, "
                     f"required={sorted(required)}, cacheable={cacheable}")
@@ -651,8 +663,14 @@ class SprintReportTeamAnalysis(AbstractSprintReport):
         serialized_rows = cached_data.get('rows', [])
 
         for serialized_row in serialized_rows:
+            # Ensure SPRINT value is present and valid
+            sprint_value = serialized_row.get(DBIndexData.SPRINT.name)
+            if not sprint_value:
+                print(f"[WARNING] Skipping row with missing SPRINT value: {serialized_row.get(DBIndexData.TICKET.name)}", file=sys.stderr)
+                continue
+
             index_lookup = [
-                FlexiDBQueryColumn(DBIndexData.SPRINT.name, serialized_row.get(DBIndexData.SPRINT.name)),
+                FlexiDBQueryColumn(DBIndexData.SPRINT.name, sprint_value),
                 FlexiDBQueryColumn(DBIndexData.TICKET.name, serialized_row.get(DBIndexData.TICKET.name)),
                 FlexiDBQueryColumn(DBIndexData.PR_ID.name, serialized_row.get(DBIndexData.PR_ID.name)),
                 FlexiDBQueryColumn(DBIndexData.PR_STATUS.name, serialized_row.get(DBIndexData.PR_STATUS.name, '')),
