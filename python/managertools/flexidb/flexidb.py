@@ -172,8 +172,6 @@ class FlexiDB:
             raise InvalidRequestException(f"Found {found_count} of {self.indexed_column_count} required filters")
 
         found_rows = None
-        # DEBUG: Log query if SPRINT filter is present
-        debug_sprint_query = any(cf.get_name() == 'SPRINT' for cf in column_filters)
 
         for column_filter in column_filters:
             desired_column_name = column_filter.get_name()
@@ -182,19 +180,11 @@ class FlexiDB:
             index_key = self._create_flexidb_index_key(desired_column_name, desired_column_value)
             filter_rows = self.indexes.get(index_key, [])
 
-            if debug_sprint_query and desired_column_name == 'SPRINT':
-                import sys
-                print(f"[DEBUG] Query {desired_column_name}={desired_column_value} found {len(filter_rows)} rows in index", file=sys.stderr)
-
             if found_rows is None:
                 found_rows = list(filter_rows)
             else:
                 filter_set = set(filter_rows)
                 found_rows = [r for r in found_rows if r in filter_set]
-
-            if debug_sprint_query:
-                import sys
-                print(f"[DEBUG] After {desired_column_name} filter: {len(found_rows)} rows", file=sys.stderr)
 
             if not found_rows:
                 break
@@ -218,8 +208,6 @@ class FlexiDB:
             return found_rows[0]
 
         row = FlexiDBRow()
-        # DEBUG: Track which indexes this row is added to
-        index_keys_added = []
 
         for column_filter in column_filters:
             column_name = column_filter.get_name()
@@ -228,7 +216,6 @@ class FlexiDB:
             row[column_name] = match_value
 
             index_key = self._create_flexidb_index_key(column_name, match_value)
-            index_keys_added.append(f"{column_name}={match_value}")
 
             if index_key not in self.indexes:
                 self.indexes[index_key] = []
@@ -236,11 +223,6 @@ class FlexiDB:
             self.indexes[index_key].append(row)
 
         self.database.append(row)
-
-        # DEBUG: Log row creation if SPRINT is in the filters
-        if any('SPRINT' in str(ik) for ik in index_keys_added):
-            import sys
-            print(f"[DEBUG] Created row with indexes: {index_keys_added}", file=sys.stderr)
 
         return row
 
