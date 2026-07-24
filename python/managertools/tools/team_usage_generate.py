@@ -153,6 +153,28 @@ def query_datadog(config_mgr, start_ms, end_ms):
                     req = urllib.request.Request(url, headers=headers)
                     with urllib.request.urlopen(req, timeout=30) as response:
                         data = json.loads(response.read().decode('utf-8'))
+
+                        # Check rate limit headers
+                        remaining = response.headers.get('X-RateLimit-Remaining')
+                        limit = response.headers.get('X-RateLimit-Limit')
+                        reset = response.headers.get('X-RateLimit-Reset')
+
+                        if remaining and limit:
+                            remaining_int = int(remaining)
+                            limit_int = int(limit)
+
+                            # If we're running low on requests, sleep until reset
+                            if remaining_int < 5:
+                                reset_int = int(reset) if reset else None
+                                if reset_int:
+                                    wait_until_reset = reset_int - int(time.time())
+                                    if wait_until_reset > 0:
+                                        print(f"\n⏱ Rate limit approaching ({remaining_int}/{limit_int} remaining), sleeping {wait_until_reset}s until reset...", file=sys.stderr, flush=True)
+                                        time.sleep(wait_until_reset + 1)  # +1 to be safe
+                            elif remaining_int < 50:
+                                # Show warning if getting low
+                                print(f" [{remaining_int}/{limit_int} requests remaining]", file=sys.stderr, end='', flush=True)
+
                 except (urllib.error.URLError, ConnectionResetError, BrokenPipeError) as e:
                     retry_count += 1
                     if retry_count < max_retries:
