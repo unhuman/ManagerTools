@@ -144,8 +144,20 @@ def query_datadog(config_mgr, start_ms, end_ms, resume_id=None):
                     cursor = checkpoint.get('cursor')
                     page = checkpoint.get('page', 0)
                     total_logs = checkpoint.get('total_logs', 0)
-                    print(f"\n✓ Resuming from checkpoint: Page {page}, Total: {total_logs}", file=sys.stderr, flush=True)
-            except:
+
+                    # Restore accumulated usage data
+                    saved_usage = checkpoint.get('usage', {})
+                    for key_str, data in saved_usage.items():
+                        email, model = key_str.split('|', 1)
+                        usage_by_email_model[(email, model)] = {
+                            'cost': data['cost'],
+                            'requests': data['requests'],
+                            'sessions': set(data['sessions'])
+                        }
+
+                    print(f"\n✓ Resuming from checkpoint: Page {page}, Total: {total_logs}, Recovered {len(usage_by_email_model)} user/model pairs", file=sys.stderr, flush=True)
+            except Exception as e:
+                print(f"\n⚠ Failed to load checkpoint: {e}", file=sys.stderr)
                 pass
 
     try:
@@ -257,7 +269,15 @@ def query_datadog(config_mgr, start_ms, end_ms, resume_id=None):
                 checkpoint_data = {
                     'page': page,
                     'cursor': next_cursor,
-                    'total_logs': total_logs
+                    'total_logs': total_logs,
+                    'usage': {
+                        f"{email}|{model}": {
+                            'cost': usage_data['cost'],
+                            'requests': usage_data['requests'],
+                            'sessions': list(usage_data['sessions'])
+                        }
+                        for (email, model), usage_data in usage_by_email_model.items()
+                    }
                 }
                 try:
                     with open(checkpoint_file, 'w') as f:
