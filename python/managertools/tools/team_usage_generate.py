@@ -184,48 +184,48 @@ def query_datadog(config_mgr, start_ms, end_ms):
             if data is None:
                 break
 
-                if not data.get('data'):
-                    break
+            if not data.get('data'):
+                break
 
-                logs_in_page = len(data['data'])
-                total_logs += logs_in_page
+            logs_in_page = len(data['data'])
+            total_logs += logs_in_page
 
-                print(f"\rPage {page}: Fetched {logs_in_page} log entries (total: {total_logs})", file=sys.stderr, end='', flush=True)
+            print(f"\rPage {page}: Fetched {logs_in_page} log entries (total: {total_logs})", file=sys.stderr, end='', flush=True)
 
-                # Process logs
-                for log in data['data']:
-                    attrs = log.get('attributes', {}).get('attributes', {})
+            # Process logs
+            for log in data['data']:
+                attrs = log.get('attributes', {}).get('attributes', {})
 
-                    # Extract email from user object
-                    user = attrs.get('user', {})
-                    email = (user.get('normalized_email') or user.get('email') or '').lower()
+                # Extract email from user object
+                user = attrs.get('user', {})
+                email = (user.get('normalized_email') or user.get('email') or '').lower()
 
-                    # Extract model and cost
-                    model = attrs.get('model', '')
-                    cost = float(attrs.get('cost_usd', 0) or 0)
+                # Extract model and cost
+                model = attrs.get('model', '')
+                cost = float(attrs.get('cost_usd', 0) or 0)
 
-                    # Extract session ID
-                    session_id = attrs.get('session', {}).get('id', '')
+                # Extract session ID
+                session_id = attrs.get('session', {}).get('id', '')
 
-                    if email and model:
-                        key = (email, model)
-                        if key not in usage_by_email_model:
-                            usage_by_email_model[key] = {
-                                'cost': 0,
-                                'requests': 0,
-                                'sessions': set()
-                            }
+                if email and model:
+                    key = (email, model)
+                    if key not in usage_by_email_model:
+                        usage_by_email_model[key] = {
+                            'cost': 0,
+                            'requests': 0,
+                            'sessions': set()
+                        }
 
-                        usage_by_email_model[key]['cost'] += cost
-                        usage_by_email_model[key]['requests'] += 1
+                    usage_by_email_model[key]['cost'] += cost
+                    usage_by_email_model[key]['requests'] += 1
 
-                        if session_id:
-                            usage_by_email_model[key]['sessions'].add(session_id)
+                    if session_id:
+                        usage_by_email_model[key]['sessions'].add(session_id)
 
-                # Check for next page
-                cursor = data.get('meta', {}).get('page', {}).get('after')
-                if not cursor:
-                    break
+            # Check for next page
+            cursor = data.get('meta', {}).get('page', {}).get('after')
+            if not cursor:
+                break
 
     except urllib.error.HTTPError as e:
         error_body = e.read().decode('utf-8')
