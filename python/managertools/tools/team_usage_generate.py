@@ -135,7 +135,6 @@ def query_datadog(config_mgr, start_ms, end_ms):
     try:
         while True:
             page += 1
-            print(f"\nFetching page {page}...", file=sys.stderr, flush=True)
 
             # Build URL with pagination
             base_url = f"https://api.datadoghq.com/api/v2/logs/events?filter[query]={urllib.parse.quote(query)}&filter[from]={start_ms}&filter[to]={end_ms}&page[limit]=1000"
@@ -152,11 +151,8 @@ def query_datadog(config_mgr, start_ms, end_ms):
             while retry_count < max_retries and data is None:
                 try:
                     req = urllib.request.Request(url, headers=headers)
-                    print(f"Making request...", file=sys.stderr, flush=True)
                     with urllib.request.urlopen(req, timeout=30) as response:
-                        print(f"Reading response...", file=sys.stderr, flush=True)
                         data = json.loads(response.read().decode('utf-8'))
-                        print(f"Response received, processing...", file=sys.stderr, flush=True)
 
                         # Check rate limit headers
                         remaining = response.headers.get('X-RateLimit-Remaining')
@@ -173,17 +169,14 @@ def query_datadog(config_mgr, start_ms, end_ms):
                                 if reset_int:
                                     wait_until_reset = reset_int - int(time.time())
                                     if wait_until_reset > 0:
-                                        print(f"\n⏱ Rate limit approaching ({remaining_int}/{limit_int} remaining), sleeping {wait_until_reset}s until reset...", file=sys.stderr, flush=True)
+                                        print(f"\r⏱ Rate limit approaching ({remaining_int}/{limit_int} remaining), sleeping {wait_until_reset}s...", file=sys.stderr, flush=True)
                                         time.sleep(wait_until_reset + 1)  # +1 to be safe
-                            elif remaining_int < 50:
-                                # Show warning if getting low
-                                print(f" [{remaining_int}/{limit_int} requests remaining]", file=sys.stderr, end='', flush=True)
 
                 except (urllib.error.URLError, ConnectionResetError, BrokenPipeError) as e:
                     retry_count += 1
                     if retry_count < max_retries:
                         wait_time = 2 ** retry_count  # Exponential backoff: 2, 4, 8, 16, 32 seconds
-                        print(f"\n⚠ Connection error on page {page}, retrying in {wait_time}s (attempt {retry_count}/{max_retries})...", file=sys.stderr, flush=True)
+                        print(f"\r⚠ Connection error on page {page}, retrying in {wait_time}s (attempt {retry_count}/{max_retries})...", file=sys.stderr, flush=True)
                         time.sleep(wait_time)
                     else:
                         raise RuntimeError(f"Failed to fetch page {page} after {max_retries} retries: {e}")
