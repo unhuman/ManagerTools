@@ -137,6 +137,12 @@ def query_datadog(config_mgr, start_iso, end_iso):
             usage_by_email_model = {}
 
             if 'data' in data:
+                print(f"Datadog returned {len(data['data'])} log entries", file=sys.stderr)
+
+                # Show first log entry for debugging
+                if data['data']:
+                    print(f"Sample log entry: {json.dumps(data['data'][0], indent=2)}", file=sys.stderr)
+
                 for log in data['data']:
                     attributes = log.get('attributes', {})
                     email = attributes.get('attributes', {}).get('email', '').lower()
@@ -176,6 +182,11 @@ def query_datadog(config_mgr, start_iso, end_iso):
     except Exception as e:
         print(f"Error querying Datadog: {e}", file=sys.stderr)
         raise
+
+    if not usage_data:
+        print(f"Warning: No usage data returned from Datadog", file=sys.stderr)
+        print(f"Query: {query}", file=sys.stderr)
+        print(f"Period: {start_iso} to {end_iso}", file=sys.stderr)
 
     return usage_data
 
