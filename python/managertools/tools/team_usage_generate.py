@@ -34,7 +34,11 @@ from managertools.tools.team_usage_report import generate_html
 
 
 def get_date_range(time_period):
-    """Get start and end timestamps for the period (milliseconds since epoch)."""
+    """Get start and end timestamps for the period (milliseconds since epoch).
+
+    Args:
+        time_period: 'mtd', 'past-month', or 'Nd' where N is 1-30 (days)
+    """
     today = date.today()
 
     if time_period == 'mtd':
@@ -47,8 +51,15 @@ def get_date_range(time_period):
         else:
             start_date = date(today.year, today.month - 1, 1)
             end_date = date(today.year, today.month, 1) - timedelta(days=1)
+    elif time_period.endswith('d') and time_period[:-1].isdigit():
+        # Handle 'Nd' format (e.g., '5d' = last 5 days)
+        num_days = int(time_period[:-1])
+        if num_days < 1 or num_days > 30:
+            raise ValueError("Day range must be between 1d and 30d")
+        start_date = today - timedelta(days=num_days - 1)
+        end_date = today
     else:
-        raise ValueError("time_period must be 'mtd' or 'past-month'")
+        raise ValueError("time_period must be 'mtd', 'past-month', or 'Nd' (where N is 1-30)")
 
     # Convert to milliseconds since epoch (Datadog API expects this format)
     start_dt = datetime.combine(start_date, datetime.min.time())
@@ -72,6 +83,13 @@ def get_period_label(time_period):
         else:
             month_name = date(today.year, today.month - 1, 1).strftime('%B %Y')
         return month_name
+    elif time_period.endswith('d') and time_period[:-1].isdigit():
+        num_days = int(time_period[:-1])
+        start_date = today - timedelta(days=num_days - 1)
+        if num_days == 1:
+            return f"Today ({today.strftime('%b %d, %Y')})"
+        else:
+            return f"Last {num_days} days ({start_date.strftime('%b %d')} - {today.strftime('%b %d, %Y')})"
     return time_period
 
 
@@ -407,8 +425,13 @@ def build_params(roster, usage_data, teams, time_period):
 
 def main(teams_str, time_period, output_path=None):
     """Main entry point."""
-    if time_period not in ('mtd', 'past-month'):
-        raise ValueError("time_period must be 'mtd' or 'past-month'")
+    # Validate time_period
+    valid = (
+        time_period in ('mtd', 'past-month') or
+        (time_period.endswith('d') and time_period[:-1].isdigit() and 1 <= int(time_period[:-1]) <= 30)
+    )
+    if not valid:
+        raise ValueError("time_period must be 'mtd', 'past-month', or 'Nd' (where N is 1-30)")
 
     if output_path is None:
         output_path = os.path.expanduser('~/claude_team_usage.html')
@@ -480,7 +503,8 @@ def main(teams_str, time_period, output_path=None):
 if __name__ == '__main__':
     if len(sys.argv) < 3:
         print(json.dumps({
-            "error": "Usage: python -m managertools.tools.team_usage_generate TEAMS TIME_PERIOD [--output PATH]"
+            "error": "Usage: python -m managertools.tools.team_usage_generate TEAMS TIME_PERIOD [--output PATH]\n"
+                     "  TIME_PERIOD: 'mtd', 'past-month', or 'Nd' where N is 1-30 (e.g., '5d' for last 5 days, '1d' for today)"
         }), file=sys.stderr)
         sys.exit(1)
 
