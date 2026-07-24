@@ -298,6 +298,13 @@ def query_datadog(config_mgr, start_ms, end_ms, resume_id=None):
         print(f"Error querying Datadog: {e}", file=sys.stderr)
         raise
 
+    # Clean up checkpoint file on successful completion
+    if checkpoint_file and os.path.exists(checkpoint_file):
+        try:
+            os.remove(checkpoint_file)
+        except:
+            pass  # Fail silently if cleanup fails
+
     # Convert to flat array
     usage_data = []
     for (email, model), data in usage_by_email_model.items():
