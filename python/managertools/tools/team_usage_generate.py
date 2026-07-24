@@ -144,10 +144,18 @@ def query_datadog(config_mgr, start_iso, end_iso):
                     print(f"Sample log entry: {json.dumps(data['data'][0], indent=2)}", file=sys.stderr)
 
                 for log in data['data']:
-                    attributes = log.get('attributes', {})
-                    email = attributes.get('attributes', {}).get('email', '').lower()
-                    model = attributes.get('attributes', {}).get('model', '')
-                    cost = float(attributes.get('attributes', {}).get('cost_usd', 0) or 0)
+                    attrs = log.get('attributes', {}).get('attributes', {})
+
+                    # Extract email from user object
+                    user = attrs.get('user', {})
+                    email = (user.get('normalized_email') or user.get('email') or '').lower()
+
+                    # Extract model and cost
+                    model = attrs.get('model', '')
+                    cost = float(attrs.get('cost_usd', 0) or 0)
+
+                    # Extract session ID
+                    session_id = attrs.get('session', {}).get('id', '')
 
                     if email and model:
                         key = (email, model)
@@ -161,7 +169,6 @@ def query_datadog(config_mgr, start_iso, end_iso):
                         usage_by_email_model[key]['cost'] += cost
                         usage_by_email_model[key]['requests'] += 1
 
-                        session_id = attributes.get('attributes', {}).get('session_id', '')
                         if session_id:
                             usage_by_email_model[key]['sessions'].add(session_id)
 
