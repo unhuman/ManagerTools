@@ -20,7 +20,7 @@ def fetch_team_rosters(teams):
     Fetch rosters for specified teams from Backstage.
 
     Args:
-        teams: List of team names
+        teams: List of team names, or ["org"] to use orgTeams from config
 
     Returns:
         List of dicts with 'name', 'email', 'team' keys, deduplicated by email
@@ -29,6 +29,14 @@ def fetch_team_rosters(teams):
 
     if not config_mgr.contains_key('backstageServer'):
         raise RuntimeError("backstageServer not configured in ~/.managerTools.cfg")
+
+    # If "org" is passed, read teams from orgTeams config
+    if teams == ["org"]:
+        if not config_mgr.contains_key('orgTeams'):
+            raise RuntimeError("orgTeams not configured in ~/.managerTools.cfg (required when using 'org' parameter)")
+        teams = config_mgr.get_value('orgTeams')
+        if not isinstance(teams, list):
+            raise RuntimeError("orgTeams must be an array of team names")
 
     backstage_server = config_mgr.get_value('backstageServer')
     backstage_auth = config_mgr.get_value('backstageAuth') if config_mgr.contains_key('backstageAuth') else None
@@ -65,7 +73,7 @@ def fetch_team_rosters(teams):
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        print(json.dumps({"error": "Usage: python -m managertools.tools.team_usage_roster TEAM1 TEAM2 ..."}), file=sys.stderr)
+        print(json.dumps({"error": "Usage: python -m managertools.tools.team_usage_roster TEAM1 TEAM2 ... (or 'org' to use orgTeams from config)"}), file=sys.stderr)
         sys.exit(1)
 
     try:
