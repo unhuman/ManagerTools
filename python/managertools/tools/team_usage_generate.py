@@ -119,33 +119,42 @@ def query_datadog(config_mgr, start_ms, end_ms):
     pat = config_mgr.get_value('datadogPAT')
 
     # Datadog logs query API endpoint
-    # Query: service:claude-code @event.name:api_request
     query = "service:claude-code @event.name:api_request"
-
-    url = f"https://api.datadoghq.com/api/v2/logs/events?filter[query]={urllib.parse.quote(query)}&filter[from]={start_ms}&filter[to]={end_ms}&page[limit]=1000"
 
     headers = {
         'Authorization': f'Bearer {pat}',
         'Content-Type': 'application/json'
     }
 
-    usage_data = []
+    usage_by_email_model = {}
+    page = 0
+    cursor = None
+    total_logs = 0
 
     try:
-        req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=30) as response:
-            data = json.loads(response.read().decode('utf-8'))
+        while True:
+            page += 1
 
-            # Aggregate logs by email and model
-            usage_by_email_model = {}
+            # Build URL with pagination
+            base_url = f"https://api.datadoghq.com/api/v2/logs/events?filter[query]={urllib.parse.quote(query)}&filter[from]={start_ms}&filter[to]={end_ms}&page[limit]=1000"
+            if cursor:
+                url = f"{base_url}&page[cursor]={urllib.parse.quote(cursor)}"
+            else:
+                url = base_url
 
-            if 'data' in data:
-                print(f"Datadog returned {len(data['data'])} log entries", file=sys.stderr)
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=30) as response:
+                data = json.loads(response.read().decode('utf-8'))
 
-                # Show first log entry for debugging
-                if data['data']:
-                    print(f"Sample log entry: {json.dumps(data['data'][0], indent=2)}", file=sys.stderr)
+                if not data.get('data'):
+                    break
 
+                logs_in_page = len(data['data'])
+                total_logs += logs_in_page
+
+                print(f"Page {page}: Fetched {logs_in_page} log entries (total: {total_logs})", file=sys.stderr)
+
+                # Process logs
                 for log in data['data']:
                     attrs = log.get('attributes', {}).get('attributes', {})
 
@@ -175,15 +184,10 @@ def query_datadog(config_mgr, start_ms, end_ms):
                         if session_id:
                             usage_by_email_model[key]['sessions'].add(session_id)
 
-            # Convert to flat array
-            for (email, model), data in usage_by_email_model.items():
-                usage_data.append({
-                    'email': email,
-                    'model': model,
-                    'cost': round(data['cost'], 2),
-                    'requests': data['requests'],
-                    'sessions': len(data['sessions'])
-                })
+                # Check for next page
+                cursor = data.get('meta', {}).get('page', {}).get('after')
+                if not cursor:
+                    break
 
     except urllib.error.HTTPError as e:
         error_body = e.read().decode('utf-8')
@@ -193,10 +197,18 @@ def query_datadog(config_mgr, start_ms, end_ms):
         print(f"Error querying Datadog: {e}", file=sys.stderr)
         raise
 
-    if not usage_data:
-        print(f"Warning: No usage data returned from Datadog", file=sys.stderr)
-        print(f"Query: {query}", file=sys.stderr)
-        print(f"Period: {start_ms} to {end_ms} (milliseconds)", file=sys.stderr)
+    # Convert to flat array
+    usage_data = []
+    for (email, model), data in usage_by_email_model.items():
+        usage_data.append({
+            'email': email,
+            'model': model,
+            'cost': round(data['cost'], 2),
+            'requests': data['requests'],
+            'sessions': len(data['sessions'])
+        })
+
+    print(f"Pagination complete: Fetched {total_logs} total log entries across {page} page(s)", file=sys.stderr)
 
     return usage_data
 
@@ -273,6 +285,12 @@ def main(teams_str, time_period, output_path=None):
     # Get date range
     start_ms, end_ms, start_date, end_date = get_date_range(time_period)
     print(f"Querying Datadog for {start_date} to {end_date}", file=sys.stderr)
+    print(f"Timestamps: {start_ms} to {end_ms} (ms)", file=sys.stderr)
+
+    # Debug: show what the dates convert to
+    from datetime import datetime as dt_module
+    print(f"Start: {dt_module.fromtimestamp(start_ms/1000)} UTC", file=sys.stderr)
+    print(f"End: {dt_module.fromtimestamp(end_ms/1000)} UTC", file=sys.stderr)
 
     # Query Datadog
     usage_data = query_datadog(config_mgr, start_ms, end_ms)
