@@ -509,18 +509,18 @@ def main(teams_str, time_period, output_path):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 5 or sys.argv[3] != '--output':
+    if len(sys.argv) < 4:
         print(json.dumps({
-            "error": "Usage: python -m managertools.tools.team_usage_generate TEAMS TIME_PERIOD --output PATH\n"
+            "error": "Usage: python -m managertools.tools.team_usage_generate TEAMS TIME_PERIOD OUTPUT_PATH\n"
                      "  TEAMS: Team names (comma-separated) or 'org'\n"
                      "  TIME_PERIOD: 'mtd', 'past-month', or 'Nd' where N is 1-30 (e.g., '5d' for last 5 days, '1d' for today)\n"
-                     "  --output PATH: Required output file path (e.g., ~/usage.html or /path/to/report.html)"
+                     "  OUTPUT_PATH: Output file path (e.g., report.html or ~/usage.html or /path/to/report.html)"
         }), file=sys.stderr)
         sys.exit(1)
 
     teams = sys.argv[1]
     time_period = sys.argv[2]
-    output_path = sys.argv[4]
+    output_path = sys.argv[3]
 
     try:
         main(teams, time_period, output_path)
