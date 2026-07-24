@@ -23,6 +23,7 @@ import json
 import os
 import urllib.request
 import urllib.parse
+import time
 from datetime import date, datetime, timedelta
 
 from managertools.util.config_file_manager import ConfigFileManager
@@ -142,9 +143,27 @@ def query_datadog(config_mgr, start_ms, end_ms):
             else:
                 url = base_url
 
-            req = urllib.request.Request(url, headers=headers)
-            with urllib.request.urlopen(req, timeout=30) as response:
-                data = json.loads(response.read().decode('utf-8'))
+            # Retry logic for connection issues
+            max_retries = 5
+            retry_count = 0
+            data = None
+
+            while retry_count < max_retries and data is None:
+                try:
+                    req = urllib.request.Request(url, headers=headers)
+                    with urllib.request.urlopen(req, timeout=30) as response:
+                        data = json.loads(response.read().decode('utf-8'))
+                except (urllib.error.URLError, ConnectionResetError, BrokenPipeError) as e:
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        wait_time = 2 ** retry_count  # Exponential backoff: 2, 4, 8, 16, 32 seconds
+                        print(f"\n⚠ Connection error on page {page}, retrying in {wait_time}s (attempt {retry_count}/{max_retries})...", file=sys.stderr, flush=True)
+                        time.sleep(wait_time)
+                    else:
+                        raise RuntimeError(f"Failed to fetch page {page} after {max_retries} retries: {e}")
+
+            if data is None:
+                break
 
                 if not data.get('data'):
                     break
