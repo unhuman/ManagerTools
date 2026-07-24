@@ -114,21 +114,21 @@ def fetch_rosters(teams, config_mgr):
 
 
 def query_datadog(config_mgr, start_ms, end_ms, resume_id=None):
-    """Query Datadog for Claude Code usage by email and model."""
+    """Query Datadog for all Anthropic product usage by email, model, and product."""
     if not config_mgr.contains_key('datadogPAT'):
         raise RuntimeError("datadogPAT not configured in ~/.managerTools.cfg")
 
     pat = config_mgr.get_value('datadogPAT')
 
-    # Datadog logs query API endpoint
-    query = "service:claude-code @event.name:api_request"
+    # Datadog logs query API endpoint - include all services (claude-code, claude-web, etc.)
+    query = "service:claude* @event.name:api_request"
 
     headers = {
         'Authorization': f'Bearer {pat}',
         'Content-Type': 'application/json'
     }
 
-    usage_by_email_model = {}
+    usage_by_email_model_product = {}
     page = 0
     cursor = None
     total_logs = 0
@@ -148,14 +148,15 @@ def query_datadog(config_mgr, start_ms, end_ms, resume_id=None):
                     # Restore accumulated usage data
                     saved_usage = checkpoint.get('usage', {})
                     for key_str, data in saved_usage.items():
-                        email, model = key_str.split('|', 1)
-                        usage_by_email_model[(email, model)] = {
+                        parts = key_str.split('|')
+                        email, model, product = parts[0], parts[1], parts[2] if len(parts) > 2 else ''
+                        usage_by_email_model_product[(email, model, product)] = {
                             'cost': data['cost'],
                             'requests': data['requests'],
                             'sessions': set(data['sessions'])
                         }
 
-                    print(f"\n✓ Resuming from checkpoint: Page {page}, Total: {total_logs}, Recovered {len(usage_by_email_model)} user/model pairs", file=sys.stderr, flush=True)
+                    print(f"\n✓ Resuming from checkpoint: Page {page}, Total: {total_logs}, Recovered {len(usage_by_email_model_product)} user/model/product tuples", file=sys.stderr, flush=True)
             except Exception as e:
                 print(f"\n⚠ Failed to load checkpoint: {e}", file=sys.stderr)
                 pass
@@ -235,6 +236,8 @@ def query_datadog(config_mgr, start_ms, end_ms, resume_id=None):
 
             # Process logs
             for log in data['data']:
+                # Extract product from top-level service field
+                product = log.get('attributes', {}).get('service', '')
                 attrs = log.get('attributes', {}).get('attributes', {})
 
                 # Extract email from user object
@@ -248,20 +251,20 @@ def query_datadog(config_mgr, start_ms, end_ms, resume_id=None):
                 # Extract session ID
                 session_id = attrs.get('session', {}).get('id', '')
 
-                if email and model:
-                    key = (email, model)
-                    if key not in usage_by_email_model:
-                        usage_by_email_model[key] = {
+                if email and model and product:
+                    key = (email, model, product)
+                    if key not in usage_by_email_model_product:
+                        usage_by_email_model_product[key] = {
                             'cost': 0,
                             'requests': 0,
                             'sessions': set()
                         }
 
-                    usage_by_email_model[key]['cost'] += cost
-                    usage_by_email_model[key]['requests'] += 1
+                    usage_by_email_model_product[key]['cost'] += cost
+                    usage_by_email_model_product[key]['requests'] += 1
 
                     if session_id:
-                        usage_by_email_model[key]['sessions'].add(session_id)
+                        usage_by_email_model_product[key]['sessions'].add(session_id)
 
             # Save checkpoint for resume capability
             if checkpoint_file:
@@ -271,12 +274,12 @@ def query_datadog(config_mgr, start_ms, end_ms, resume_id=None):
                     'cursor': next_cursor,
                     'total_logs': total_logs,
                     'usage': {
-                        f"{email}|{model}": {
+                        f"{email}|{model}|{product}": {
                             'cost': usage_data['cost'],
                             'requests': usage_data['requests'],
                             'sessions': list(usage_data['sessions'])
                         }
-                        for (email, model), usage_data in usage_by_email_model.items()
+                        for (email, model, product), usage_data in usage_by_email_model_product.items()
                     }
                 }
                 try:
@@ -305,15 +308,42 @@ def query_datadog(config_mgr, start_ms, end_ms, resume_id=None):
         except:
             pass  # Fail silently if cleanup fails
 
-    # Convert to flat array
+    # Convert to flat array, grouped by email, with breakdown by model and product
+    usage_by_email = {}
+    for (email, model, product), data in usage_by_email_model_product.items():
+        if email not in usage_by_email:
+            usage_by_email[email] = {
+                'cost': 0,
+                'requests': 0,
+                'sessions': set(),
+                'model_costs': {},
+                'product_costs': {}
+            }
+
+        usage_by_email[email]['cost'] += data['cost']
+        usage_by_email[email]['requests'] += data['requests']
+        usage_by_email[email]['sessions'].update(data['sessions'])
+
+        # Track cost by model
+        if model not in usage_by_email[email]['model_costs']:
+            usage_by_email[email]['model_costs'][model] = 0
+        usage_by_email[email]['model_costs'][model] += data['cost']
+
+        # Track cost by product
+        if product not in usage_by_email[email]['product_costs']:
+            usage_by_email[email]['product_costs'][product] = 0
+        usage_by_email[email]['product_costs'][product] += data['cost']
+
+    # Convert to flat array for downstream processing
     usage_data = []
-    for (email, model), data in usage_by_email_model.items():
+    for email, data in usage_by_email.items():
         usage_data.append({
             'email': email,
-            'model': model,
             'cost': round(data['cost'], 2),
             'requests': data['requests'],
-            'sessions': len(data['sessions'])
+            'sessions': len(data['sessions']),
+            'model_costs': {m: round(c, 2) for m, c in data['model_costs'].items()},
+            'product_costs': {p: round(c, 2) for p, c in data['product_costs'].items()}
         })
 
     print(f"\nPagination complete: Fetched {total_logs} total log entries across {page} page(s)", file=sys.stderr)
@@ -325,6 +355,7 @@ def build_params(roster, usage_data, teams, time_period):
     """Build params from roster and usage data."""
     usage_by_email = {}
     models = set()
+    products = set()
 
     # Initialize from roster
     for member in roster:
@@ -333,13 +364,13 @@ def build_params(roster, usage_data, teams, time_period):
             'cost': 0,
             'requests': 0,
             'sessions': 0,
-            'model_costs': {}
+            'model_costs': {},
+            'product_costs': {}
         }
 
     # Merge usage data
     for row in usage_data:
         email = row.get('email', '').lower()
-        model = row.get('model', '')
         cost = row.get('cost', 0)
         requests = row.get('requests', 0)
         sessions = row.get('sessions', 0)
@@ -349,9 +380,17 @@ def build_params(roster, usage_data, teams, time_period):
             usage_by_email[email]['requests'] += requests
             usage_by_email[email]['sessions'] = max(usage_by_email[email]['sessions'], sessions)
 
-            if model:
-                usage_by_email[email]['model_costs'][model] = cost
+            # Merge model costs
+            model_costs = row.get('model_costs', {})
+            for model, model_cost in model_costs.items():
+                usage_by_email[email]['model_costs'][model] = model_cost
                 models.add(model)
+
+            # Merge product costs
+            product_costs = row.get('product_costs', {})
+            for product, product_cost in product_costs.items():
+                usage_by_email[email]['product_costs'][product] = product_cost
+                products.add(product)
 
     params = {
         'teams': teams,
@@ -359,7 +398,8 @@ def build_params(roster, usage_data, teams, time_period):
         'period_label': get_period_label(time_period),
         'members': roster,
         'usage_by_email': usage_by_email,
-        'models': sorted(list(models))
+        'models': sorted(list(models)),
+        'products': sorted(list(products))
     }
 
     return params
@@ -416,7 +456,8 @@ def main(teams_str, time_period, output_path=None):
         params['period_label'],
         roster,
         params['usage_by_email'],
-        params['models']
+        params['models'],
+        params['products']
     )
 
     # Write output
@@ -431,7 +472,8 @@ def main(teams_str, time_period, output_path=None):
         'members': len(roster),
         'active_users': sum(1 for u in params['usage_by_email'].values() if u['cost'] > 0),
         'total_cost': round(sum(u['cost'] for u in params['usage_by_email'].values()), 2),
-        'models': params['models']
+        'models': params['models'],
+        'products': params['products']
     }))
 
 

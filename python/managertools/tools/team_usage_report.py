@@ -37,7 +37,7 @@ def format_number(value):
     return f"{int(value):,}"
 
 
-def generate_html(teams, time_period, period_label, members, usage_by_email, models):
+def generate_html(teams, time_period, period_label, members, usage_by_email, models, products=None):
     """
     Generate a self-contained HTML report.
 
@@ -46,9 +46,12 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
         time_period: 'mtd' or 'past-month'
         period_label: Human-readable period (e.g., "July 2026 (MTD)")
         members: List of dicts with 'name', 'email', 'team'
-        usage_by_email: Dict mapping email -> {'cost': float, 'requests': int, 'sessions': int, 'model_costs': {model: cost}}
+        usage_by_email: Dict mapping email -> {'cost': float, 'requests': int, 'sessions': int, 'model_costs': {model: cost}, 'product_costs': {product: cost}}
         models: Sorted list of all model names found
+        products: Sorted list of all product names found (optional)
     """
+    if products is None:
+        products = []
 
     # Build active and inactive rows
     active_rows = []
@@ -65,6 +68,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
         sessions = usage.get('sessions', 0)
         cost_per_request = (cost / requests) if requests > 0 else 0
         model_costs = usage.get('model_costs', {})
+        product_costs = usage.get('product_costs', {})
 
         row = {
             'name': escape_html(name),
@@ -75,6 +79,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
             'sessions': sessions,
             'cost_per_request': cost_per_request,
             'model_costs': model_costs,
+            'product_costs': product_costs,
             'cost_formatted': format_currency(cost),
             'requests_formatted': format_number(requests),
             'sessions_formatted': format_number(sessions),
@@ -102,6 +107,19 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
         cells = ''.join(f'<td class="currency model-cell">$0.00</td>' for m in models)
         model_cells_inactive.append(cells)
 
+    # Generate product cost header columns
+    product_headers = ''.join(f'<th class="sortable product-col" data-product="{escape_html(p)}">{escape_html(p)}</th>' for p in products)
+
+    product_cells_active = []
+    for row in active_rows:
+        cells = ''.join(f'<td class="currency product-cell">{format_currency(row["product_costs"].get(p, 0))}</td>' for p in products)
+        product_cells_active.append(cells)
+
+    product_cells_inactive = []
+    for row in inactive_rows:
+        cells = ''.join(f'<td class="currency product-cell">$0.00</td>' for p in products)
+        product_cells_inactive.append(cells)
+
     # Build table rows - active section
     active_table_rows = ''
     for i, row in enumerate(active_rows):
@@ -113,7 +131,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       <td class="number">{row['requests_formatted']}</td>
       <td class="number">{row['sessions_formatted']}</td>
       <td class="currency">{row['cost_per_request_formatted']}</td>
-      {model_cells_active[i]}
+      {model_cells_active[i]}{product_cells_active[i]}
     </tr>
 '''
 
@@ -128,7 +146,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       <td class="number">0</td>
       <td class="number">0</td>
       <td class="currency">$0.00</td>
-      {model_cells_inactive[i]}
+      {model_cells_inactive[i]}{product_cells_inactive[i]}
     </tr>
 '''
 
@@ -172,7 +190,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
           <th class="sortable">Requests</th>
           <th class="sortable">Sessions</th>
           <th class="sortable">Cost/Request</th>
-          {model_headers}
+          {model_headers}{product_headers}
         </tr>
       </thead>
       <tbody>
@@ -458,7 +476,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
           <th class="sortable">Requests</th>
           <th class="sortable">Sessions</th>
           <th class="sortable">Cost/Request</th>
-          {model_headers}
+          {model_headers}{product_headers}
         </tr>
       </thead>
       <tbody>
