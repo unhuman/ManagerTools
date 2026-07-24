@@ -190,7 +190,22 @@ def query_datadog(config_mgr, start_ms, end_ms):
             logs_in_page = len(data['data'])
             total_logs += logs_in_page
 
-            print(f"\rPage {page}: Fetched {logs_in_page} log entries (total: {total_logs})", file=sys.stderr, end='', flush=True)
+            # Extract timestamp from last entry in page for progress indication
+            latest_timestamp = ""
+            if data['data']:
+                last_log = data['data'][-1]
+                ts_raw = last_log.get('attributes', {}).get('attributes', {}).get('event', {}).get('timestamp')
+                if ts_raw:
+                    # Convert ISO format to readable format
+                    try:
+                        # Parse ISO timestamp and format as readable date/time
+                        from datetime import datetime as dt_module
+                        dt_obj = dt_module.fromisoformat(ts_raw.replace('Z', '+00:00'))
+                        latest_timestamp = f" - Latest: {dt_obj.strftime('%Y-%m-%d %H:%M:%S')}"
+                    except:
+                        pass
+
+            print(f"\rPage {page}: Fetched {logs_in_page} log entries (total: {total_logs}){latest_timestamp}", file=sys.stderr, end='', flush=True)
 
             # Process logs
             for log in data['data']:
