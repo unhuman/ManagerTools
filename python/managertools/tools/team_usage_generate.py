@@ -21,6 +21,7 @@ Configuration required in ~/.managerTools.cfg:
 import sys
 import json
 import os
+import socket
 import urllib.request
 import urllib.parse
 import time
@@ -112,7 +113,7 @@ def fetch_rosters(teams, config_mgr):
     return list(members_by_email.values())
 
 
-def query_datadog(config_mgr, start_ms, end_ms):
+def query_datadog(config_mgr, start_ms, end_ms, resume_id=None):
     """Query Datadog for Claude Code usage by email and model."""
     if not config_mgr.contains_key('datadogPAT'):
         raise RuntimeError("datadogPAT not configured in ~/.managerTools.cfg")
@@ -132,6 +133,21 @@ def query_datadog(config_mgr, start_ms, end_ms):
     cursor = None
     total_logs = 0
 
+    # Try to resume from saved checkpoint
+    checkpoint_file = None
+    if resume_id:
+        checkpoint_file = f"/tmp/datadog_checkpoint_{resume_id}.json"
+        if os.path.exists(checkpoint_file):
+            try:
+                with open(checkpoint_file, 'r') as f:
+                    checkpoint = json.load(f)
+                    cursor = checkpoint.get('cursor')
+                    page = checkpoint.get('page', 0)
+                    total_logs = checkpoint.get('total_logs', 0)
+                    print(f"\n✓ Resuming from checkpoint: Page {page}, Total: {total_logs}", file=sys.stderr, flush=True)
+            except:
+                pass
+
     try:
         while True:
             page += 1
@@ -143,12 +159,12 @@ def query_datadog(config_mgr, start_ms, end_ms):
             else:
                 url = base_url
 
-            # Retry logic for connection issues
-            max_retries = 5
+            # Retry logic for connection issues - infinite retries with exponential backoff
             retry_count = 0
+            max_retry_wait = 300  # Cap backoff at 5 minutes
             data = None
 
-            while retry_count < max_retries and data is None:
+            while data is None:
                 try:
                     req = urllib.request.Request(url, headers=headers)
                     with urllib.request.urlopen(req, timeout=30) as response:
@@ -172,14 +188,12 @@ def query_datadog(config_mgr, start_ms, end_ms):
                                         print(f"\r⏱ Rate limit approaching ({remaining_int}/{limit_int} remaining), sleeping {wait_until_reset}s...", file=sys.stderr, flush=True)
                                         time.sleep(wait_until_reset + 1)  # +1 to be safe
 
-                except (urllib.error.URLError, ConnectionResetError, BrokenPipeError) as e:
+                except (urllib.error.URLError, ConnectionResetError, BrokenPipeError, TimeoutError, socket.timeout) as e:
                     retry_count += 1
-                    if retry_count < max_retries:
-                        wait_time = 2 ** retry_count  # Exponential backoff: 2, 4, 8, 16, 32 seconds
-                        print(f"\r⚠ Connection error on page {page}, retrying in {wait_time}s (attempt {retry_count}/{max_retries})...", file=sys.stderr, flush=True)
-                        time.sleep(wait_time)
-                    else:
-                        raise RuntimeError(f"Failed to fetch page {page} after {max_retries} retries: {e}")
+                    wait_time = min(2 ** retry_count, max_retry_wait)  # Exponential backoff, capped at 5 minutes
+                    error_type = type(e).__name__
+                    print(f"\r⚠ {error_type} on page {page}, retrying in {wait_time}s (attempt {retry_count})...", file=sys.stderr, flush=True)
+                    time.sleep(wait_time)
 
             if data is None:
                 break
@@ -236,6 +250,20 @@ def query_datadog(config_mgr, start_ms, end_ms):
 
                     if session_id:
                         usage_by_email_model[key]['sessions'].add(session_id)
+
+            # Save checkpoint for resume capability
+            if checkpoint_file:
+                next_cursor = data.get('meta', {}).get('page', {}).get('after')
+                checkpoint_data = {
+                    'page': page,
+                    'cursor': next_cursor,
+                    'total_logs': total_logs
+                }
+                try:
+                    with open(checkpoint_file, 'w') as f:
+                        json.dump(checkpoint_data, f)
+                except:
+                    pass  # Fail silently if checkpoint can't be saved
 
             # Check for next page
             cursor = data.get('meta', {}).get('page', {}).get('after')
@@ -345,8 +373,10 @@ def main(teams_str, time_period, output_path=None):
     print(f"Start: {dt_module.fromtimestamp(start_ms/1000)} UTC", file=sys.stderr)
     print(f"End: {dt_module.fromtimestamp(end_ms/1000)} UTC", file=sys.stderr)
 
-    # Query Datadog
-    usage_data = query_datadog(config_mgr, start_ms, end_ms)
+    # Query Datadog with resume capability
+    # Use teams_str + time_period as resume ID so same query can resume
+    resume_id = f"{teams_str}_{time_period}".replace(' ', '_').replace(',', '')
+    usage_data = query_datadog(config_mgr, start_ms, end_ms, resume_id=resume_id)
     print(f"Found usage data for {len(set(u['email'] for u in usage_data))} users", file=sys.stderr)
 
     # Build params
