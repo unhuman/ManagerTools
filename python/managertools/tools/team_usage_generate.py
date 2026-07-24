@@ -15,7 +15,7 @@ Arguments:
 
 Configuration required in ~/.managerTools.cfg:
   - backstageServer: Backstage FQDN
-  - datadogApiKey: Datadog API key
+  - datadogPAT: Datadog Personal Access Token
   - orgTeams: Array of team names (if using 'org' parameter)
 """
 import sys
@@ -110,10 +110,10 @@ def fetch_rosters(teams, config_mgr):
 
 def query_datadog(config_mgr, start_iso, end_iso):
     """Query Datadog for Claude Code usage by email and model."""
-    if not config_mgr.contains_key('datadogApiKey'):
-        raise RuntimeError("datadogApiKey not configured in ~/.managerTools.cfg")
+    if not config_mgr.contains_key('datadogPAT'):
+        raise RuntimeError("datadogPAT not configured in ~/.managerTools.cfg")
 
-    api_key = config_mgr.get_value('datadogApiKey')
+    pat = config_mgr.get_value('datadogPAT')
 
     # Datadog logs query API endpoint
     # Query: service:claude-code @event.name:api_request
@@ -122,7 +122,7 @@ def query_datadog(config_mgr, start_iso, end_iso):
     url = f"https://api.datadoghq.com/api/v2/logs/events?filter[query]={urllib.parse.quote(query)}&filter[from]={start_iso}&filter[to]={end_iso}&page[limit]=1000"
 
     headers = {
-        'DD-API-KEY': api_key,
+        'Authorization': f'Bearer {pat}',
         'Content-Type': 'application/json'
     }
 
