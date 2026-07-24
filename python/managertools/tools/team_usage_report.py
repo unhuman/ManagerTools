@@ -53,6 +53,86 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     if products is None:
         products = []
 
+    # Aggregate usage by team
+    usage_by_team = {}
+    for team in teams:
+        usage_by_team[team] = {
+            'cost': 0,
+            'requests': 0,
+            'sessions': set(),
+            'member_count': 0,
+            'active_member_count': 0,
+            'model_costs': {},
+            'product_costs': {}
+        }
+
+    for member in members:
+        team = member['team']
+        email = member['email']
+        if team not in usage_by_team:
+            usage_by_team[team] = {
+                'cost': 0,
+                'requests': 0,
+                'sessions': set(),
+                'member_count': 0,
+                'active_member_count': 0,
+                'model_costs': {},
+                'product_costs': {}
+            }
+
+        usage_by_team[team]['member_count'] += 1
+        usage = usage_by_email.get(email, {})
+        cost = usage.get('cost', 0)
+        requests = usage.get('requests', 0)
+        sessions = usage.get('sessions', 0)
+
+        if cost > 0 or requests > 0:
+            usage_by_team[team]['active_member_count'] += 1
+
+        usage_by_team[team]['cost'] += cost
+        usage_by_team[team]['requests'] += requests
+
+        if sessions > 0:
+            usage_by_team[team]['sessions'].add(email)
+
+        # Aggregate model and product costs
+        for model, model_cost in usage.get('model_costs', {}).items():
+            if model not in usage_by_team[team]['model_costs']:
+                usage_by_team[team]['model_costs'][model] = 0
+            usage_by_team[team]['model_costs'][model] += model_cost
+
+        for product, product_cost in usage.get('product_costs', {}).items():
+            if product not in usage_by_team[team]['product_costs']:
+                usage_by_team[team]['product_costs'][product] = 0
+            usage_by_team[team]['product_costs'][product] += product_cost
+
+    # Build team rows
+    team_rows = []
+    for team_name in sorted(teams, key=lambda t: usage_by_team[t]['cost'], reverse=True):
+        team_data = usage_by_team[team_name]
+        cost = team_data['cost']
+        requests = team_data['requests']
+        sessions = len(team_data['sessions'])
+        cost_per_request = (cost / requests) if requests > 0 else 0
+
+        team_rows.append({
+            'name': escape_html(team_name),
+            'cost': cost,
+            'requests': requests,
+            'sessions': sessions,
+            'cost_per_request': cost_per_request,
+            'member_count': team_data['member_count'],
+            'active_member_count': team_data['active_member_count'],
+            'model_costs': team_data['model_costs'],
+            'product_costs': team_data['product_costs'],
+            'cost_formatted': format_currency(cost),
+            'requests_formatted': format_number(requests),
+            'sessions_formatted': format_number(sessions),
+            'cost_per_request_formatted': format_currency(cost_per_request),
+            'member_count_formatted': format_number(team_data['member_count']),
+            'active_member_count_formatted': format_number(team_data['active_member_count']),
+        })
+
     # Build active and inactive rows
     active_rows = []
     inactive_rows = []
@@ -150,6 +230,22 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     </tr>
 '''
 
+    # Build team table rows
+    team_table_rows = ''
+    for row in team_rows:
+        model_cells = ''.join(f'<td class="currency model-cell">{format_currency(row["model_costs"].get(m, 0))}</td>' for m in models)
+        product_cells = ''.join(f'<td class="currency product-cell">{format_currency(row["product_costs"].get(p, 0))}</td>' for p in products)
+        team_table_rows += f'''    <tr class="team-row" data-cost="{row['cost']}" data-requests="{row['requests']}" data-sessions="{row['sessions']}" data-cost-per-request="{row['cost_per_request']}">
+      <td class="name">{row['name']}</td>
+      <td class="number">{row['active_member_count_formatted']}/{row['member_count_formatted']}</td>
+      <td class="currency">{row['cost_formatted']}</td>
+      <td class="number">{row['requests_formatted']}</td>
+      <td class="number">{row['sessions_formatted']}</td>
+      <td class="currency">{row['cost_per_request_formatted']}</td>
+      {model_cells}{product_cells}
+    </tr>
+'''
+
     # Compute summary statistics
     total_cost = sum(r['cost'] for r in active_rows)
     total_requests = sum(r['requests'] for r in active_rows)
@@ -178,7 +274,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
 
     inactive_section = ''
     if inactive_rows:
-        inactive_section = f'''    <h3 class="inactive-header">Inactive Users ({len(inactive_rows)})</h3>
+        inactive_section = f'''    <h3 class="inactive-header" id="inactive-users">Inactive Users ({len(inactive_rows)})</h3>
     <p class="inactive-description">These team members have no Claude Code usage in the selected period.</p>
     <table class="report-table inactive-table">
       <thead>
@@ -435,6 +531,48 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       background-color: var(--inactive-bg);
     }}
 
+    .toc {{
+      background-color: var(--header-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1rem;
+      margin: 1.5rem 0;
+    }}
+
+    .toc ul {{
+      list-style: none;
+      padding-left: 1rem;
+      margin: 0.5rem 0 0 0;
+    }}
+
+    .toc li {{
+      margin: 0.5rem 0;
+    }}
+
+    .toc a {{
+      color: var(--accent);
+      text-decoration: none;
+      transition: opacity 0.2s;
+    }}
+
+    .toc a:hover {{
+      opacity: 0.8;
+      text-decoration: underline;
+    }}
+
+    .team-table .name {{
+      font-weight: 600;
+    }}
+
+    .team-row {{
+      background-color: var(--header-bg);
+      font-weight: 500;
+    }}
+
+    .team-row:hover {{
+      background-color: var(--hover-bg) !important;
+    }}
+
     @media (max-width: 1024px) {{
       .report-table {{
         font-size: 0.9rem;
@@ -463,9 +601,36 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       <strong>Teams:</strong> {', '.join(escape_html(t) for t in teams)}
     </div>
 
+    <nav class="toc">
+      <strong>Contents:</strong>
+      <ul>
+        <li><a href="#team-summary">Team Summary</a></li>
+        <li><a href="#individual-users">Individual Users</a></li>
+        {f'<li><a href="#inactive-users">Inactive Users</a></li>' if inactive_section else ''}
+      </ul>
+    </nav>
+
     {summary_html}
 
-    <h2>Active Users ({len(active_rows)})</h2>
+    <h2 id="team-summary">Team Summary ({len(team_rows)})</h2>
+    <table class="report-table team-table">
+      <thead>
+        <tr>
+          <th class="sortable">Team</th>
+          <th class="sortable">Active/Members</th>
+          <th class="sortable">Total Cost</th>
+          <th class="sortable">Requests</th>
+          <th class="sortable">Sessions</th>
+          <th class="sortable">Cost/Request</th>
+          {model_headers}{product_headers}
+        </tr>
+      </thead>
+      <tbody>
+        {team_table_rows}
+      </tbody>
+    </table>
+
+    <h2 id="individual-users">Active Users ({len(active_rows)})</h2>
     <table class="report-table">
       <thead>
         <tr>
