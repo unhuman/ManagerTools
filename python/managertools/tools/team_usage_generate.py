@@ -135,6 +135,7 @@ def query_datadog(config_mgr, start_ms, end_ms):
     try:
         while True:
             page += 1
+            print(f"\nFetching page {page}...", file=sys.stderr, flush=True)
 
             # Build URL with pagination
             base_url = f"https://api.datadoghq.com/api/v2/logs/events?filter[query]={urllib.parse.quote(query)}&filter[from]={start_ms}&filter[to]={end_ms}&page[limit]=1000"
@@ -151,8 +152,11 @@ def query_datadog(config_mgr, start_ms, end_ms):
             while retry_count < max_retries and data is None:
                 try:
                     req = urllib.request.Request(url, headers=headers)
+                    print(f"Making request...", file=sys.stderr, flush=True)
                     with urllib.request.urlopen(req, timeout=30) as response:
+                        print(f"Reading response...", file=sys.stderr, flush=True)
                         data = json.loads(response.read().decode('utf-8'))
+                        print(f"Response received, processing...", file=sys.stderr, flush=True)
 
                         # Check rate limit headers
                         remaining = response.headers.get('X-RateLimit-Remaining')
