@@ -1,27 +1,21 @@
 #!/usr/bin/env python3
 """
-Build a complete report params JSON from a roster, optionally with Datadog usage data.
+Build complete report params from roster and Datadog usage data.
 
-Usage (with Datadog data):
-  python -m managertools.tools.team_usage_build_report ROSTER_JSON TIME_PERIOD OUTPUT_JSON [--datadog-json DATADOG_JSON]
+Usage:
+  python -m managertools.tools.team_usage_build_report ROSTER_JSON TIME_PERIOD USAGE_JSON OUTPUT_JSON
 
 Arguments:
-  ROSTER_JSON: JSON file with roster (output from team_usage_roster)
+  ROSTER_JSON: JSON from team_usage_roster (array of team members)
   TIME_PERIOD: 'mtd' or 'past-month'
-  OUTPUT_JSON: Path to write the complete params JSON
-  --datadog-json: Optional path to Datadog query results JSON
+  USAGE_JSON: Datadog aggregated usage by email and model (required - no zero usage reports)
+  OUTPUT_JSON: Path to write complete params for team_usage_report
 
-The Datadog JSON should have the structure from Datadog MCP queries:
-  {
-    "by_email_model": [
-      {"@email": "user@cvent.com", "@model": "claude-sonnet-4-5", "sum_cost": 45.50, "request_count": 127, "session_count": 8}
-    ],
-    "by_email": [
-      {"@email": "user@cvent.com", "event_count": 250}
-    ]
-  }
-
-If no Datadog JSON provided, initializes usage_by_email with zero values.
+Usage JSON format (from Datadog MCP aggregation):
+  [
+    {"email": "user@cvent.com", "model": "claude-sonnet-4-5", "cost": 45.50, "requests": 127, "sessions": 8},
+    {"email": "user@cvent.com", "model": "claude-opus-4-5", "cost": 13.50, "requests": 32, "sessions": 4}
+  ]
 """
 import sys
 import json
@@ -43,37 +37,39 @@ def get_period_label(time_period):
     return time_period
 
 
-def build_params(roster_file, time_period, datadog_file=None):
-    """
-    Build complete params from roster and optional Datadog data.
-
-    Args:
-        roster_file: Path to roster JSON (from team_usage_roster)
-        time_period: 'mtd' or 'past-month'
-        datadog_file: Optional path to Datadog query results JSON
-
-    Returns:
-        Dict with params structure ready for team_usage_report
-    """
-    # Read roster
+def build_params(roster_file, time_period, usage_file):
+    """Build params from roster and usage data."""
     with open(roster_file, 'r') as f:
         roster = json.load(f)
 
     if not isinstance(roster, list):
-        raise ValueError("Roster file must contain a JSON array")
+        raise ValueError("Roster must be a JSON array")
 
-    # Extract unique teams and initialize usage template
+    with open(usage_file, 'r') as f:
+        usage_list = json.load(f)
+
+    if not isinstance(usage_list, list):
+        raise ValueError("Usage data must be a JSON array")
+
+    # Extract unique teams from roster
     teams = []
-    usage_by_email = {}
     seen_teams = set()
-
     for member in roster:
-        email = member.get('email', '').lower()
         team = member.get('team', '')
-
         if team and team not in seen_teams:
             teams.append(team)
             seen_teams.add(team)
+
+    # Build usage_by_email from flat usage list
+    usage_by_email = {}
+    models = set()
+
+    for row in usage_list:
+        email = row.get('email', '').lower()
+        model = row.get('model', '')
+        cost = row.get('cost', 0) or 0
+        requests = row.get('requests', 0) or 0
+        sessions = row.get('sessions', 0) or 0
 
         if email:
             if email not in usage_by_email:
@@ -84,33 +80,14 @@ def build_params(roster_file, time_period, datadog_file=None):
                     'model_costs': {}
                 }
 
-    # Merge Datadog data if provided
-    models = set()
-    if datadog_file:
-        with open(datadog_file, 'r') as f:
-            datadog = json.load(f)
+            usage_by_email[email]['cost'] += cost
+            usage_by_email[email]['requests'] += requests
+            usage_by_email[email]['sessions'] = max(usage_by_email[email]['sessions'], sessions)
 
-        # Process per-email-model usage data
-        by_email_model = datadog.get('by_email_model', [])
-        for row in by_email_model:
-            email = row.get('@email', '').lower()
-            model = row.get('@model', '')
-            cost = row.get('sum_cost', 0) or row.get('cost', 0) or 0
-            requests = row.get('request_count', 0) or row.get('count', 0) or 0
-            sessions = row.get('session_count', 0) or 0
+            if model:
+                usage_by_email[email]['model_costs'][model] = cost
+                models.add(model)
 
-            if email in usage_by_email:
-                # Add to totals
-                usage_by_email[email]['cost'] += cost
-                usage_by_email[email]['requests'] += requests
-                usage_by_email[email]['sessions'] = max(usage_by_email[email]['sessions'], sessions)
-
-                # Add per-model cost
-                if model:
-                    usage_by_email[email]['model_costs'][model] = cost
-                    models.add(model)
-
-    # Build params
     params = {
         'teams': teams,
         'time_period': time_period,
@@ -123,47 +100,36 @@ def build_params(roster_file, time_period, datadog_file=None):
     return params
 
 
-def main(roster_file, time_period, output_file, datadog_file=None):
+def main(roster_file, time_period, usage_file, output_file):
     """Main entry point."""
     if time_period not in ('mtd', 'past-month'):
-        raise ValueError(f"time_period must be 'mtd' or 'past-month', got '{time_period}'")
+        raise ValueError(f"time_period must be 'mtd' or 'past-month'")
 
-    params = build_params(roster_file, time_period, datadog_file)
+    params = build_params(roster_file, time_period, usage_file)
 
     with open(output_file, 'w') as f:
         json.dump(params, f, indent=2)
 
-    active_users = sum(1 for usage in params['usage_by_email'].values() if usage['cost'] > 0)
-    total_cost = sum(usage['cost'] for usage in params['usage_by_email'].values())
-
+    total_cost = sum(u['cost'] for u in params['usage_by_email'].values())
     print(json.dumps({
         'success': True,
         'output': output_file,
         'teams': params['teams'],
         'members': len(params['members']),
-        'active_users': active_users,
-        'total_cost': total_cost,
+        'total_cost': round(total_cost, 2),
         'models': params['models']
     }))
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 4:
+    if len(sys.argv) != 5:
         print(json.dumps({
-            "error": "Usage: python -m managertools.tools.team_usage_build_report ROSTER_JSON TIME_PERIOD OUTPUT_JSON [--datadog-json DATADOG_JSON]"
+            "error": "Usage: python -m managertools.tools.team_usage_build_report ROSTER_JSON TIME_PERIOD USAGE_JSON OUTPUT_JSON"
         }), file=sys.stderr)
         sys.exit(1)
 
-    roster_file = sys.argv[1]
-    time_period = sys.argv[2]
-    output_file = sys.argv[3]
-    datadog_file = None
-
-    if len(sys.argv) > 4 and sys.argv[4] == '--datadog-json' and len(sys.argv) > 5:
-        datadog_file = sys.argv[5]
-
     try:
-        main(roster_file, time_period, output_file, datadog_file)
+        main(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
     except Exception as e:
         print(json.dumps({"error": str(e)}), file=sys.stderr)
         sys.exit(1)

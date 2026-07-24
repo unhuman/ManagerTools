@@ -1,0 +1,1356 @@
+{
+  "teams": [
+    "ApocalypseNull",
+    "Artificial-Pirates",
+    "Bellatrix",
+    "CocoDell",
+    "Dumbledore-Army",
+    "GinPorter",
+    "Neuron",
+    "Oktagon",
+    "Queueless",
+    "Rebel-Intelligence",
+    "Red-emption",
+    "RepLock",
+    "RESTafarians",
+    "Team-Rocket"
+  ],
+  "time_period": "mtd",
+  "period_label": "July 2026 (MTD)",
+  "members": [
+    {
+      "name": "Adam Greene",
+      "email": "agreene@cvent.com",
+      "team": "ApocalypseNull"
+    },
+    {
+      "name": "Edward Peters",
+      "email": "epeters@cvent.com",
+      "team": "ApocalypseNull"
+    },
+    {
+      "name": "Gaetan Savoie",
+      "email": "gsavoie@cvent.com",
+      "team": "ApocalypseNull"
+    },
+    {
+      "name": "Howard Uman",
+      "email": "human@cvent.com",
+      "team": "ApocalypseNull"
+    },
+    {
+      "name": "Jeremy Regan",
+      "email": "j.regan@cvent.com",
+      "team": "ApocalypseNull"
+    },
+    {
+      "name": "Jeremy Byron",
+      "email": "jbyron@cvent.com",
+      "team": "ApocalypseNull"
+    },
+    {
+      "name": "Justin Bailey",
+      "email": "justin.bailey@cvent.com",
+      "team": "ApocalypseNull"
+    },
+    {
+      "name": "Quinn Savitt",
+      "email": "quinn.savitt@cvent.com",
+      "team": "ApocalypseNull"
+    },
+    {
+      "name": "Rob Miller",
+      "email": "robm@cvent.com",
+      "team": "ApocalypseNull"
+    },
+    {
+      "name": "Sanju Dongol",
+      "email": "sdongol@cvent.com",
+      "team": "ApocalypseNull"
+    },
+    {
+      "name": "Akash Jain",
+      "email": "akash.jain@cvent.com",
+      "team": "Artificial-Pirates"
+    },
+    {
+      "name": "Ayush Bahuguna",
+      "email": "ayush.bahuguna@cvent.com",
+      "team": "Artificial-Pirates"
+    },
+    {
+      "name": "Kalpana Verma",
+      "email": "kalpana.verma@cvent.com",
+      "team": "Artificial-Pirates"
+    },
+    {
+      "name": "Karan Bhanot",
+      "email": "kbhanot@cvent.com",
+      "team": "Artificial-Pirates"
+    },
+    {
+      "name": "Meenakshi Dahiya",
+      "email": "mdahiya@cvent.com",
+      "team": "Artificial-Pirates"
+    },
+    {
+      "name": "Rishabh Jain",
+      "email": "rishabh.jain@cvent.com",
+      "team": "Artificial-Pirates"
+    },
+    {
+      "name": "Tushar Srivastava",
+      "email": "tushar.srivastava@cvent.com",
+      "team": "Artificial-Pirates"
+    },
+    {
+      "name": "Aseem Bathla",
+      "email": "abathla@cvent.com",
+      "team": "Bellatrix"
+    },
+    {
+      "name": "Amit Kumar",
+      "email": "akumar6@cvent.com",
+      "team": "Bellatrix"
+    },
+    {
+      "name": "Arun Kumar Verma",
+      "email": "arunkumar.verma@cvent.com",
+      "team": "Bellatrix"
+    },
+    {
+      "name": "Dushyant Arora",
+      "email": "darora@cvent.com",
+      "team": "Bellatrix"
+    },
+    {
+      "name": "Gagan Dhingra",
+      "email": "gdhingra@cvent.com",
+      "team": "Bellatrix"
+    },
+    {
+      "name": "James Hooker",
+      "email": "james.hooker@cvent.com",
+      "team": "Bellatrix"
+    },
+    {
+      "name": "Kshitij Singh",
+      "email": "kshitij.singh@cvent.com",
+      "team": "Bellatrix"
+    },
+    {
+      "name": "Matt Jenkins",
+      "email": "mjenkins@cvent.com",
+      "team": "Bellatrix"
+    },
+    {
+      "name": "Rahul Akash Katare",
+      "email": "rahulakash.katare@cvent.com",
+      "team": "Bellatrix"
+    },
+    {
+      "name": "Rahul Bairwa",
+      "email": "rbairwa@cvent.com",
+      "team": "Bellatrix"
+    },
+    {
+      "name": "Sandeep Singh Chauhan",
+      "email": "sandeep.chauhan@cvent.com",
+      "team": "Bellatrix"
+    },
+    {
+      "name": "Sarthak Aggarwal",
+      "email": "sarthak.aggarwal@cvent.com",
+      "team": "Bellatrix"
+    },
+    {
+      "name": "Anurag Lal",
+      "email": "anurag.lal@cvent.com",
+      "team": "CocoDell"
+    },
+    {
+      "name": "Himanshu Shukla",
+      "email": "h.shukla@cvent.com",
+      "team": "CocoDell"
+    },
+    {
+      "name": "Janvi Soni",
+      "email": "janvi.soni@cvent.com",
+      "team": "CocoDell"
+    },
+    {
+      "name": "Pranay Deep",
+      "email": "pdeep@cvent.com",
+      "team": "CocoDell"
+    },
+    {
+      "name": "Rajat Goel",
+      "email": "rajat.goel@cvent.com",
+      "team": "CocoDell"
+    },
+    {
+      "name": "Shubham Vinay Tiwari",
+      "email": "svtiwari@cvent.com",
+      "team": "CocoDell"
+    },
+    {
+      "name": "Vishal Gera",
+      "email": "vgera@cvent.com",
+      "team": "CocoDell"
+    },
+    {
+      "name": "Alex Migdol",
+      "email": "amigdol@cvent.com",
+      "team": "Dumbledore-Army"
+    },
+    {
+      "name": "Kisha Cooper",
+      "email": "kisha.cooper@cvent.com",
+      "team": "Dumbledore-Army"
+    },
+    {
+      "name": "Mohamed Hamidi",
+      "email": "mhamidi@cvent.com",
+      "team": "Dumbledore-Army"
+    },
+    {
+      "name": "Pooja Lohiya",
+      "email": "plohiya@cvent.com",
+      "team": "Dumbledore-Army"
+    },
+    {
+      "name": "Shaan Malhotra",
+      "email": "shaan.malhotra@cvent.com",
+      "team": "Dumbledore-Army"
+    },
+    {
+      "name": "Shawn McIntosh",
+      "email": "smcintosh@cvent.com",
+      "team": "Dumbledore-Army"
+    },
+    {
+      "name": "Yaman Shrestha",
+      "email": "yaman.shrestha@cvent.com",
+      "team": "Dumbledore-Army"
+    },
+    {
+      "name": "Dorian Clair",
+      "email": "dclair@cvent.com",
+      "team": "GinPorter"
+    },
+    {
+      "name": "David White",
+      "email": "dwhite@cvent.com",
+      "team": "GinPorter"
+    },
+    {
+      "name": "Jallen Liao",
+      "email": "jliao@cvent.com",
+      "team": "GinPorter"
+    },
+    {
+      "name": "Karan Govil",
+      "email": "kgovil@cvent.com",
+      "team": "GinPorter"
+    },
+    {
+      "name": "Kumaran Subramanian",
+      "email": "kumaran.subramanian@cvent.com",
+      "team": "GinPorter"
+    },
+    {
+      "name": "Kyle Grant",
+      "email": "kyleg@cvent.com",
+      "team": "GinPorter"
+    },
+    {
+      "name": "Laura Richardson",
+      "email": "lrichardson@cvent.com",
+      "team": "GinPorter"
+    },
+    {
+      "name": "Milan Malhotra",
+      "email": "m.malhotra@cvent.com",
+      "team": "GinPorter"
+    },
+    {
+      "name": "Nicholas Hancock",
+      "email": "nicholas.hancock@cvent.com",
+      "team": "GinPorter"
+    },
+    {
+      "name": "Nimat Saliu",
+      "email": "nsaliu@cvent.com",
+      "team": "GinPorter"
+    },
+    {
+      "name": "Pratik Shrestha",
+      "email": "pratik.shrestha@cvent.com",
+      "team": "GinPorter"
+    },
+    {
+      "name": "Edwin Liu",
+      "email": "eliu@cvent.com",
+      "team": "Neuron"
+    },
+    {
+      "name": "John Dheem Abiertas",
+      "email": "jabiertas@cvent.com",
+      "team": "Neuron"
+    },
+    {
+      "name": "James Lapus",
+      "email": "james.lapus@cvent.com",
+      "team": "Neuron"
+    },
+    {
+      "name": "Jashanpreet Kaur",
+      "email": "jashan.kaur@cvent.com",
+      "team": "Neuron"
+    },
+    {
+      "name": "Li Chua",
+      "email": "jchua@cvent.com",
+      "team": "Neuron"
+    },
+    {
+      "name": "Jerrod Lepper",
+      "email": "jerrod.lepper@cvent.com",
+      "team": "Neuron"
+    },
+    {
+      "name": "Rolando Lopez",
+      "email": "rlopez@cvent.com",
+      "team": "Neuron"
+    },
+    {
+      "name": "Ramesh Poopandi",
+      "email": "rpoopandi@cvent.com",
+      "team": "Neuron"
+    },
+    {
+      "name": "Zaylie Tamashiro",
+      "email": "zaylie.tamashiro@cvent.com",
+      "team": "Neuron"
+    },
+    {
+      "name": "Zac Davidson",
+      "email": "zdavidson@cvent.com",
+      "team": "Neuron"
+    },
+    {
+      "name": "Abhishek Joshi",
+      "email": "ajoshi@cvent.com",
+      "team": "Oktagon"
+    },
+    {
+      "name": "Aaron Lindsey",
+      "email": "alindsey@cvent.com",
+      "team": "Oktagon"
+    },
+    {
+      "name": "Charlton Port",
+      "email": "cport@cvent.com",
+      "team": "Oktagon"
+    },
+    {
+      "name": "Joel Spiers",
+      "email": "j.spiers@cvent.com",
+      "team": "Oktagon"
+    },
+    {
+      "name": "Kevin Truong",
+      "email": "kevin.truong@cvent.com",
+      "team": "Oktagon"
+    },
+    {
+      "name": "Matthew Hostetler",
+      "email": "mhostetler@cvent.com",
+      "team": "Oktagon"
+    },
+    {
+      "name": "Quan Trinh",
+      "email": "qtrinh@cvent.com",
+      "team": "Oktagon"
+    },
+    {
+      "name": "Sam Galletta",
+      "email": "sam.galletta@cvent.com",
+      "team": "Oktagon"
+    },
+    {
+      "name": "Brian Felder",
+      "email": "bfelder@cvent.com",
+      "team": "Queueless"
+    },
+    {
+      "name": "Chris Giessner",
+      "email": "c.giessner@cvent.com",
+      "team": "Queueless"
+    },
+    {
+      "name": "Edward Chang",
+      "email": "edward.chang@cvent.com",
+      "team": "Queueless"
+    },
+    {
+      "name": "Kelly Hatcher",
+      "email": "khatcher@cvent.com",
+      "team": "Queueless"
+    },
+    {
+      "name": "Lawson Kennan",
+      "email": "lkennan@cvent.com",
+      "team": "Queueless"
+    },
+    {
+      "name": "Suhaim Abdussamad",
+      "email": "sabdussamad@cvent.com",
+      "team": "Queueless"
+    },
+    {
+      "name": "Taidg Murphy",
+      "email": "tmurphy@cvent.com",
+      "team": "Queueless"
+    },
+    {
+      "name": "Utsav Upadhyay",
+      "email": "utsav.upadhyay@cvent.com",
+      "team": "Queueless"
+    },
+    {
+      "name": "Yingchen Bai",
+      "email": "ybai@cvent.com",
+      "team": "Queueless"
+    },
+    {
+      "name": "Cael Maceachern",
+      "email": "cmaceachern@cvent.com",
+      "team": "Rebel-Intelligence"
+    },
+    {
+      "name": "Cuong Mai",
+      "email": "cmai@cvent.com",
+      "team": "Rebel-Intelligence"
+    },
+    {
+      "name": "Edwin Yan",
+      "email": "eyan@cvent.com",
+      "team": "Rebel-Intelligence"
+    },
+    {
+      "name": "Jake Myshrall",
+      "email": "jmyshrall@cvent.com",
+      "team": "Rebel-Intelligence"
+    },
+    {
+      "name": "Ryan Pitre",
+      "email": "ryan.pitre@cvent.com",
+      "team": "Rebel-Intelligence"
+    },
+    {
+      "name": "Shary Masood",
+      "email": "smasood@cvent.com",
+      "team": "Rebel-Intelligence"
+    },
+    {
+      "name": "Gaurav Sharma",
+      "email": "gaurav.sharma1@cvent.com",
+      "team": "Red-emption"
+    },
+    {
+      "name": "Krunal Patni",
+      "email": "krunal.patni@cvent.com",
+      "team": "Red-emption"
+    },
+    {
+      "name": "Monish Chatterjee",
+      "email": "m.chatterjee@cvent.com",
+      "team": "Red-emption"
+    },
+    {
+      "name": "Mayank Dixit",
+      "email": "mayank.dixit@cvent.com",
+      "team": "Red-emption"
+    },
+    {
+      "name": "Nihal Shaikh",
+      "email": "nihal.shaikh-v@cvent.com",
+      "team": "Red-emption"
+    },
+    {
+      "name": "Nitesh Singh",
+      "email": "nitesh.singh@cvent.com",
+      "team": "Red-emption"
+    },
+    {
+      "name": "Ramesh Kumar",
+      "email": "ramesh.kumar@cvent.com",
+      "team": "Red-emption"
+    },
+    {
+      "name": "Ramesh Madane",
+      "email": "rmadane@cvent.com",
+      "team": "Red-emption"
+    },
+    {
+      "name": "Sagar Bundale",
+      "email": "sbundale@cvent.com",
+      "team": "Red-emption"
+    },
+    {
+      "name": "Nitin Shivankar",
+      "email": "snitin@cvent.com",
+      "team": "Red-emption"
+    },
+    {
+      "name": "Vishrut Jambudi",
+      "email": "vishrut.jambudi@cvent.com",
+      "team": "Red-emption"
+    },
+    {
+      "name": "Aditya Mishra",
+      "email": "amishra1@cvent.com",
+      "team": "RepLock"
+    },
+    {
+      "name": "Anurag Dixit",
+      "email": "anurag.dixit@cvent.com",
+      "team": "RepLock"
+    },
+    {
+      "name": "Osama Malik",
+      "email": "osama.malik@cvent.com",
+      "team": "RepLock"
+    },
+    {
+      "name": "Sahil Sharma",
+      "email": "sahil.sharma1@cvent.com",
+      "team": "RepLock"
+    },
+    {
+      "name": "Shivangi Aggarwal",
+      "email": "shivangi.aggarwal@cvent.com",
+      "team": "RepLock"
+    },
+    {
+      "name": "Yash Mathuria",
+      "email": "yash.mathuria@cvent.com",
+      "team": "RepLock"
+    },
+    {
+      "name": "Geoff Walker",
+      "email": "gwalker@cvent.com",
+      "team": "RESTafarians"
+    },
+    {
+      "name": "Haris Siddiqui",
+      "email": "hsiddiqui@cvent.com",
+      "team": "RESTafarians"
+    },
+    {
+      "name": "Michael Roscoe",
+      "email": "michael.roscoe@cvent.com",
+      "team": "RESTafarians"
+    },
+    {
+      "name": "Mihir Kothari",
+      "email": "mkothari@cvent.com",
+      "team": "RESTafarians"
+    },
+    {
+      "name": "Paul Armstrong",
+      "email": "paul.armstrong@cvent.com",
+      "team": "RESTafarians"
+    },
+    {
+      "name": "Patrick Wilson",
+      "email": "pwilson@cvent.com",
+      "team": "RESTafarians"
+    },
+    {
+      "name": "Rajpaul Bagga",
+      "email": "rbagga@cvent.com",
+      "team": "RESTafarians"
+    },
+    {
+      "name": "Sam Kyataka",
+      "email": "sam.kyataka@cvent.com",
+      "team": "RESTafarians"
+    },
+    {
+      "name": "Anjali Garg",
+      "email": "anjali.garg@cvent.com",
+      "team": "Team-Rocket"
+    },
+    {
+      "name": "Gurleen Kaur",
+      "email": "gurleen.kaur@cvent.com",
+      "team": "Team-Rocket"
+    },
+    {
+      "name": "Jayant Sharma",
+      "email": "jayant.sharma3@cvent.com",
+      "team": "Team-Rocket"
+    },
+    {
+      "name": "Manu Mittal",
+      "email": "mmittal@cvent.com",
+      "team": "Team-Rocket"
+    },
+    {
+      "name": "Samar Mathur",
+      "email": "samar.mathur@cvent.com",
+      "team": "Team-Rocket"
+    },
+    {
+      "name": "Sanjay Joshi",
+      "email": "sjoshi@cvent.com",
+      "team": "Team-Rocket"
+    },
+    {
+      "name": "Tushar Negi",
+      "email": "tnegi@cvent.com",
+      "team": "Team-Rocket"
+    },
+    {
+      "name": "Utteya Pal",
+      "email": "upal@cvent.com",
+      "team": "Team-Rocket"
+    },
+    {
+      "name": "Vishwadeep Tripathi",
+      "email": "vishwadeep.tripathi@cvent.com",
+      "team": "Team-Rocket"
+    }
+  ],
+  "usage_by_email": {
+    "agreene@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "epeters@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "gsavoie@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "human@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "j.regan@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "jbyron@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "justin.bailey@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "quinn.savitt@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "robm@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "sdongol@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "akash.jain@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "ayush.bahuguna@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "kalpana.verma@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "kbhanot@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "mdahiya@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "rishabh.jain@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "tushar.srivastava@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "abathla@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "akumar6@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "arunkumar.verma@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "darora@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "gdhingra@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "james.hooker@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "kshitij.singh@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "mjenkins@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "rahulakash.katare@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "rbairwa@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "sandeep.chauhan@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "sarthak.aggarwal@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "anurag.lal@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "h.shukla@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "janvi.soni@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "pdeep@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "rajat.goel@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "svtiwari@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "vgera@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "amigdol@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "kisha.cooper@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "mhamidi@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "plohiya@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "shaan.malhotra@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "smcintosh@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "yaman.shrestha@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "dclair@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "dwhite@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "jliao@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "kgovil@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "kumaran.subramanian@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "kyleg@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "lrichardson@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "m.malhotra@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "nicholas.hancock@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "nsaliu@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "pratik.shrestha@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "eliu@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "jabiertas@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "james.lapus@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "jashan.kaur@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "jchua@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "jerrod.lepper@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "rlopez@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "rpoopandi@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "zaylie.tamashiro@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "zdavidson@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "ajoshi@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "alindsey@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "cport@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "j.spiers@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "kevin.truong@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "mhostetler@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "qtrinh@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "sam.galletta@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "bfelder@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "c.giessner@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "edward.chang@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "khatcher@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "lkennan@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "sabdussamad@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "tmurphy@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "utsav.upadhyay@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "ybai@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "cmaceachern@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "cmai@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "eyan@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "jmyshrall@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "ryan.pitre@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "smasood@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "gaurav.sharma1@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "krunal.patni@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "m.chatterjee@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "mayank.dixit@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "nihal.shaikh-v@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "nitesh.singh@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "ramesh.kumar@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "rmadane@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "sbundale@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "snitin@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "vishrut.jambudi@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "amishra1@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "anurag.dixit@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "osama.malik@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "sahil.sharma1@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "shivangi.aggarwal@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "yash.mathuria@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "gwalker@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "hsiddiqui@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "michael.roscoe@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "mkothari@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "paul.armstrong@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "pwilson@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "rbagga@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "sam.kyataka@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "anjali.garg@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "gurleen.kaur@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "jayant.sharma3@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "mmittal@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "samar.mathur@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "sjoshi@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "tnegi@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "upal@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    },
+    "vishwadeep.tripathi@cvent.com": {
+      "cost": 0,
+      "requests": 0,
+      "sessions": 0,
+      "model_costs": {}
+    }
+  },
+  "models": []
+}
