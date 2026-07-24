@@ -152,7 +152,7 @@ def query_datadog(config_mgr, start_ms, end_ms):
                 logs_in_page = len(data['data'])
                 total_logs += logs_in_page
 
-                print(f"Page {page}: Fetched {logs_in_page} log entries (total: {total_logs})", file=sys.stderr)
+                print(f"\rPage {page}: Fetched {logs_in_page} log entries (total: {total_logs})", file=sys.stderr, end='', flush=True)
 
                 # Process logs
                 for log in data['data']:
@@ -208,7 +208,7 @@ def query_datadog(config_mgr, start_ms, end_ms):
             'sessions': len(data['sessions'])
         })
 
-    print(f"Pagination complete: Fetched {total_logs} total log entries across {page} page(s)", file=sys.stderr)
+    print(f"\nPagination complete: Fetched {total_logs} total log entries across {page} page(s)", file=sys.stderr)
 
     return usage_data
 
