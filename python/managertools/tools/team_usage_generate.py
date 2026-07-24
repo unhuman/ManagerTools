@@ -32,7 +32,7 @@ from managertools.tools.team_usage_report import generate_html
 
 
 def get_date_range(time_period):
-    """Get start and end ISO timestamps for the period."""
+    """Get start and end timestamps for the period (milliseconds since epoch)."""
     today = date.today()
 
     if time_period == 'mtd':
@@ -48,11 +48,14 @@ def get_date_range(time_period):
     else:
         raise ValueError("time_period must be 'mtd' or 'past-month'")
 
-    # Convert to ISO 8601 timestamps
-    start_iso = f"{start_date}T00:00:00Z"
-    end_iso = f"{end_date}T23:59:59Z"
+    # Convert to milliseconds since epoch (Datadog API expects this format)
+    start_dt = datetime.combine(start_date, datetime.min.time())
+    end_dt = datetime.combine(end_date, datetime.max.time())
 
-    return start_iso, end_iso, start_date, end_date
+    start_ms = int(start_dt.timestamp() * 1000)
+    end_ms = int(end_dt.timestamp() * 1000)
+
+    return start_ms, end_ms, start_date, end_date
 
 
 def get_period_label(time_period):
@@ -108,7 +111,7 @@ def fetch_rosters(teams, config_mgr):
     return list(members_by_email.values())
 
 
-def query_datadog(config_mgr, start_iso, end_iso):
+def query_datadog(config_mgr, start_ms, end_ms):
     """Query Datadog for Claude Code usage by email and model."""
     if not config_mgr.contains_key('datadogPAT'):
         raise RuntimeError("datadogPAT not configured in ~/.managerTools.cfg")
@@ -119,7 +122,7 @@ def query_datadog(config_mgr, start_iso, end_iso):
     # Query: service:claude-code @event.name:api_request
     query = "service:claude-code @event.name:api_request"
 
-    url = f"https://api.datadoghq.com/api/v2/logs/events?filter[query]={urllib.parse.quote(query)}&filter[from]={start_iso}&filter[to]={end_iso}&page[limit]=1000"
+    url = f"https://api.datadoghq.com/api/v2/logs/events?filter[query]={urllib.parse.quote(query)}&filter[from]={start_ms}&filter[to]={end_ms}&page[limit]=1000"
 
     headers = {
         'Authorization': f'Bearer {pat}',
@@ -193,7 +196,7 @@ def query_datadog(config_mgr, start_iso, end_iso):
     if not usage_data:
         print(f"Warning: No usage data returned from Datadog", file=sys.stderr)
         print(f"Query: {query}", file=sys.stderr)
-        print(f"Period: {start_iso} to {end_iso}", file=sys.stderr)
+        print(f"Period: {start_ms} to {end_ms} (milliseconds)", file=sys.stderr)
 
     return usage_data
 
@@ -268,11 +271,11 @@ def main(teams_str, time_period, output_path=None):
     print(f"Found {len(roster)} team members", file=sys.stderr)
 
     # Get date range
-    start_ts, end_ts, start_date, end_date = get_date_range(time_period)
+    start_ms, end_ms, start_date, end_date = get_date_range(time_period)
     print(f"Querying Datadog for {start_date} to {end_date}", file=sys.stderr)
 
     # Query Datadog
-    usage_data = query_datadog(config_mgr, start_ts, end_ts)
+    usage_data = query_datadog(config_mgr, start_ms, end_ms)
     print(f"Found usage data for {len(set(u['email'] for u in usage_data))} users", file=sys.stderr)
 
     # Build params
