@@ -423,8 +423,14 @@ def build_params(roster, usage_data, teams, time_period):
     return params
 
 
-def main(teams_str, time_period, output_path=None):
-    """Main entry point."""
+def main(teams_str, time_period, output_path):
+    """Main entry point.
+
+    Args:
+        teams_str: Team names (comma-separated) or 'org'
+        time_period: 'mtd', 'past-month', or 'Nd' (where N is 1-30)
+        output_path: Required path for output HTML file
+    """
     # Validate time_period
     valid = (
         time_period in ('mtd', 'past-month') or
@@ -433,10 +439,7 @@ def main(teams_str, time_period, output_path=None):
     if not valid:
         raise ValueError("time_period must be 'mtd', 'past-month', or 'Nd' (where N is 1-30)")
 
-    if output_path is None:
-        output_path = os.path.expanduser('~/claude_team_usage.html')
-    else:
-        output_path = os.path.expanduser(output_path)
+    output_path = os.path.expanduser(output_path)
 
     # Load config
     config_mgr = ConfigFileManager('.managerTools.cfg')
@@ -488,6 +491,11 @@ def main(teams_str, time_period, output_path=None):
     with open(output_path, 'w') as f:
         f.write(html)
 
+    # Print status message to stderr for user visibility
+    print(f"\n✓ Report generated successfully!", file=sys.stderr)
+    print(f"  Output file: {output_path}", file=sys.stderr)
+
+    # Print JSON summary to stdout
     print(json.dumps({
         'success': True,
         'output': output_path,
@@ -501,19 +509,18 @@ def main(teams_str, time_period, output_path=None):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 5 or sys.argv[3] != '--output':
         print(json.dumps({
-            "error": "Usage: python -m managertools.tools.team_usage_generate TEAMS TIME_PERIOD [--output PATH]\n"
-                     "  TIME_PERIOD: 'mtd', 'past-month', or 'Nd' where N is 1-30 (e.g., '5d' for last 5 days, '1d' for today)"
+            "error": "Usage: python -m managertools.tools.team_usage_generate TEAMS TIME_PERIOD --output PATH\n"
+                     "  TEAMS: Team names (comma-separated) or 'org'\n"
+                     "  TIME_PERIOD: 'mtd', 'past-month', or 'Nd' where N is 1-30 (e.g., '5d' for last 5 days, '1d' for today)\n"
+                     "  --output PATH: Required output file path (e.g., ~/usage.html or /path/to/report.html)"
         }), file=sys.stderr)
         sys.exit(1)
 
     teams = sys.argv[1]
     time_period = sys.argv[2]
-    output_path = None
-
-    if len(sys.argv) > 3 and sys.argv[3] == '--output' and len(sys.argv) > 4:
-        output_path = sys.argv[4]
+    output_path = sys.argv[4]
 
     try:
         main(teams, time_period, output_path)
