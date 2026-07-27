@@ -463,7 +463,12 @@ TROUBLESHOOTING:
     - "User not found": Email doesn't exist in any team roster
     - "orgTeams not configured": Need to set orgTeams in ~/.managerTools.cfg
     - "datadogPAT not configured": Need to set datadogPAT in ~/.managerTools.cfg
-    - Rate limit errors: Reduce datadogParallelDays in config (default 8, try 4)
+    - PAT scope errors (403 Forbidden): Ensure your PAT has all 4 required scopes:
+      * cloud_cost_management_read
+      * logs_read_data
+      * logs_read_index_data
+      * timeseries_query
+      Generate a new PAT at: Datadog → Settings → Organization → API Keys → Personal Access Tokens
 """
     print(help_text)
 
