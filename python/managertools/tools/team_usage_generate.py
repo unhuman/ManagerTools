@@ -39,10 +39,18 @@ _rate_limit_lock = threading.Lock()
 _rate_limit_reset_time = 0
 
 
-def log_debug(day_str, page, message):
-    """Log debug message with day and page context."""
+def log_debug(day_str, page, message, time_of_day=None):
+    """Log debug message with day, page, and optional time-of-day context.
+
+    Args:
+        day_str: The day being queried (e.g., "2026-07-15")
+        page: The page number being fetched
+        message: The message to log
+        time_of_day: Optional timestamp showing progress within the day (e.g., "14:32:15")
+    """
     thread_id = threading.current_thread().ident
-    print(f"[{day_str}:p{page}:t{thread_id}] {message}", file=sys.stderr, flush=True)
+    time_str = f"@{time_of_day}" if time_of_day else ""
+    print(f"[{day_str}{time_str}:p{page}:t{thread_id}] {message}", file=sys.stderr, flush=True)
 
 
 def get_date_range(time_period):
@@ -229,6 +237,7 @@ def query_datadog_day(config_mgr, start_ms, end_ms, day_str, resume_id=None):
     page = 0
     cursor = None
     total_logs = 0
+    last_known_timestamp = None  # Track progress through the day
 
     # Per-day checkpoint (optional)
     checkpoint_file = None
@@ -309,13 +318,13 @@ def query_datadog_day(config_mgr, start_ms, end_ms, day_str, resume_id=None):
                     wait_time = min(2 ** retry_count, max_retry_wait)
                     error_code = e.code
                     error_msg = e.reason if hasattr(e, 'reason') else str(e)
-                    log_debug(day_str, page, f"HTTP {error_code} ({error_msg}), retrying in {wait_time}s (attempt {retry_count}, URL: {url[:80]}...)")
+                    log_debug(day_str, page, f"HTTP {error_code} ({error_msg}), retrying in {wait_time}s (attempt {retry_count})", time_of_day=last_known_timestamp)
                     time.sleep(wait_time)
                 except (urllib.error.URLError, ConnectionResetError, BrokenPipeError, TimeoutError, socket.timeout) as e:
                     retry_count += 1
                     wait_time = min(2 ** retry_count, max_retry_wait)
                     error_type = type(e).__name__
-                    log_debug(day_str, page, f"{error_type}: {str(e)[:100]}, retrying in {wait_time}s (attempt {retry_count})")
+                    log_debug(day_str, page, f"{error_type}: {str(e)[:100]}, retrying in {wait_time}s (attempt {retry_count})", time_of_day=last_known_timestamp)
                     time.sleep(wait_time)
 
             if data is None:
@@ -339,6 +348,7 @@ def query_datadog_day(config_mgr, start_ms, end_ms, day_str, resume_id=None):
                         from datetime import datetime as dt_module
                         dt_obj = dt_module.fromisoformat(ts_raw.replace('Z', '+00:00'))
                         latest_timestamp = f" - Latest: {dt_obj.strftime('%Y-%m-%d %H:%M:%S')}"
+                        last_known_timestamp = dt_obj.strftime('%H:%M:%S')  # Save time of day for error logging
                     except:
                         pass
 
