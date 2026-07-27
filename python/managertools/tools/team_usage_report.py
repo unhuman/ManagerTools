@@ -186,6 +186,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     <div class="team-filter-container">
       <label style="font-weight: 600; margin-right: 1rem;">Filter by Team:</label>
       {team_checkboxes}
+      <button id="clear-team-filter" class="filter-button">Clear All</button>
     </div>
     '''
 
@@ -612,6 +613,26 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       cursor: pointer;
     }}
 
+    .filter-button {{
+      padding: 0.4rem 1rem;
+      background-color: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: opacity 0.2s;
+      margin-left: auto;
+    }}
+
+    .filter-button:hover {{
+      opacity: 0.8;
+    }}
+
+    .filter-button:active {{
+      opacity: 0.7;
+    }}
+
     @media (max-width: 1024px) {{
       .report-table {{
         font-size: 0.9rem;
@@ -778,6 +799,17 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     document.querySelectorAll('.team-filter').forEach(checkbox => {{
       checkbox.addEventListener('change', applyTeamFilter);
     }});
+
+    // Clear All button handler
+    const clearButton = document.getElementById('clear-team-filter');
+    if (clearButton) {{
+      clearButton.addEventListener('click', () => {{
+        document.querySelectorAll('.team-filter').forEach(checkbox => {{
+          checkbox.checked = true;
+        }});
+        applyTeamFilter();
+      }});
+    }}
   </script>
 </body>
 </html>'''
