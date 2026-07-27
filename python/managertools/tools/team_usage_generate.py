@@ -26,6 +26,7 @@ import urllib.request
 import urllib.parse
 import time
 from datetime import date, datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from managertools.util.config_file_manager import ConfigFileManager
 from managertools.rest.backstage_rest import BackstageREST
@@ -131,8 +132,75 @@ def fetch_rosters(teams, config_mgr):
     return list(members_by_email.values())
 
 
-def query_datadog(config_mgr, start_ms, end_ms, resume_id=None):
-    """Query Datadog for all Anthropic product usage by email, model, and product."""
+def split_date_range(start_ms, end_ms):
+    """Split a date range into individual calendar days.
+
+    Returns:
+        List of tuples: (day_start_ms, day_end_ms, date_str)
+    """
+    start_dt = datetime.fromtimestamp(start_ms / 1000)
+    end_dt = datetime.fromtimestamp(end_ms / 1000)
+
+    result = []
+    current = start_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    while current <= end_dt:
+        day_start = current
+        day_end = current.replace(hour=23, minute=59, second=59, microsecond=999999)
+        if day_end > end_dt:
+            day_end = end_dt
+
+        day_start_ms = int(day_start.timestamp() * 1000)
+        day_end_ms = int(day_end.timestamp() * 1000)
+        date_str = current.strftime('%Y-%m-%d')
+
+        result.append((day_start_ms, day_end_ms, date_str))
+
+        current += timedelta(days=1)
+
+    return result
+
+
+def merge_usage_dicts(usage_dicts):
+    """Merge multiple per-day usage dicts into one.
+
+    Args:
+        usage_dicts: List of {(email, model, product): {'cost': ..., 'requests': ..., 'sessions': {...}}} dicts
+
+    Returns:
+        Merged dict with costs/requests summed and sessions union'd
+    """
+    merged = {}
+
+    for usage_dict in usage_dicts:
+        for key, data in usage_dict.items():
+            if key not in merged:
+                merged[key] = {
+                    'cost': 0,
+                    'requests': 0,
+                    'sessions': set()
+                }
+
+            merged[key]['cost'] += data['cost']
+            merged[key]['requests'] += data['requests']
+            merged[key]['sessions'].update(data['sessions'])
+
+    return merged
+
+
+def query_datadog_day(config_mgr, start_ms, end_ms, day_str, resume_id=None):
+    """Query Datadog for a single day of Anthropic product usage by email, model, and product.
+
+    Args:
+        config_mgr: ConfigFileManager
+        start_ms: Day start (milliseconds since epoch)
+        end_ms: Day end (milliseconds since epoch)
+        day_str: Date string for logging (e.g., "2026-07-15")
+        resume_id: Optional resume ID for per-day checkpointing
+
+    Returns:
+        Dict {(email, model, product): {'cost': float, 'requests': int, 'sessions': set}}
+    """
     if not config_mgr.contains_key('datadogPAT'):
         raise RuntimeError("datadogPAT not configured in ~/.managerTools.cfg")
 
@@ -151,10 +219,10 @@ def query_datadog(config_mgr, start_ms, end_ms, resume_id=None):
     cursor = None
     total_logs = 0
 
-    # Try to resume from saved checkpoint
+    # Per-day checkpoint (optional)
     checkpoint_file = None
     if resume_id:
-        checkpoint_file = f"/tmp/datadog_checkpoint_{resume_id}.json"
+        checkpoint_file = f"/tmp/datadog_daycheck_{resume_id}_{day_str}.json"
         if os.path.exists(checkpoint_file):
             try:
                 with open(checkpoint_file, 'r') as f:
@@ -319,16 +387,64 @@ def query_datadog(config_mgr, start_ms, end_ms, resume_id=None):
         print(f"Error querying Datadog: {e}", file=sys.stderr)
         raise
 
-    # Clean up checkpoint file on successful completion
+    # Clean up checkpoint file on successful day completion
     if checkpoint_file and os.path.exists(checkpoint_file):
         try:
             os.remove(checkpoint_file)
         except:
             pass  # Fail silently if cleanup fails
 
+    print(f"✓ {day_str}: Fetched {total_logs} log entries ({page} page(s))", file=sys.stderr)
+
+    # Return raw usage dict for merging with other days
+    return usage_by_email_model_product
+
+
+def query_datadog(config_mgr, start_ms, end_ms, resume_id=None):
+    """Query Datadog for all days in parallel, merge results.
+
+    Args:
+        config_mgr: ConfigFileManager
+        start_ms: Period start (milliseconds since epoch)
+        end_ms: Period end (milliseconds since epoch)
+        resume_id: Optional resume ID for per-day checkpointing
+
+    Returns:
+        List of usage dicts with model and product cost breakdowns
+    """
+    days = split_date_range(start_ms, end_ms)
+
+    # Get max workers from config, default to 8
+    max_workers = 8
+    if config_mgr.contains_key('datadogParallelDays'):
+        try:
+            max_workers = int(config_mgr.get_value('datadogParallelDays'))
+        except:
+            max_workers = 8
+
+    # Query each day in parallel
+    all_usage_dicts = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(query_datadog_day, config_mgr, d_start, d_end, day_str, resume_id): day_str
+            for d_start, d_end, day_str in days
+        }
+
+        for future in as_completed(futures):
+            try:
+                day_usage = future.result()
+                all_usage_dicts.append(day_usage)
+            except Exception as e:
+                day_str = futures[future]
+                print(f"✗ {day_str}: Failed to fetch - {e}", file=sys.stderr)
+                raise
+
+    # Merge results from all days
+    merged_usage = merge_usage_dicts(all_usage_dicts)
+
     # Convert to flat array, grouped by email, with breakdown by model and product
     usage_by_email = {}
-    for (email, model, product), data in usage_by_email_model_product.items():
+    for (email, model, product), data in merged_usage.items():
         if email not in usage_by_email:
             usage_by_email[email] = {
                 'cost': 0,
@@ -364,7 +480,7 @@ def query_datadog(config_mgr, start_ms, end_ms, resume_id=None):
             'product_costs': {p: round(c, 2) for p, c in data['product_costs'].items()}
         })
 
-    print(f"\nPagination complete: Fetched {total_logs} total log entries across {page} page(s)", file=sys.stderr)
+    print(f"\nParallel fetch complete: {len(days)} days queried", file=sys.stderr)
 
     return usage_data
 
@@ -423,11 +539,62 @@ def build_params(roster, usage_data, teams, time_period):
     return params
 
 
-def main(teams_str, time_period, output_path):
+def find_user_in_rosters(user_email, config_mgr):
+    """Find a user by email across all org teams.
+
+    Args:
+        user_email: Email address to find
+        config_mgr: ConfigFileManager instance
+
+    Returns:
+        Dict with 'name', 'email', 'team' keys
+
+    Raises:
+        RuntimeError if user not found
+    """
+    if not config_mgr.contains_key('orgTeams'):
+        raise RuntimeError("orgTeams not configured in ~/.managerTools.cfg")
+
+    org_teams = config_mgr.get_value('orgTeams')
+    if not isinstance(org_teams, list):
+        raise RuntimeError("orgTeams must be an array of team names")
+
+    # Fetch rosters for all teams
+    backstage_server = config_mgr.get_value('backstageServer')
+    backstage_auth = config_mgr.get_value('backstageAuth') if config_mgr.contains_key('backstageAuth') else None
+    backstage_cache_days = int(config_mgr.get_value('backstageCacheDays')) if config_mgr.contains_key('backstageCacheDays') else 7
+
+    backstage = BackstageREST(backstage_server, backstage_auth)
+    cache = BackstageCache(cache_ttl_days=backstage_cache_days)
+
+    target_email = user_email.lower()
+    for team_name in org_teams:
+        roster = cache.get(team_name)
+        if roster is None:
+            roster = backstage.get_team_roster(team_name)
+            if roster:
+                cache.put(team_name, roster)
+
+        if roster:
+            for member in roster:
+                raw_entity = member.get('raw_entity', {})
+                email_raw = raw_entity.get('spec', {}).get('profile', {}).get('email')
+                if email_raw and email_raw.lower() == target_email:
+                    return {
+                        'name': member.get('display_name', ''),
+                        'email': email_raw.lower(),
+                        'team': team_name
+                    }
+
+    raise RuntimeError(f"User {user_email} not found in any team")
+
+
+def main(user_email, teams_str, time_period, output_path):
     """Main entry point.
 
     Args:
-        teams_str: Team names (comma-separated) or 'org'
+        user_email: Single user email (mutually exclusive with teams_str)
+        teams_str: Team names (comma-separated) or 'org' (mutually exclusive with user_email)
         time_period: 'mtd', 'past-month', or 'Nd' (where N is 1-30)
         output_path: Required path for output HTML file
     """
@@ -444,17 +611,24 @@ def main(teams_str, time_period, output_path):
     # Load config
     config_mgr = ConfigFileManager('.managerTools.cfg')
 
-    # Parse teams
-    if teams_str.lower() == 'org':
-        if not config_mgr.contains_key('orgTeams'):
-            raise RuntimeError("orgTeams not configured in ~/.managerTools.cfg")
-        teams = config_mgr.get_value('orgTeams')
+    # Parse teams or user
+    if user_email:
+        print(f"Fetching user: {user_email}", file=sys.stderr)
+        member = find_user_in_rosters(user_email, config_mgr)
+        roster = [member]
+        teams = [member['team']]
+        print(f"Found user {member['name']} ({member['email']}) on team {member['team']}", file=sys.stderr)
     else:
-        teams = [t.strip() for t in teams_str.split(',')]
+        if teams_str.lower() == 'org':
+            if not config_mgr.contains_key('orgTeams'):
+                raise RuntimeError("orgTeams not configured in ~/.managerTools.cfg")
+            teams = config_mgr.get_value('orgTeams')
+        else:
+            teams = [t.strip() for t in teams_str.split(',')]
 
-    print(f"Fetching rosters for teams: {', '.join(teams)}", file=sys.stderr)
-    roster = fetch_rosters(teams, config_mgr)
-    print(f"Found {len(roster)} team members", file=sys.stderr)
+        print(f"Fetching rosters for teams: {', '.join(teams)}", file=sys.stderr)
+        roster = fetch_rosters(teams, config_mgr)
+        print(f"Found {len(roster)} team members", file=sys.stderr)
 
     # Get date range
     start_ms, end_ms, start_date, end_date = get_date_range(time_period)
@@ -467,8 +641,12 @@ def main(teams_str, time_period, output_path):
     print(f"End: {dt_module.fromtimestamp(end_ms/1000)} UTC", file=sys.stderr)
 
     # Query Datadog with resume capability
-    # Use teams_str + time_period as resume ID so same query can resume
-    resume_id = f"{teams_str}_{time_period}".replace(' ', '_').replace(',', '')
+    # Use user_email or teams_str + time_period as resume ID so same query can resume
+    if user_email:
+        resume_id = f"user_{user_email.replace('@', '_')}_{time_period}".replace(' ', '_')
+    else:
+        resume_id = f"teams_{teams_str}_{time_period}".replace(' ', '_').replace(',', '')
+
     usage_data = query_datadog(config_mgr, start_ms, end_ms, resume_id=resume_id)
     print(f"Found usage data for {len(set(u['email'] for u in usage_data))} users", file=sys.stderr)
 
@@ -511,19 +689,66 @@ def main(teams_str, time_period, output_path):
 if __name__ == '__main__':
     if len(sys.argv) < 4:
         print(json.dumps({
-            "error": "Usage: python -m managertools.tools.team_usage_generate TEAMS TIME_PERIOD OUTPUT_PATH\n"
-                     "  TEAMS: Team names (comma-separated) or 'org'\n"
+            "error": "Usage: python -m managertools.tools.team_usage_generate [-u EMAIL | -t TEAMS] TIME_PERIOD OUTPUT_PATH\n"
+                     "  -u EMAIL: Single user email (mutually exclusive with -t)\n"
+                     "  -t TEAMS: Team names (comma-separated) or 'org' (mutually exclusive with -u). One of -u or -t is required.\n"
                      "  TIME_PERIOD: 'mtd', 'past-month', or 'Nd' where N is 1-30 (e.g., '5d' for last 5 days, '1d' for today)\n"
-                     "  OUTPUT_PATH: Output file path (e.g., report.html or ~/usage.html or /path/to/report.html)"
+                     "  OUTPUT_PATH: Output file path (e.g., report.html or ~/usage.html or /path/to/report.html)\n"
+                     "\nExamples:\n"
+                     "  python -m managertools.tools.team_usage_generate -u alice@cvent.com 7d ~/usage.html\n"
+                     "  python -m managertools.tools.team_usage_generate -t Queueless mtd ~/usage.html\n"
+                     "  python -m managertools.tools.team_usage_generate -t org 30d ~/usage.html"
         }), file=sys.stderr)
         sys.exit(1)
 
-    teams = sys.argv[1]
-    time_period = sys.argv[2]
-    output_path = sys.argv[3]
+    # Parse -u and -t flags (mutually exclusive)
+    user_email = None
+    teams_str = None
+    time_period = None
+    output_path = None
+
+    i = 1
+    while i < len(sys.argv):
+        arg = sys.argv[i]
+        if arg == '-u':
+            if user_email is not None or teams_str is not None:
+                print(json.dumps({"error": "-u and -t are mutually exclusive, and can each only be specified once"}), file=sys.stderr)
+                sys.exit(1)
+            if i + 1 >= len(sys.argv):
+                print(json.dumps({"error": "-u requires an EMAIL argument"}), file=sys.stderr)
+                sys.exit(1)
+            user_email = sys.argv[i + 1]
+            i += 2
+        elif arg == '-t':
+            if user_email is not None or teams_str is not None:
+                print(json.dumps({"error": "-u and -t are mutually exclusive, and can each only be specified once"}), file=sys.stderr)
+                sys.exit(1)
+            if i + 1 >= len(sys.argv):
+                print(json.dumps({"error": "-t requires a TEAMS argument"}), file=sys.stderr)
+                sys.exit(1)
+            teams_str = sys.argv[i + 1]
+            i += 2
+        else:
+            # Positional arguments
+            if time_period is None:
+                time_period = arg
+            elif output_path is None:
+                output_path = arg
+            else:
+                print(json.dumps({"error": f"Unexpected argument: {arg}"}), file=sys.stderr)
+                sys.exit(1)
+            i += 1
+
+    # Validate we have one of -u or -t, and both required positional args
+    if user_email is None and teams_str is None:
+        print(json.dumps({"error": "Either -u EMAIL or -t TEAMS is required"}), file=sys.stderr)
+        sys.exit(1)
+    if time_period is None or output_path is None:
+        print(json.dumps({"error": "TIME_PERIOD and OUTPUT_PATH are required"}), file=sys.stderr)
+        sys.exit(1)
 
     try:
-        main(teams, time_period, output_path)
+        main(user_email, teams_str, time_period, output_path)
     except Exception as e:
         print(json.dumps({"error": str(e)}), file=sys.stderr)
         import traceback
