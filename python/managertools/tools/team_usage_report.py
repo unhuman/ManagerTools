@@ -385,7 +385,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     }}
 
     .table-wrapper {{
-      max-height: 600px;
+      max-height: 800px;
       overflow-y: auto;
       border: 1px solid var(--border);
       border-radius: 4px;
