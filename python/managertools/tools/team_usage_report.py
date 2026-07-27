@@ -174,6 +174,21 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     # Sort active by cost descending
     active_rows.sort(key=lambda r: r['cost'], reverse=True)
 
+    # Extract unique teams from active users
+    active_teams = sorted(set(r['team'] for r in active_rows))
+    team_filter_html = ''
+    if active_teams:
+        team_checkboxes = ''.join(
+            f'<label><input type="checkbox" class="team-filter" value="{t}" checked> {t}</label>'
+            for t in active_teams
+        )
+        team_filter_html = f'''
+    <div class="team-filter-container">
+      <label style="font-weight: 600; margin-right: 1rem;">Filter by Team:</label>
+      {team_checkboxes}
+    </div>
+    '''
+
     # Generate model cost header columns
     model_headers = ''.join(f'<th class="sortable model-col" data-model="{escape_html(m)}">{escape_html(m)}</th>' for m in models)
 
@@ -573,6 +588,30 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       background-color: var(--hover-bg) !important;
     }}
 
+    .team-filter-container {{
+      margin: 1.5rem 0;
+      padding: 1rem;
+      background-color: var(--header-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+    }}
+
+    .team-filter-container label {{
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      user-select: none;
+    }}
+
+    .team-filter-container input[type="checkbox"] {{
+      cursor: pointer;
+    }}
+
     @media (max-width: 1024px) {{
       .report-table {{
         font-size: 0.9rem;
@@ -631,7 +670,8 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     </table>
 
     <h2 id="individual-users">Active Users ({len(active_rows)})</h2>
-    <table class="report-table">
+    {team_filter_html}
+    <table class="report-table" id="active-users-table">
       <thead>
         <tr>
           <th class="sortable">Name</th>
@@ -718,6 +758,25 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     // Attach click handlers to sortable headers
     document.querySelectorAll('th.sortable').forEach(header => {{
       header.addEventListener('click', () => sortTable(header));
+    }});
+
+    // Team filter functionality
+    function applyTeamFilter() {{
+      const selectedTeams = Array.from(document.querySelectorAll('.team-filter:checked')).map(cb => cb.value);
+      const table = document.getElementById('active-users-table');
+      if (!table) return;
+
+      const rows = table.querySelector('tbody').querySelectorAll('tr');
+      rows.forEach(row => {{
+        const teamCell = row.children[1].textContent.trim();
+        const isVisible = selectedTeams.length === 0 || selectedTeams.includes(teamCell);
+        row.style.display = isVisible ? '' : 'none';
+      }});
+    }}
+
+    // Attach filter change handlers
+    document.querySelectorAll('.team-filter').forEach(checkbox => {{
+      checkbox.addEventListener('change', applyTeamFilter);
     }});
   </script>
 </body>
