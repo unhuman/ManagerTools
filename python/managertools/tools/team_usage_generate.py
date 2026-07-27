@@ -207,7 +207,7 @@ def merge_usage_dicts(usage_dicts):
     return merged
 
 
-def query_datadog_day(config_mgr, start_ms, end_ms, day_str, resume_id=None):
+def query_datadog_day(config_mgr, start_ms, end_ms, day_str, resume_id=None, roster_emails=None):
     """Query Datadog for a single day of Anthropic product usage by email, model, and product.
 
     Args:
@@ -216,6 +216,7 @@ def query_datadog_day(config_mgr, start_ms, end_ms, day_str, resume_id=None):
         end_ms: Day end (milliseconds since epoch)
         day_str: Date string for logging (e.g., "2026-07-15")
         resume_id: Optional resume ID for per-day checkpointing
+        roster_emails: Optional set/list of emails to filter by (for efficiency)
 
     Returns:
         Dict {(email, model, product): {'cost': float, 'requests': int, 'sessions': set}}
@@ -227,6 +228,11 @@ def query_datadog_day(config_mgr, start_ms, end_ms, day_str, resume_id=None):
 
     # Datadog logs query API endpoint - include all services (claude-code, claude-web, etc.)
     query = "service:claude* @event.name:api_request"
+
+    # Add email filter if roster is provided (more efficient server-side filtering)
+    if roster_emails:
+        email_filters = " OR ".join([f"@user.normalized_email:{email}" for email in sorted(roster_emails)])
+        query = f"{query} ({email_filters})"
 
     headers = {
         'Authorization': f'Bearer {pat}',
@@ -434,7 +440,7 @@ def query_datadog_day(config_mgr, start_ms, end_ms, day_str, resume_id=None):
     return usage_by_email_model_product
 
 
-def query_datadog(config_mgr, start_ms, end_ms, resume_id=None):
+def query_datadog(config_mgr, start_ms, end_ms, resume_id=None, roster=None):
     """Query Datadog for all days in parallel, merge results.
 
     Args:
@@ -442,6 +448,7 @@ def query_datadog(config_mgr, start_ms, end_ms, resume_id=None):
         start_ms: Period start (milliseconds since epoch)
         end_ms: Period end (milliseconds since epoch)
         resume_id: Optional resume ID for per-day checkpointing
+        roster: Optional list of member dicts with email field (for server-side filtering)
 
     Returns:
         List of usage dicts with model and product cost breakdowns
@@ -460,11 +467,17 @@ def query_datadog(config_mgr, start_ms, end_ms, resume_id=None):
 
     print(f"   Using {max_workers} worker thread(s)", file=sys.stderr)
 
+    # Extract emails from roster for efficient server-side filtering
+    roster_emails = set()
+    if roster:
+        roster_emails = {member['email'] for member in roster}
+        print(f"   Filtering by {len(roster_emails)} roster email(s)", file=sys.stderr)
+
     # Query each day in parallel
     all_usage_dicts = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
-            executor.submit(query_datadog_day, config_mgr, d_start, d_end, day_str, resume_id): day_str
+            executor.submit(query_datadog_day, config_mgr, d_start, d_end, day_str, resume_id, roster_emails if roster_emails else None): day_str
             for d_start, d_end, day_str in days
         }
 
@@ -761,7 +774,7 @@ def main(user_email, teams_str, time_period, output_path):
     else:
         resume_id = f"teams_{teams_str}_{time_period}".replace(' ', '_').replace(',', '')
 
-    usage_data = query_datadog(config_mgr, start_ms, end_ms, resume_id=resume_id)
+    usage_data = query_datadog(config_mgr, start_ms, end_ms, resume_id=resume_id, roster=roster)
     active_users = [u['email'] for u in usage_data if u['cost'] > 0]
     print(f"📊 Query results: {len(active_users)} active user(s) from {len(roster)} roster member(s)", file=sys.stderr)
 
