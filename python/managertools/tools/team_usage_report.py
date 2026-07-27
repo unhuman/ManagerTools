@@ -798,7 +798,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       const rows = table.querySelector('tbody').querySelectorAll('tr');
       rows.forEach(row => {{
         const teamCell = row.children[1].textContent.trim();
-        const isVisible = selectedTeams.length === 0 || selectedTeams.includes(teamCell);
+        const isVisible = selectedTeams.length > 0 && selectedTeams.includes(teamCell);
         row.style.display = isVisible ? '' : 'none';
       }});
     }}
