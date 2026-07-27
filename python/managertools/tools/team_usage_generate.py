@@ -420,7 +420,9 @@ REQUIRED POSITIONAL ARGUMENTS:
 
 CONFIGURATION (required in ~/.managerTools.cfg):
     backstageServer        Backstage FQDN (e.g., backstage.core.cvent.org)
-    datadogPAT            Datadog Personal Access Token
+    datadogPAT            Datadog Personal Access Token with scopes:
+                          - cloud_cost_management_read (to read Cloud Cost metrics)
+                          - timeseries_query (to query metrics API)
     orgTeams              Array of team names (required if using -t org)
 
 OPTIONAL CONFIGURATION:
