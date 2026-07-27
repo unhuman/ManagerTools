@@ -509,6 +509,21 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     .report-table .model-cell {{
       font-size: 0.85rem;
       text-align: right;
+      background-color: #f5f8ff;
+    }}
+
+    @media (prefers-color-scheme: dark) {{
+      .report-table .model-cell {{
+        background-color: #0f1e2e;
+      }}
+    }}
+
+    :root[data-theme="light"] .report-table .model-cell {{
+      background-color: #f5f8ff;
+    }}
+
+    :root[data-theme="dark"] .report-table .model-cell {{
+      background-color: #0f1e2e;
     }}
 
     .report-table .product-col {{
@@ -518,6 +533,21 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     .report-table .product-cell {{
       font-size: 0.85rem;
       text-align: right;
+      background-color: #faf5ff;
+    }}
+
+    @media (prefers-color-scheme: dark) {{
+      .report-table .product-cell {{
+        background-color: #2e0f3e;
+      }}
+    }}
+
+    :root[data-theme="light"] .report-table .product-cell {{
+      background-color: #faf5ff;
+    }}
+
+    :root[data-theme="dark"] .report-table .product-cell {{
+      background-color: #2e0f3e;
     }}
 
 .toc {{
