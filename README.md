@@ -144,6 +144,21 @@ Configuration is stored in `~/.managerTools.cfg` as a JSON file. The following o
   "downMergeTrunkBranches": ["main", "master", "develop", "release/.*"]
   ```
 
+#### Datadog Integration
+
+- **`datadogPAT`** — Datadog Personal Access Token for querying Claude Code usage data. Required for generating team usage reports. The token must have the following scopes:
+  - `logs_read_index` — Required to read logs for usage metrics
+  
+  To generate a new token, go to Datadog Settings → Organization → API Keys → Personal Access Tokens. Create a new token with the `logs_read_index` scope.
+  ```json
+  "datadogPAT": "ddpat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  ```
+
+- **`datadogParallelDays`** — Number of concurrent day-by-day queries to run when fetching Datadog logs (default: `8`). Increase for faster queries if your token allows higher concurrency; decrease if you hit rate limits.
+  ```json
+  "datadogParallelDays": 8
+  ```
+
 #### Backstage Catalog Integration
 
 - **`backstageServer`** — Backstage software catalog server FQDN for fetching team member role/title data. Used by the dashboard to enable "Compare by Title" peer analysis across the organization. Example: `"backstage.core.cvent.org"`. No default; if not configured, Backstage integration is skipped gracefully.
@@ -184,6 +199,8 @@ When the same setting is provided in both the configuration file and CLI flags:
   "backstageServer": "backstage.core.cvent.org",
   "backstageAuth": "",
   "backstageCacheDays": 7,
+  "datadogPAT": "ddpat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "datadogParallelDays": 8,
   "workSource": "pr",
   "maxCommitSize": 2000,
   "maxFileChangeSize": 5000,

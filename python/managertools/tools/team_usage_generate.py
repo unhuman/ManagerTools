@@ -15,7 +15,8 @@ Arguments:
 
 Configuration required in ~/.managerTools.cfg:
   - backstageServer: Backstage FQDN
-  - datadogPAT: Datadog Personal Access Token
+  - datadogPAT: Datadog Personal Access Token with scopes:
+    * logs_read_index (required for querying logs API)
   - orgTeams: Array of team names (if using 'org' parameter)
 """
 import sys
@@ -226,8 +227,9 @@ def query_datadog_day(config_mgr, start_ms, end_ms, day_str, resume_id=None, ros
 
     pat = config_mgr.get_value('datadogPAT')
 
-    # Datadog logs query API endpoint - include all services (claude-code, claude-web, etc.)
-    query = "service:claude* @event.name:api_request"
+    # Datadog logs query API endpoint - query all Anthropic usage events (no product filtering)
+    # This captures: chat, claude-code, claude-design, claude-web, voice-mode, research, cowork, office-agent, etc.
+    query = "@event.name:api_request @cost_usd:>0"
 
     # Add email filter if roster is provided (more efficient server-side filtering)
     if roster_emails:

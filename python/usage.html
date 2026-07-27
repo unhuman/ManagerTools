@@ -1,0 +1,1893 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Code Team Usage Report</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --text: #000000;
+      --border: #ddd;
+      --header-bg: #f5f5f5;
+      --hover-bg: #fafafa;
+      --accent: #0066cc;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1e1e1e;
+        --text: #e0e0e0;
+        --border: #444;
+        --header-bg: #2d2d2d;
+        --hover-bg: #333;
+        --accent: #5aa8ff;
+      }
+    }
+
+    :root[data-theme="light"] {
+      --bg: #ffffff;
+      --text: #000000;
+      --border: #ddd;
+      --header-bg: #f5f5f5;
+      --hover-bg: #fafafa;
+      --accent: #0066cc;
+    }
+
+    :root[data-theme="dark"] {
+      --bg: #1e1e1e;
+      --text: #e0e0e0;
+      --border: #444;
+      --header-bg: #2d2d2d;
+      --hover-bg: #333;
+      --accent: #5aa8ff;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      padding: 2rem;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 100%;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin-bottom: 0.5rem;
+      font-size: 2rem;
+    }
+
+    h2 {
+      margin-top: 2rem;
+      margin-bottom: 1rem;
+      font-size: 1.3rem;
+    }
+
+    .period-label {
+      color: var(--text);
+      font-size: 0.9rem;
+      margin-bottom: 2rem;
+    }
+
+    .teams-list {
+      margin-bottom: 2rem;
+      padding: 1rem;
+      background-color: var(--header-bg);
+      border-radius: 4px;
+    }
+
+    .teams-list strong {
+      margin-right: 0.5rem;
+    }
+
+    .summary-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-item {
+      padding: 1rem;
+      background-color: var(--header-bg);
+      border-radius: 4px;
+      border-left: 4px solid var(--accent);
+    }
+
+    .stat-label {
+      display: block;
+      font-size: 0.9rem;
+      color: var(--text);
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-value {
+      display: block;
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: var(--text);
+    }
+
+    .report-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 2rem;
+      background-color: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .report-table thead {
+      background-color: var(--header-bg);
+      font-weight: 600;
+    }
+
+    .report-table th {
+      padding: 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      user-select: none;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .report-table th.sortable::after {
+      content: " ⇅";
+      opacity: 0.3;
+      font-size: 0.9rem;
+    }
+
+    .report-table th.sort-asc::after {
+      content: " ↑";
+      opacity: 1;
+    }
+
+    .report-table th.sort-desc::after {
+      content: " ↓";
+      opacity: 1;
+    }
+
+    .report-table tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background-color 0.2s;
+    }
+
+    .report-table tbody tr:hover {
+      background-color: var(--hover-bg);
+    }
+
+    .report-table td {
+      padding: 0.75rem 1rem;
+    }
+
+    .report-table .name {
+      font-weight: 500;
+    }
+
+    .report-table .team {
+      font-size: 0.9rem;
+    }
+
+    .report-table .email {
+      font-size: 0.85rem;
+      font-family: monospace;
+    }
+
+    .report-table .currency {
+      text-align: right;
+      font-family: "Courier New", monospace;
+    }
+
+    .report-table .number {
+      text-align: right;
+      font-family: "Courier New", monospace;
+    }
+
+    .report-table .model-col {
+      font-size: 0.85rem;
+    }
+
+    .report-table .model-cell {
+      font-size: 0.85rem;
+      text-align: right;
+    }
+
+.toc {
+      background-color: var(--header-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1rem;
+      margin: 1.5rem 0;
+    }
+
+    .toc ul {
+      list-style: none;
+      padding-left: 1rem;
+      margin: 0.5rem 0 0 0;
+    }
+
+    .toc li {
+      margin: 0.5rem 0;
+    }
+
+    .toc a {
+      color: var(--accent);
+      text-decoration: none;
+      transition: opacity 0.2s;
+    }
+
+    .toc a:hover {
+      opacity: 0.8;
+      text-decoration: underline;
+    }
+
+    .team-table .name {
+      font-weight: 600;
+    }
+
+    .team-row {
+      background-color: var(--header-bg);
+      font-weight: 500;
+    }
+
+    .team-row:hover {
+      background-color: var(--hover-bg) !important;
+    }
+
+    .team-filter-container {
+      margin: 1.5rem 0;
+      padding: 1rem;
+      background-color: var(--header-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+    }
+
+    .team-filter-container label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .team-filter-container input[type="checkbox"] {
+      cursor: pointer;
+    }
+
+    .filter-buttons {
+      display: flex;
+      gap: 0.5rem;
+      margin-left: auto;
+    }
+
+    .filter-button {
+      padding: 0.4rem 1rem;
+      background-color: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: opacity 0.2s;
+    }
+
+    .filter-button:hover {
+      opacity: 0.8;
+    }
+
+    .filter-button:active {
+      opacity: 0.7;
+    }
+
+    @media (max-width: 1024px) {
+      .report-table {
+        font-size: 0.9rem;
+      }
+
+      .report-table th,
+      .report-table td {
+        padding: 0.5rem;
+      }
+
+      .model-col {
+        display: none;
+      }
+
+      .model-cell {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Claude Code Team Usage Report</h1>
+    <div class="period-label">Period: July 2026 (MTD)</div>
+    <div class="teams-list">
+      <strong>Teams:</strong> ApocalypseNull, Artificial-Pirates, Bellatrix, CocoDell, Dumbledore-Army, GinPorter, Neuron, Oktagon, Queueless, Rebel-Intelligence, Red-emption, RepLock, RESTafarians, Team-Rocket
+    </div>
+
+    <nav class="toc">
+      <strong>Contents:</strong>
+      <ul>
+        <li><a href="#filters">Filters</a></li>
+        <li><a href="#overall-stats">Overall Stats</a></li>
+        <li><a href="#team-summary">Team Summary</a></li>
+        <li><a href="#individual-users">Users</a></li>
+      </ul>
+    </nav>
+
+    <h2 id="filters">Filters</h2>
+    
+    <div class="team-filter-container">
+      <label style="font-weight: 600; margin-right: 1rem;">Filter by Team:</label>
+      <label><input type="checkbox" class="team-filter" value="ApocalypseNull" checked> ApocalypseNull</label><label><input type="checkbox" class="team-filter" value="Artificial-Pirates" checked> Artificial-Pirates</label><label><input type="checkbox" class="team-filter" value="Bellatrix" checked> Bellatrix</label><label><input type="checkbox" class="team-filter" value="CocoDell" checked> CocoDell</label><label><input type="checkbox" class="team-filter" value="Dumbledore-Army" checked> Dumbledore-Army</label><label><input type="checkbox" class="team-filter" value="GinPorter" checked> GinPorter</label><label><input type="checkbox" class="team-filter" value="Neuron" checked> Neuron</label><label><input type="checkbox" class="team-filter" value="Oktagon" checked> Oktagon</label><label><input type="checkbox" class="team-filter" value="Queueless" checked> Queueless</label><label><input type="checkbox" class="team-filter" value="RESTafarians" checked> RESTafarians</label><label><input type="checkbox" class="team-filter" value="Rebel-Intelligence" checked> Rebel-Intelligence</label><label><input type="checkbox" class="team-filter" value="Red-emption" checked> Red-emption</label><label><input type="checkbox" class="team-filter" value="RepLock" checked> RepLock</label><label><input type="checkbox" class="team-filter" value="Team-Rocket" checked> Team-Rocket</label>
+      <div class="filter-buttons">
+        <button id="select-all-teams" class="filter-button">Select All</button>
+        <button id="clear-all-teams" class="filter-button">Clear All</button>
+      </div>
+    </div>
+    
+
+    <h2 id="overall-stats">Overall Stats</h2>
+        <div class="summary-stats">
+      <div class="stat-item">
+        <span class="stat-label">Users:</span>
+        <span class="stat-value">121</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Total Cost:</span>
+        <span class="stat-value">$12944.85</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Total Requests:</span>
+        <span class="stat-value">198,517</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Average Cost/Request:</span>
+        <span class="stat-value">$0.07</span>
+      </div>
+    </div>
+
+
+    <h2 id="team-summary">Team Summary (14)</h2>
+    <table class="report-table team-table" id="team-summary-table">
+      <thead>
+        <tr>
+          <th class="sortable">Team</th>
+          <th class="sortable">Active/Members</th>
+          <th class="sortable">Total Cost</th>
+          <th class="sortable">Requests</th>
+          <th class="sortable">Sessions</th>
+          <th class="sortable">Cost/Request</th>
+          <th class="sortable model-col" data-model="claude-haiku-4-5-20251001">claude-haiku-4-5-20251001</th><th class="sortable model-col" data-model="claude-opus-4-7">claude-opus-4-7</th><th class="sortable model-col" data-model="claude-opus-4-8">claude-opus-4-8</th><th class="sortable model-col" data-model="claude-sonnet-4-6">claude-sonnet-4-6</th><th class="sortable model-col" data-model="claude-sonnet-5">claude-sonnet-5</th><th class="sortable product-col" data-product="claude-code">claude-code</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="team-row" data-cost="1545.5800000000002" data-requests="24137" data-sessions="9" data-cost-per-request="0.06403364129759291">
+      <td class="name">Neuron</td>
+      <td class="number">9/10</td>
+      <td class="currency">$1545.58</td>
+      <td class="number">24,137</td>
+      <td class="number">9</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$8.57</td><td class="currency model-cell">$8.09</td><td class="currency model-cell">$176.19</td><td class="currency model-cell">$1021.37</td><td class="currency model-cell">$331.35</td><td class="currency product-cell">$1545.58</td>
+    </tr>
+    <tr class="team-row" data-cost="1542.0300000000002" data-requests="20261" data-sessions="9" data-cost-per-request="0.07610828685652239">
+      <td class="name">GinPorter</td>
+      <td class="number">9/11</td>
+      <td class="currency">$1542.03</td>
+      <td class="number">20,261</td>
+      <td class="number">9</td>
+      <td class="currency">$0.08</td>
+      <td class="currency model-cell">$5.58</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$473.41</td><td class="currency model-cell">$819.74</td><td class="currency model-cell">$243.31</td><td class="currency product-cell">$1542.03</td>
+    </tr>
+    <tr class="team-row" data-cost="1379.9199999999996" data-requests="18778" data-sessions="8" data-cost-per-request="0.07348599424858876">
+      <td class="name">Oktagon</td>
+      <td class="number">8/8</td>
+      <td class="currency">$1379.92</td>
+      <td class="number">18,778</td>
+      <td class="number">8</td>
+      <td class="currency">$0.07</td>
+      <td class="currency model-cell">$9.24</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$174.45</td><td class="currency model-cell">$814.28</td><td class="currency model-cell">$381.96</td><td class="currency product-cell">$1379.92</td>
+    </tr>
+    <tr class="team-row" data-cost="1215.2800000000002" data-requests="23797" data-sessions="8" data-cost-per-request="0.051068622095222095">
+      <td class="name">Queueless</td>
+      <td class="number">8/9</td>
+      <td class="currency">$1215.28</td>
+      <td class="number">23,797</td>
+      <td class="number">8</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$44.89</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$63.04</td><td class="currency model-cell">$789.33</td><td class="currency model-cell">$318.04</td><td class="currency product-cell">$1215.28</td>
+    </tr>
+    <tr class="team-row" data-cost="1081.1599999999999" data-requests="20737" data-sessions="7" data-cost-per-request="0.0521367603799971">
+      <td class="name">CocoDell</td>
+      <td class="number">7/7</td>
+      <td class="currency">$1081.16</td>
+      <td class="number">20,737</td>
+      <td class="number">7</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$6.31</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$111.60</td><td class="currency model-cell">$665.84</td><td class="currency model-cell">$297.42</td><td class="currency product-cell">$1081.16</td>
+    </tr>
+    <tr class="team-row" data-cost="948.78" data-requests="11468" data-sessions="8" data-cost-per-request="0.08273282176491105">
+      <td class="name">Bellatrix</td>
+      <td class="number">8/12</td>
+      <td class="currency">$948.78</td>
+      <td class="number">11,468</td>
+      <td class="number">8</td>
+      <td class="currency">$0.08</td>
+      <td class="currency model-cell">$11.66</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$416.00</td><td class="currency model-cell">$353.64</td><td class="currency model-cell">$167.48</td><td class="currency product-cell">$948.78</td>
+    </tr>
+    <tr class="team-row" data-cost="828.77" data-requests="10647" data-sessions="6" data-cost-per-request="0.07784070630224477">
+      <td class="name">Rebel-Intelligence</td>
+      <td class="number">6/6</td>
+      <td class="currency">$828.77</td>
+      <td class="number">10,647</td>
+      <td class="number">6</td>
+      <td class="currency">$0.08</td>
+      <td class="currency model-cell">$7.54</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$278.91</td><td class="currency model-cell">$323.01</td><td class="currency model-cell">$219.30</td><td class="currency product-cell">$828.77</td>
+    </tr>
+    <tr class="team-row" data-cost="781.8199999999999" data-requests="11933" data-sessions="8" data-cost-per-request="0.0655174725550993">
+      <td class="name">ApocalypseNull</td>
+      <td class="number">8/10</td>
+      <td class="currency">$781.82</td>
+      <td class="number">11,933</td>
+      <td class="number">8</td>
+      <td class="currency">$0.07</td>
+      <td class="currency model-cell">$44.09</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$145.59</td><td class="currency model-cell">$483.64</td><td class="currency model-cell">$108.48</td><td class="currency product-cell">$781.82</td>
+    </tr>
+    <tr class="team-row" data-cost="778.25" data-requests="13911" data-sessions="8" data-cost-per-request="0.05594493566242542">
+      <td class="name">RESTafarians</td>
+      <td class="number">8/8</td>
+      <td class="currency">$778.25</td>
+      <td class="number">13,911</td>
+      <td class="number">8</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$3.51</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$193.56</td><td class="currency model-cell">$360.03</td><td class="currency model-cell">$221.12</td><td class="currency product-cell">$778.25</td>
+    </tr>
+    <tr class="team-row" data-cost="768.82" data-requests="6449" data-sessions="4" data-cost-per-request="0.11921538222980307">
+      <td class="name">Dumbledore-Army</td>
+      <td class="number">4/7</td>
+      <td class="currency">$768.82</td>
+      <td class="number">6,449</td>
+      <td class="number">4</td>
+      <td class="currency">$0.12</td>
+      <td class="currency model-cell">$4.69</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$575.83</td><td class="currency model-cell">$188.30</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$768.82</td>
+    </tr>
+    <tr class="team-row" data-cost="639.23" data-requests="11200" data-sessions="7" data-cost-per-request="0.05707410714285714">
+      <td class="name">Red-emption</td>
+      <td class="number">7/11</td>
+      <td class="currency">$639.23</td>
+      <td class="number">11,200</td>
+      <td class="number">7</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$4.56</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$72.15</td><td class="currency model-cell">$482.07</td><td class="currency model-cell">$80.44</td><td class="currency product-cell">$639.23</td>
+    </tr>
+    <tr class="team-row" data-cost="556.1800000000001" data-requests="12231" data-sessions="7" data-cost-per-request="0.04547297849726106">
+      <td class="name">Team-Rocket</td>
+      <td class="number">7/9</td>
+      <td class="currency">$556.18</td>
+      <td class="number">12,231</td>
+      <td class="number">7</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$58.97</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$31.11</td><td class="currency model-cell">$330.24</td><td class="currency model-cell">$135.87</td><td class="currency product-cell">$556.18</td>
+    </tr>
+    <tr class="team-row" data-cost="478.4100000000001" data-requests="7971" data-sessions="5" data-cost-per-request="0.06001881821603313">
+      <td class="name">RepLock</td>
+      <td class="number">5/6</td>
+      <td class="currency">$478.41</td>
+      <td class="number">7,971</td>
+      <td class="number">5</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$1.46</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$96.45</td><td class="currency model-cell">$320.46</td><td class="currency model-cell">$60.02</td><td class="currency product-cell">$478.41</td>
+    </tr>
+    <tr class="team-row" data-cost="400.62" data-requests="4997" data-sessions="5" data-cost-per-request="0.08017210326195717">
+      <td class="name">Artificial-Pirates</td>
+      <td class="number">5/7</td>
+      <td class="currency">$400.62</td>
+      <td class="number">4,997</td>
+      <td class="number">5</td>
+      <td class="currency">$0.08</td>
+      <td class="currency model-cell">$2.33</td><td class="currency model-cell">$2.95</td><td class="currency model-cell">$91.93</td><td class="currency model-cell">$151.37</td><td class="currency model-cell">$152.05</td><td class="currency product-cell">$400.62</td>
+    </tr>
+
+      </tbody>
+    </table>
+
+    <h2 id="individual-users">Users (121)</h2>
+    <table class="report-table" id="active-users-table">
+      <thead>
+        <tr>
+          <th class="sortable">Name</th>
+          <th class="sortable">Team</th>
+          <th class="sortable">Email</th>
+          <th class="sortable">Total Cost</th>
+          <th class="sortable">Requests</th>
+          <th class="sortable">Sessions</th>
+          <th class="sortable">Cost/Request</th>
+          <th class="sortable model-col" data-model="claude-haiku-4-5-20251001">claude-haiku-4-5-20251001</th><th class="sortable model-col" data-model="claude-opus-4-7">claude-opus-4-7</th><th class="sortable model-col" data-model="claude-opus-4-8">claude-opus-4-8</th><th class="sortable model-col" data-model="claude-sonnet-4-6">claude-sonnet-4-6</th><th class="sortable model-col" data-model="claude-sonnet-5">claude-sonnet-5</th><th class="sortable product-col" data-product="claude-code">claude-code</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr data-email="rpoopandi@cvent.com" data-cost="376.98" data-requests="4598" data-sessions="35" data-cost-per-request="0.08198782079164854">
+      <td class="name">Ramesh Poopandi</td>
+      <td class="team">Neuron</td>
+      <td class="email">rpoopandi@cvent.com</td>
+      <td class="currency">$376.98</td>
+      <td class="number">4,598</td>
+      <td class="number">35</td>
+      <td class="currency">$0.08</td>
+      <td class="currency model-cell">$0.31</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$13.28</td><td class="currency model-cell">$233.90</td><td class="currency model-cell">$129.48</td><td class="currency product-cell">$376.98</td>
+    </tr>
+    <tr data-email="smasood@cvent.com" data-cost="350.65" data-requests="2893" data-sessions="21" data-cost-per-request="0.1212063601797442">
+      <td class="name">Shary Masood</td>
+      <td class="team">Rebel-Intelligence</td>
+      <td class="email">smasood@cvent.com</td>
+      <td class="currency">$350.65</td>
+      <td class="number">2,893</td>
+      <td class="number">21</td>
+      <td class="currency">$0.12</td>
+      <td class="currency model-cell">$0.76</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$147.36</td><td class="currency model-cell">$118.43</td><td class="currency model-cell">$84.10</td><td class="currency product-cell">$350.65</td>
+    </tr>
+    <tr data-email="pratik.shrestha@cvent.com" data-cost="339.6" data-requests="2723" data-sessions="14" data-cost-per-request="0.12471538744032318">
+      <td class="name">Pratik Shrestha</td>
+      <td class="team">GinPorter</td>
+      <td class="email">pratik.shrestha@cvent.com</td>
+      <td class="currency">$339.60</td>
+      <td class="number">2,723</td>
+      <td class="number">14</td>
+      <td class="currency">$0.12</td>
+      <td class="currency model-cell">$3.74</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$135.92</td><td class="currency model-cell">$122.78</td><td class="currency model-cell">$77.16</td><td class="currency product-cell">$339.60</td>
+    </tr>
+    <tr data-email="smcintosh@cvent.com" data-cost="313.65" data-requests="3269" data-sessions="35" data-cost-per-request="0.09594677271336799">
+      <td class="name">Shawn McIntosh</td>
+      <td class="team">Dumbledore-Army</td>
+      <td class="email">smcintosh@cvent.com</td>
+      <td class="currency">$313.65</td>
+      <td class="number">3,269</td>
+      <td class="number">35</td>
+      <td class="currency">$0.10</td>
+      <td class="currency model-cell">$0.31</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$179.87</td><td class="currency model-cell">$133.47</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$313.65</td>
+    </tr>
+    <tr data-email="kshitij.singh@cvent.com" data-cost="305.79" data-requests="2653" data-sessions="44" data-cost-per-request="0.11526196758386732">
+      <td class="name">Kshitij Singh</td>
+      <td class="team">Bellatrix</td>
+      <td class="email">kshitij.singh@cvent.com</td>
+      <td class="currency">$305.79</td>
+      <td class="number">2,653</td>
+      <td class="number">44</td>
+      <td class="currency">$0.12</td>
+      <td class="currency model-cell">$1.07</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$127.34</td><td class="currency model-cell">$142.18</td><td class="currency model-cell">$35.20</td><td class="currency product-cell">$305.79</td>
+    </tr>
+    <tr data-email="jashan.kaur@cvent.com" data-cost="277.37" data-requests="3916" data-sessions="23" data-cost-per-request="0.07082992849846782">
+      <td class="name">Jashanpreet Kaur</td>
+      <td class="team">Neuron</td>
+      <td class="email">jashan.kaur@cvent.com</td>
+      <td class="currency">$277.37</td>
+      <td class="number">3,916</td>
+      <td class="number">23</td>
+      <td class="currency">$0.07</td>
+      <td class="currency model-cell">$2.25</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$35.95</td><td class="currency model-cell">$179.75</td><td class="currency model-cell">$59.42</td><td class="currency product-cell">$277.37</td>
+    </tr>
+    <tr data-email="gsavoie@cvent.com" data-cost="269.03" data-requests="2470" data-sessions="15" data-cost-per-request="0.10891902834008096">
+      <td class="name">Gaetan Savoie</td>
+      <td class="team">ApocalypseNull</td>
+      <td class="email">gsavoie@cvent.com</td>
+      <td class="currency">$269.03</td>
+      <td class="number">2,470</td>
+      <td class="number">15</td>
+      <td class="currency">$0.11</td>
+      <td class="currency model-cell">$3.93</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$85.62</td><td class="currency model-cell">$139.38</td><td class="currency model-cell">$40.11</td><td class="currency product-cell">$269.03</td>
+    </tr>
+    <tr data-email="tmurphy@cvent.com" data-cost="265.86" data-requests="4801" data-sessions="26" data-cost-per-request="0.055375963340970634">
+      <td class="name">Taidg Murphy</td>
+      <td class="team">Queueless</td>
+      <td class="email">tmurphy@cvent.com</td>
+      <td class="currency">$265.86</td>
+      <td class="number">4,801</td>
+      <td class="number">26</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$12.75</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.44</td><td class="currency model-cell">$148.74</td><td class="currency model-cell">$103.92</td><td class="currency product-cell">$265.86</td>
+    </tr>
+    <tr data-email="rajat.goel@cvent.com" data-cost="265.3" data-requests="4779" data-sessions="135" data-cost-per-request="0.05551370579619167">
+      <td class="name">Rajat Goel</td>
+      <td class="team">CocoDell</td>
+      <td class="email">rajat.goel@cvent.com</td>
+      <td class="currency">$265.30</td>
+      <td class="number">4,779</td>
+      <td class="number">135</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$0.32</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$34.49</td><td class="currency model-cell">$133.24</td><td class="currency model-cell">$97.26</td><td class="currency product-cell">$265.30</td>
+    </tr>
+    <tr data-email="ajoshi@cvent.com" data-cost="259.87" data-requests="4105" data-sessions="64" data-cost-per-request="0.06330572472594397">
+      <td class="name">Abhishek Joshi</td>
+      <td class="team">Oktagon</td>
+      <td class="email">ajoshi@cvent.com</td>
+      <td class="currency">$259.87</td>
+      <td class="number">4,105</td>
+      <td class="number">64</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$0.37</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$34.13</td><td class="currency model-cell">$159.07</td><td class="currency model-cell">$66.30</td><td class="currency product-cell">$259.87</td>
+    </tr>
+    <tr data-email="kevin.truong@cvent.com" data-cost="244.57" data-requests="2116" data-sessions="38" data-cost-per-request="0.1155812854442344">
+      <td class="name">Kevin Truong</td>
+      <td class="team">Oktagon</td>
+      <td class="email">kevin.truong@cvent.com</td>
+      <td class="currency">$244.57</td>
+      <td class="number">2,116</td>
+      <td class="number">38</td>
+      <td class="currency">$0.12</td>
+      <td class="currency model-cell">$0.02</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$32.41</td><td class="currency model-cell">$166.71</td><td class="currency model-cell">$45.42</td><td class="currency product-cell">$244.57</td>
+    </tr>
+    <tr data-email="arunkumar.verma@cvent.com" data-cost="234.2" data-requests="2919" data-sessions="42" data-cost-per-request="0.0802329564919493">
+      <td class="name">Arun Kumar Verma</td>
+      <td class="team">Bellatrix</td>
+      <td class="email">arunkumar.verma@cvent.com</td>
+      <td class="currency">$234.20</td>
+      <td class="number">2,919</td>
+      <td class="number">42</td>
+      <td class="currency">$0.08</td>
+      <td class="currency model-cell">$0.43</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$156.42</td><td class="currency model-cell">$47.67</td><td class="currency model-cell">$29.68</td><td class="currency product-cell">$234.20</td>
+    </tr>
+    <tr data-email="cport@cvent.com" data-cost="229.41" data-requests="2938" data-sessions="84" data-cost-per-request="0.07808373042886317">
+      <td class="name">Charlton Port</td>
+      <td class="team">Oktagon</td>
+      <td class="email">cport@cvent.com</td>
+      <td class="currency">$229.41</td>
+      <td class="number">2,938</td>
+      <td class="number">84</td>
+      <td class="currency">$0.08</td>
+      <td class="currency model-cell">$0.09</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$20.29</td><td class="currency model-cell">$86.19</td><td class="currency model-cell">$122.84</td><td class="currency product-cell">$229.41</td>
+    </tr>
+    <tr data-email="m.malhotra@cvent.com" data-cost="215.29" data-requests="3625" data-sessions="46" data-cost-per-request="0.059390344827586206">
+      <td class="name">Milan Malhotra</td>
+      <td class="team">GinPorter</td>
+      <td class="email">m.malhotra@cvent.com</td>
+      <td class="currency">$215.29</td>
+      <td class="number">3,625</td>
+      <td class="number">46</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$0.23</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$17.04</td><td class="currency model-cell">$131.44</td><td class="currency model-cell">$66.58</td><td class="currency product-cell">$215.29</td>
+    </tr>
+    <tr data-email="bfelder@cvent.com" data-cost="209.2" data-requests="4419" data-sessions="122" data-cost-per-request="0.047341027381760575">
+      <td class="name">Brian Felder</td>
+      <td class="team">Queueless</td>
+      <td class="email">bfelder@cvent.com</td>
+      <td class="currency">$209.20</td>
+      <td class="number">4,419</td>
+      <td class="number">122</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$15.84</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$31.99</td><td class="currency model-cell">$119.86</td><td class="currency model-cell">$41.52</td><td class="currency product-cell">$209.20</td>
+    </tr>
+    <tr data-email="kumaran.subramanian@cvent.com" data-cost="208.3" data-requests="2909" data-sessions="15" data-cost-per-request="0.07160536266758337">
+      <td class="name">Kumaran Subramanian</td>
+      <td class="team">GinPorter</td>
+      <td class="email">kumaran.subramanian@cvent.com</td>
+      <td class="currency">$208.30</td>
+      <td class="number">2,909</td>
+      <td class="number">15</td>
+      <td class="currency">$0.07</td>
+      <td class="currency model-cell">$0.01</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$67.15</td><td class="currency model-cell">$141.14</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$208.30</td>
+    </tr>
+    <tr data-email="j.spiers@cvent.com" data-cost="204.2" data-requests="2805" data-sessions="83" data-cost-per-request="0.07279857397504456">
+      <td class="name">Joel Spiers</td>
+      <td class="team">Oktagon</td>
+      <td class="email">j.spiers@cvent.com</td>
+      <td class="currency">$204.20</td>
+      <td class="number">2,805</td>
+      <td class="number">83</td>
+      <td class="currency">$0.07</td>
+      <td class="currency model-cell">$2.15</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$19.43</td><td class="currency model-cell">$150.56</td><td class="currency model-cell">$32.06</td><td class="currency product-cell">$204.20</td>
+    </tr>
+    <tr data-email="michael.roscoe@cvent.com" data-cost="198.13" data-requests="3968" data-sessions="94" data-cost-per-request="0.04993195564516129">
+      <td class="name">Michael Roscoe</td>
+      <td class="team">RESTafarians</td>
+      <td class="email">michael.roscoe@cvent.com</td>
+      <td class="currency">$198.13</td>
+      <td class="number">3,968</td>
+      <td class="number">94</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$0.62</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$14.81</td><td class="currency model-cell">$111.59</td><td class="currency model-cell">$71.10</td><td class="currency product-cell">$198.13</td>
+    </tr>
+    <tr data-email="dclair@cvent.com" data-cost="196.2" data-requests="2325" data-sessions="29" data-cost-per-request="0.08438709677419354">
+      <td class="name">Dorian Clair</td>
+      <td class="team">GinPorter</td>
+      <td class="email">dclair@cvent.com</td>
+      <td class="currency">$196.20</td>
+      <td class="number">2,325</td>
+      <td class="number">29</td>
+      <td class="currency">$0.08</td>
+      <td class="currency model-cell">$0.03</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$117.41</td><td class="currency model-cell">$68.14</td><td class="currency model-cell">$10.62</td><td class="currency product-cell">$196.20</td>
+    </tr>
+    <tr data-email="akash.jain@cvent.com" data-cost="192.23" data-requests="1824" data-sessions="22" data-cost-per-request="0.1053892543859649">
+      <td class="name">Akash Jain</td>
+      <td class="team">Artificial-Pirates</td>
+      <td class="email">akash.jain@cvent.com</td>
+      <td class="currency">$192.23</td>
+      <td class="number">1,824</td>
+      <td class="number">22</td>
+      <td class="currency">$0.11</td>
+      <td class="currency model-cell">$0.44</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$15.74</td><td class="currency model-cell">$30.04</td><td class="currency model-cell">$146.01</td><td class="currency product-cell">$192.23</td>
+    </tr>
+    <tr data-email="jabiertas@cvent.com" data-cost="191.34" data-requests="3510" data-sessions="48" data-cost-per-request="0.05451282051282051">
+      <td class="name">John Dheem Abiertas</td>
+      <td class="team">Neuron</td>
+      <td class="email">jabiertas@cvent.com</td>
+      <td class="currency">$191.34</td>
+      <td class="number">3,510</td>
+      <td class="number">48</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$0.28</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$7.21</td><td class="currency model-cell">$120.51</td><td class="currency model-cell">$63.34</td><td class="currency product-cell">$191.34</td>
+    </tr>
+    <tr data-email="anurag.lal@cvent.com" data-cost="190.11" data-requests="4369" data-sessions="147" data-cost-per-request="0.04351338979171435">
+      <td class="name">Anurag Lal</td>
+      <td class="team">CocoDell</td>
+      <td class="email">anurag.lal@cvent.com</td>
+      <td class="currency">$190.11</td>
+      <td class="number">4,369</td>
+      <td class="number">147</td>
+      <td class="currency">$0.04</td>
+      <td class="currency model-cell">$0.87</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$2.97</td><td class="currency model-cell">$97.07</td><td class="currency model-cell">$89.19</td><td class="currency product-cell">$190.11</td>
+    </tr>
+    <tr data-email="h.shukla@cvent.com" data-cost="188.68" data-requests="3807" data-sessions="71" data-cost-per-request="0.04956133438402942">
+      <td class="name">Himanshu Shukla</td>
+      <td class="team">CocoDell</td>
+      <td class="email">h.shukla@cvent.com</td>
+      <td class="currency">$188.68</td>
+      <td class="number">3,807</td>
+      <td class="number">71</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$1.60</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$14.66</td><td class="currency model-cell">$94.43</td><td class="currency model-cell">$77.99</td><td class="currency product-cell">$188.68</td>
+    </tr>
+    <tr data-email="yaman.shrestha@cvent.com" data-cost="186.34" data-requests="1338" data-sessions="30" data-cost-per-request="0.1392675635276532">
+      <td class="name">Yaman Shrestha</td>
+      <td class="team">Dumbledore-Army</td>
+      <td class="email">yaman.shrestha@cvent.com</td>
+      <td class="currency">$186.34</td>
+      <td class="number">1,338</td>
+      <td class="number">30</td>
+      <td class="currency">$0.14</td>
+      <td class="currency model-cell">$0.14</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$141.90</td><td class="currency model-cell">$44.30</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$186.34</td>
+    </tr>
+    <tr data-email="sam.kyataka@cvent.com" data-cost="185.09" data-requests="3834" data-sessions="104" data-cost-per-request="0.048275952008346376">
+      <td class="name">Sam Kyataka</td>
+      <td class="team">RESTafarians</td>
+      <td class="email">sam.kyataka@cvent.com</td>
+      <td class="currency">$185.09</td>
+      <td class="number">3,834</td>
+      <td class="number">104</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$1.02</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$14.78</td><td class="currency model-cell">$73.15</td><td class="currency model-cell">$96.14</td><td class="currency product-cell">$185.09</td>
+    </tr>
+    <tr data-email="cmaceachern@cvent.com" data-cost="184.36" data-requests="5120" data-sessions="174" data-cost-per-request="0.0360078125">
+      <td class="name">Cael Maceachern</td>
+      <td class="team">Rebel-Intelligence</td>
+      <td class="email">cmaceachern@cvent.com</td>
+      <td class="currency">$184.36</td>
+      <td class="number">5,120</td>
+      <td class="number">174</td>
+      <td class="currency">$0.04</td>
+      <td class="currency model-cell">$4.63</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$179.73</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$184.36</td>
+    </tr>
+    <tr data-email="khatcher@cvent.com" data-cost="179.97" data-requests="3598" data-sessions="47" data-cost-per-request="0.05001945525291829">
+      <td class="name">Kelly Hatcher</td>
+      <td class="team">Queueless</td>
+      <td class="email">khatcher@cvent.com</td>
+      <td class="currency">$179.97</td>
+      <td class="number">3,598</td>
+      <td class="number">47</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$0.31</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$114.93</td><td class="currency model-cell">$64.73</td><td class="currency product-cell">$179.97</td>
+    </tr>
+    <tr data-email="mhostetler@cvent.com" data-cost="172.87" data-requests="2731" data-sessions="30" data-cost-per-request="0.06329915781764922">
+      <td class="name">Matthew Hostetler</td>
+      <td class="team">Oktagon</td>
+      <td class="email">mhostetler@cvent.com</td>
+      <td class="currency">$172.87</td>
+      <td class="number">2,731</td>
+      <td class="number">30</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$2.18</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$7.68</td><td class="currency model-cell">$93.94</td><td class="currency model-cell">$69.08</td><td class="currency product-cell">$172.87</td>
+    </tr>
+    <tr data-email="shaan.malhotra@cvent.com" data-cost="169.79" data-requests="974" data-sessions="7" data-cost-per-request="0.1743223819301848">
+      <td class="name">Shaan Malhotra</td>
+      <td class="team">Dumbledore-Army</td>
+      <td class="email">shaan.malhotra@cvent.com</td>
+      <td class="currency">$169.79</td>
+      <td class="number">974</td>
+      <td class="number">7</td>
+      <td class="currency">$0.17</td>
+      <td class="currency model-cell">$3.76</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$165.52</td><td class="currency model-cell">$0.51</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$169.79</td>
+    </tr>
+    <tr data-email="nsaliu@cvent.com" data-cost="165.93" data-requests="2039" data-sessions="55" data-cost-per-request="0.08137812653261403">
+      <td class="name">Nimat Saliu</td>
+      <td class="team">GinPorter</td>
+      <td class="email">nsaliu@cvent.com</td>
+      <td class="currency">$165.93</td>
+      <td class="number">2,039</td>
+      <td class="number">55</td>
+      <td class="currency">$0.08</td>
+      <td class="currency model-cell">$0.03</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$53.71</td><td class="currency model-cell">$104.20</td><td class="currency model-cell">$8.00</td><td class="currency product-cell">$165.93</td>
+    </tr>
+    <tr data-email="amishra1@cvent.com" data-cost="162.94" data-requests="2808" data-sessions="16" data-cost-per-request="0.058027065527065526">
+      <td class="name">Aditya Mishra</td>
+      <td class="team">RepLock</td>
+      <td class="email">amishra1@cvent.com</td>
+      <td class="currency">$162.94</td>
+      <td class="number">2,808</td>
+      <td class="number">16</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$0.15</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$1.63</td><td class="currency model-cell">$152.33</td><td class="currency model-cell">$8.83</td><td class="currency product-cell">$162.94</td>
+    </tr>
+    <tr data-email="zaylie.tamashiro@cvent.com" data-cost="161.49" data-requests="3430" data-sessions="23" data-cost-per-request="0.04708163265306123">
+      <td class="name">Zaylie Tamashiro</td>
+      <td class="team">Neuron</td>
+      <td class="email">zaylie.tamashiro@cvent.com</td>
+      <td class="currency">$161.49</td>
+      <td class="number">3,430</td>
+      <td class="number">23</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$1.19</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$8.98</td><td class="currency model-cell">$151.32</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$161.49</td>
+    </tr>
+    <tr data-email="pdeep@cvent.com" data-cost="153.82" data-requests="2992" data-sessions="103" data-cost-per-request="0.05141042780748663">
+      <td class="name">Pranay Deep</td>
+      <td class="team">CocoDell</td>
+      <td class="email">pdeep@cvent.com</td>
+      <td class="currency">$153.82</td>
+      <td class="number">2,992</td>
+      <td class="number">103</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$2.52</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$33.22</td><td class="currency model-cell">$118.09</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$153.82</td>
+    </tr>
+    <tr data-email="utsav.upadhyay@cvent.com" data-cost="152.79" data-requests="2732" data-sessions="10" data-cost-per-request="0.055926061493411415">
+      <td class="name">Utsav Upadhyay</td>
+      <td class="team">Queueless</td>
+      <td class="email">utsav.upadhyay@cvent.com</td>
+      <td class="currency">$152.79</td>
+      <td class="number">2,732</td>
+      <td class="number">10</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$14.59</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$138.20</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$152.79</td>
+    </tr>
+    <tr data-email="jerrod.lepper@cvent.com" data-cost="149.73" data-requests="3130" data-sessions="38" data-cost-per-request="0.0478370607028754">
+      <td class="name">Jerrod Lepper</td>
+      <td class="team">Neuron</td>
+      <td class="email">jerrod.lepper@cvent.com</td>
+      <td class="currency">$149.73</td>
+      <td class="number">3,130</td>
+      <td class="number">38</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$0.57</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$5.21</td><td class="currency model-cell">$114.08</td><td class="currency model-cell">$29.87</td><td class="currency product-cell">$149.73</td>
+    </tr>
+    <tr data-email="rlopez@cvent.com" data-cost="149.2" data-requests="1599" data-sessions="23" data-cost-per-request="0.0933083176985616">
+      <td class="name">Rolando Lopez</td>
+      <td class="team">Neuron</td>
+      <td class="email">rlopez@cvent.com</td>
+      <td class="currency">$149.20</td>
+      <td class="number">1,599</td>
+      <td class="number">23</td>
+      <td class="currency">$0.09</td>
+      <td class="currency model-cell">$2.53</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$69.04</td><td class="currency model-cell">$77.63</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$149.20</td>
+    </tr>
+    <tr data-email="sabdussamad@cvent.com" data-cost="148.81" data-requests="2642" data-sessions="74" data-cost-per-request="0.056324753974261926">
+      <td class="name">Suhaim Abdussamad</td>
+      <td class="team">Queueless</td>
+      <td class="email">sabdussamad@cvent.com</td>
+      <td class="currency">$148.81</td>
+      <td class="number">2,642</td>
+      <td class="number">74</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$0.58</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$8.45</td><td class="currency model-cell">$84.16</td><td class="currency model-cell">$55.63</td><td class="currency product-cell">$148.81</td>
+    </tr>
+    <tr data-email="krunal.patni@cvent.com" data-cost="147.97" data-requests="2019" data-sessions="20" data-cost-per-request="0.07328875681030213">
+      <td class="name">Krunal Patni</td>
+      <td class="team">Red-emption</td>
+      <td class="email">krunal.patni@cvent.com</td>
+      <td class="currency">$147.97</td>
+      <td class="number">2,019</td>
+      <td class="number">20</td>
+      <td class="currency">$0.07</td>
+      <td class="currency model-cell">$0.03</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$48.71</td><td class="currency model-cell">$99.22</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$147.97</td>
+    </tr>
+    <tr data-email="cmai@cvent.com" data-cost="146.64" data-requests="938" data-sessions="10" data-cost-per-request="0.1563326226012793">
+      <td class="name">Cuong Mai</td>
+      <td class="team">Rebel-Intelligence</td>
+      <td class="email">cmai@cvent.com</td>
+      <td class="currency">$146.64</td>
+      <td class="number">938</td>
+      <td class="number">10</td>
+      <td class="currency">$0.16</td>
+      <td class="currency model-cell">$0.09</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$93.16</td><td class="currency model-cell">$13.98</td><td class="currency model-cell">$39.40</td><td class="currency product-cell">$146.64</td>
+    </tr>
+    <tr data-email="sarthak.aggarwal@cvent.com" data-cost="142.61" data-requests="1055" data-sessions="8" data-cost-per-request="0.13517535545023698">
+      <td class="name">Sarthak Aggarwal</td>
+      <td class="team">Bellatrix</td>
+      <td class="email">sarthak.aggarwal@cvent.com</td>
+      <td class="currency">$142.61</td>
+      <td class="number">1,055</td>
+      <td class="number">8</td>
+      <td class="currency">$0.14</td>
+      <td class="currency model-cell">$1.21</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$101.12</td><td class="currency model-cell">$40.28</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$142.61</td>
+    </tr>
+    <tr data-email="anjali.garg@cvent.com" data-cost="137.12" data-requests="2356" data-sessions="29" data-cost-per-request="0.05820033955857386">
+      <td class="name">Anjali Garg</td>
+      <td class="team">Team-Rocket</td>
+      <td class="email">anjali.garg@cvent.com</td>
+      <td class="currency">$137.12</td>
+      <td class="number">2,356</td>
+      <td class="number">29</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$1.63</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$4.78</td><td class="currency model-cell">$64.58</td><td class="currency model-cell">$66.14</td><td class="currency product-cell">$137.12</td>
+    </tr>
+    <tr data-email="jchua@cvent.com" data-cost="134.06" data-requests="1987" data-sessions="49" data-cost-per-request="0.06746854554604932">
+      <td class="name">Li Chua</td>
+      <td class="team">Neuron</td>
+      <td class="email">jchua@cvent.com</td>
+      <td class="currency">$134.06</td>
+      <td class="number">1,987</td>
+      <td class="number">49</td>
+      <td class="currency">$0.07</td>
+      <td class="currency model-cell">$1.13</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$32.44</td><td class="currency model-cell">$55.54</td><td class="currency model-cell">$44.95</td><td class="currency product-cell">$134.06</td>
+    </tr>
+    <tr data-email="kyleg@cvent.com" data-cost="133.81" data-requests="2179" data-sessions="20" data-cost-per-request="0.06140890316659018">
+      <td class="name">Kyle Grant</td>
+      <td class="team">GinPorter</td>
+      <td class="email">kyleg@cvent.com</td>
+      <td class="currency">$133.81</td>
+      <td class="number">2,179</td>
+      <td class="number">20</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$1.41</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$12.96</td><td class="currency model-cell">$84.59</td><td class="currency model-cell">$34.85</td><td class="currency product-cell">$133.81</td>
+    </tr>
+    <tr data-email="janvi.soni@cvent.com" data-cost="131.87" data-requests="2524" data-sessions="44" data-cost-per-request="0.052246434231378765">
+      <td class="name">Janvi Soni</td>
+      <td class="team">CocoDell</td>
+      <td class="email">janvi.soni@cvent.com</td>
+      <td class="currency">$131.87</td>
+      <td class="number">2,524</td>
+      <td class="number">44</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$0.91</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.06</td><td class="currency model-cell">$130.90</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$131.87</td>
+    </tr>
+    <tr data-email="j.regan@cvent.com" data-cost="130.15" data-requests="2283" data-sessions="10" data-cost-per-request="0.057008322382829615">
+      <td class="name">Jeremy Regan</td>
+      <td class="team">ApocalypseNull</td>
+      <td class="email">j.regan@cvent.com</td>
+      <td class="currency">$130.15</td>
+      <td class="number">2,283</td>
+      <td class="number">10</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.11</td><td class="currency model-cell">$128.70</td><td class="currency model-cell">$1.33</td><td class="currency product-cell">$130.15</td>
+    </tr>
+    <tr data-email="mayank.dixit@cvent.com" data-cost="127.56" data-requests="2448" data-sessions="41" data-cost-per-request="0.0521078431372549">
+      <td class="name">Mayank Dixit</td>
+      <td class="team">Red-emption</td>
+      <td class="email">mayank.dixit@cvent.com</td>
+      <td class="currency">$127.56</td>
+      <td class="number">2,448</td>
+      <td class="number">41</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$0.60</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$2.10</td><td class="currency model-cell">$111.95</td><td class="currency model-cell">$12.91</td><td class="currency product-cell">$127.56</td>
+    </tr>
+    <tr data-email="mjenkins@cvent.com" data-cost="124.07" data-requests="2683" data-sessions="72" data-cost-per-request="0.046243011554230336">
+      <td class="name">Matt Jenkins</td>
+      <td class="team">Bellatrix</td>
+      <td class="email">mjenkins@cvent.com</td>
+      <td class="currency">$124.07</td>
+      <td class="number">2,683</td>
+      <td class="number">72</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$7.25</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$6.74</td><td class="currency model-cell">$60.49</td><td class="currency model-cell">$49.59</td><td class="currency product-cell">$124.07</td>
+    </tr>
+    <tr data-email="ramesh.kumar@cvent.com" data-cost="122.0" data-requests="2071" data-sessions="76" data-cost-per-request="0.0589087397392564">
+      <td class="name">Ramesh Kumar</td>
+      <td class="team">Red-emption</td>
+      <td class="email">ramesh.kumar@cvent.com</td>
+      <td class="currency">$122.00</td>
+      <td class="number">2,071</td>
+      <td class="number">76</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$0.23</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.84</td><td class="currency model-cell">$102.85</td><td class="currency model-cell">$18.08</td><td class="currency product-cell">$122.00</td>
+    </tr>
+    <tr data-email="gaurav.sharma1@cvent.com" data-cost="118.99" data-requests="2412" data-sessions="86" data-cost-per-request="0.04933250414593698">
+      <td class="name">Gaurav Sharma</td>
+      <td class="team">Red-emption</td>
+      <td class="email">gaurav.sharma1@cvent.com</td>
+      <td class="currency">$118.99</td>
+      <td class="number">2,412</td>
+      <td class="number">86</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$3.66</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$7.91</td><td class="currency model-cell">$76.21</td><td class="currency model-cell">$31.22</td><td class="currency product-cell">$118.99</td>
+    </tr>
+    <tr data-email="jliao@cvent.com" data-cost="117.03" data-requests="2442" data-sessions="29" data-cost-per-request="0.047923832923832926">
+      <td class="name">Jallen Liao</td>
+      <td class="team">GinPorter</td>
+      <td class="email">jliao@cvent.com</td>
+      <td class="currency">$117.03</td>
+      <td class="number">2,442</td>
+      <td class="number">29</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$0.07</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$109.09</td><td class="currency model-cell">$7.88</td><td class="currency product-cell">$117.03</td>
+    </tr>
+    <tr data-email="hsiddiqui@cvent.com" data-cost="115.77" data-requests="1866" data-sessions="20" data-cost-per-request="0.062041800643086814">
+      <td class="name">Haris Siddiqui</td>
+      <td class="team">RESTafarians</td>
+      <td class="email">hsiddiqui@cvent.com</td>
+      <td class="currency">$115.77</td>
+      <td class="number">1,866</td>
+      <td class="number">20</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$1.43</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$27.16</td><td class="currency model-cell">$76.71</td><td class="currency model-cell">$10.46</td><td class="currency product-cell">$115.77</td>
+    </tr>
+    <tr data-email="ybai@cvent.com" data-cost="111.47" data-requests="2178" data-sessions="27" data-cost-per-request="0.05117998163452709">
+      <td class="name">Yingchen Bai</td>
+      <td class="team">Queueless</td>
+      <td class="email">ybai@cvent.com</td>
+      <td class="currency">$111.47</td>
+      <td class="number">2,178</td>
+      <td class="number">27</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$0.19</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$72.21</td><td class="currency model-cell">$39.07</td><td class="currency product-cell">$111.47</td>
+    </tr>
+    <tr data-email="nitesh.singh@cvent.com" data-cost="110.61" data-requests="2085" data-sessions="24" data-cost-per-request="0.05305035971223022">
+      <td class="name">Nitesh Singh</td>
+      <td class="team">Red-emption</td>
+      <td class="email">nitesh.singh@cvent.com</td>
+      <td class="currency">$110.61</td>
+      <td class="number">2,085</td>
+      <td class="number">24</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$0.03</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$9.57</td><td class="currency model-cell">$82.77</td><td class="currency model-cell">$18.23</td><td class="currency product-cell">$110.61</td>
+    </tr>
+    <tr data-email="alindsey@cvent.com" data-cost="105.63" data-requests="1499" data-sessions="59" data-cost-per-request="0.07046697798532355">
+      <td class="name">Aaron Lindsey</td>
+      <td class="team">Oktagon</td>
+      <td class="email">alindsey@cvent.com</td>
+      <td class="currency">$105.63</td>
+      <td class="number">1,499</td>
+      <td class="number">59</td>
+      <td class="currency">$0.07</td>
+      <td class="currency model-cell">$1.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$49.63</td><td class="currency model-cell">$36.28</td><td class="currency model-cell">$18.72</td><td class="currency product-cell">$105.63</td>
+    </tr>
+    <tr data-email="anurag.dixit@cvent.com" data-cost="104.91" data-requests="1482" data-sessions="29" data-cost-per-request="0.07078947368421053">
+      <td class="name">Anurag Dixit</td>
+      <td class="team">RepLock</td>
+      <td class="email">anurag.dixit@cvent.com</td>
+      <td class="currency">$104.91</td>
+      <td class="number">1,482</td>
+      <td class="number">29</td>
+      <td class="currency">$0.07</td>
+      <td class="currency model-cell">$0.06</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$90.43</td><td class="currency model-cell">$14.42</td><td class="currency product-cell">$104.91</td>
+    </tr>
+    <tr data-email="upal@cvent.com" data-cost="101.29" data-requests="3068" data-sessions="54" data-cost-per-request="0.03301499348109518">
+      <td class="name">Utteya Pal</td>
+      <td class="team">Team-Rocket</td>
+      <td class="email">upal@cvent.com</td>
+      <td class="currency">$101.29</td>
+      <td class="number">3,068</td>
+      <td class="number">54</td>
+      <td class="currency">$0.03</td>
+      <td class="currency model-cell">$27.87</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$15.79</td><td class="currency model-cell">$42.13</td><td class="currency model-cell">$15.50</td><td class="currency product-cell">$101.29</td>
+    </tr>
+    <tr data-email="rishabh.jain@cvent.com" data-cost="100.61" data-requests="1872" data-sessions="44" data-cost-per-request="0.05374465811965812">
+      <td class="name">Rishabh Jain</td>
+      <td class="team">Artificial-Pirates</td>
+      <td class="email">rishabh.jain@cvent.com</td>
+      <td class="currency">$100.61</td>
+      <td class="number">1,872</td>
+      <td class="number">44</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$1.77</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$20.67</td><td class="currency model-cell">$78.18</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$100.61</td>
+    </tr>
+    <tr data-email="agreene@cvent.com" data-cost="99.26" data-requests="1358" data-sessions="28" data-cost-per-request="0.07309278350515465">
+      <td class="name">Adam Greene</td>
+      <td class="team">ApocalypseNull</td>
+      <td class="email">agreene@cvent.com</td>
+      <td class="currency">$99.26</td>
+      <td class="number">1,358</td>
+      <td class="number">28</td>
+      <td class="currency">$0.07</td>
+      <td class="currency model-cell">$0.21</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$50.82</td><td class="currency model-cell">$48.22</td><td class="currency product-cell">$99.26</td>
+    </tr>
+    <tr data-email="mhamidi@cvent.com" data-cost="99.04" data-requests="868" data-sessions="8" data-cost-per-request="0.11410138248847927">
+      <td class="name">Mohamed Hamidi</td>
+      <td class="team">Dumbledore-Army</td>
+      <td class="email">mhamidi@cvent.com</td>
+      <td class="currency">$99.04</td>
+      <td class="number">868</td>
+      <td class="number">8</td>
+      <td class="currency">$0.11</td>
+      <td class="currency model-cell">$0.48</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$88.54</td><td class="currency model-cell">$10.02</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$99.04</td>
+    </tr>
+    <tr data-email="osama.malik@cvent.com" data-cost="97.84" data-requests="1824" data-sessions="47" data-cost-per-request="0.05364035087719298">
+      <td class="name">Osama Malik</td>
+      <td class="team">RepLock</td>
+      <td class="email">osama.malik@cvent.com</td>
+      <td class="currency">$97.84</td>
+      <td class="number">1,824</td>
+      <td class="number">47</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$0.96</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$37.89</td><td class="currency model-cell">$22.21</td><td class="currency model-cell">$36.77</td><td class="currency product-cell">$97.84</td>
+    </tr>
+    <tr data-email="zdavidson@cvent.com" data-cost="97.23" data-requests="1871" data-sessions="39" data-cost-per-request="0.05196686264029931">
+      <td class="name">Zac Davidson</td>
+      <td class="team">Neuron</td>
+      <td class="email">zdavidson@cvent.com</td>
+      <td class="currency">$97.23</td>
+      <td class="number">1,871</td>
+      <td class="number">39</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$0.31</td><td class="currency model-cell">$8.09</td><td class="currency model-cell">$0.68</td><td class="currency model-cell">$88.15</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$97.23</td>
+    </tr>
+    <tr data-email="gurleen.kaur@cvent.com" data-cost="93.93" data-requests="1485" data-sessions="13" data-cost-per-request="0.06325252525252525">
+      <td class="name">Gurleen Kaur</td>
+      <td class="team">Team-Rocket</td>
+      <td class="email">gurleen.kaur@cvent.com</td>
+      <td class="currency">$93.93</td>
+      <td class="number">1,485</td>
+      <td class="number">13</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$0.01</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$90.21</td><td class="currency model-cell">$3.71</td><td class="currency product-cell">$93.93</td>
+    </tr>
+    <tr data-email="lrichardson@cvent.com" data-cost="92.92" data-requests="1709" data-sessions="37" data-cost-per-request="0.054370977179637216">
+      <td class="name">Laura Richardson</td>
+      <td class="team">GinPorter</td>
+      <td class="email">lrichardson@cvent.com</td>
+      <td class="currency">$92.92</td>
+      <td class="number">1,709</td>
+      <td class="number">37</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$0.05</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$1.08</td><td class="currency model-cell">$53.56</td><td class="currency model-cell">$38.22</td><td class="currency product-cell">$92.92</td>
+    </tr>
+    <tr data-email="sam.galletta@cvent.com" data-cost="90.62" data-requests="1612" data-sessions="29" data-cost-per-request="0.05621588089330025">
+      <td class="name">Sam Galletta</td>
+      <td class="team">Oktagon</td>
+      <td class="email">sam.galletta@cvent.com</td>
+      <td class="currency">$90.62</td>
+      <td class="number">1,612</td>
+      <td class="number">29</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$1.89</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$81.91</td><td class="currency model-cell">$6.82</td><td class="currency product-cell">$90.62</td>
+    </tr>
+    <tr data-email="quinn.savitt@cvent.com" data-cost="88.45" data-requests="1564" data-sessions="84" data-cost-per-request="0.0565537084398977">
+      <td class="name">Quinn Savitt</td>
+      <td class="team">ApocalypseNull</td>
+      <td class="email">quinn.savitt@cvent.com</td>
+      <td class="currency">$88.45</td>
+      <td class="number">1,564</td>
+      <td class="number">84</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$3.32</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$29.60</td><td class="currency model-cell">$55.09</td><td class="currency model-cell">$0.44</td><td class="currency product-cell">$88.45</td>
+    </tr>
+    <tr data-email="svtiwari@cvent.com" data-cost="87.78" data-requests="1455" data-sessions="22" data-cost-per-request="0.0603298969072165">
+      <td class="name">Shubham Vinay Tiwari</td>
+      <td class="team">CocoDell</td>
+      <td class="email">svtiwari@cvent.com</td>
+      <td class="currency">$87.78</td>
+      <td class="number">1,455</td>
+      <td class="number">22</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$0.03</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$1.01</td><td class="currency model-cell">$86.15</td><td class="currency model-cell">$0.59</td><td class="currency product-cell">$87.78</td>
+    </tr>
+    <tr data-email="jbyron@cvent.com" data-cost="87.38" data-requests="980" data-sessions="18" data-cost-per-request="0.08916326530612244">
+      <td class="name">Jeremy Byron</td>
+      <td class="team">ApocalypseNull</td>
+      <td class="email">jbyron@cvent.com</td>
+      <td class="currency">$87.38</td>
+      <td class="number">980</td>
+      <td class="number">18</td>
+      <td class="currency">$0.09</td>
+      <td class="currency model-cell">$1.20</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$27.96</td><td class="currency model-cell">$58.22</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$87.38</td>
+    </tr>
+    <tr data-email="james.hooker@cvent.com" data-cost="87.02" data-requests="1418" data-sessions="40" data-cost-per-request="0.061368124118476725">
+      <td class="name">James Hooker</td>
+      <td class="team">Bellatrix</td>
+      <td class="email">james.hooker@cvent.com</td>
+      <td class="currency">$87.02</td>
+      <td class="number">1,418</td>
+      <td class="number">40</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$1.43</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.14</td><td class="currency model-cell">$33.94</td><td class="currency model-cell">$51.51</td><td class="currency product-cell">$87.02</td>
+    </tr>
+    <tr data-email="ryan.pitre@cvent.com" data-cost="86.78" data-requests="730" data-sessions="15" data-cost-per-request="0.11887671232876712">
+      <td class="name">Ryan Pitre</td>
+      <td class="team">Rebel-Intelligence</td>
+      <td class="email">ryan.pitre@cvent.com</td>
+      <td class="currency">$86.78</td>
+      <td class="number">730</td>
+      <td class="number">15</td>
+      <td class="currency">$0.12</td>
+      <td class="currency model-cell">$0.01</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$25.05</td><td class="currency model-cell">$6.13</td><td class="currency model-cell">$55.59</td><td class="currency product-cell">$86.78</td>
+    </tr>
+    <tr data-email="gwalker@cvent.com" data-cost="85.98" data-requests="507" data-sessions="4" data-cost-per-request="0.16958579881656805">
+      <td class="name">Geoff Walker</td>
+      <td class="team">RESTafarians</td>
+      <td class="email">gwalker@cvent.com</td>
+      <td class="currency">$85.98</td>
+      <td class="number">507</td>
+      <td class="number">4</td>
+      <td class="currency">$0.17</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$85.27</td><td class="currency model-cell">$0.70</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$85.98</td>
+    </tr>
+    <tr data-email="pwilson@cvent.com" data-cost="85.01" data-requests="1353" data-sessions="34" data-cost-per-request="0.06283074648928308">
+      <td class="name">Patrick Wilson</td>
+      <td class="team">RESTafarians</td>
+      <td class="email">pwilson@cvent.com</td>
+      <td class="currency">$85.01</td>
+      <td class="number">1,353</td>
+      <td class="number">34</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$0.15</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$42.32</td><td class="currency model-cell">$24.92</td><td class="currency model-cell">$17.62</td><td class="currency product-cell">$85.01</td>
+    </tr>
+    <tr data-email="c.giessner@cvent.com" data-cost="83.17" data-requests="1921" data-sessions="60" data-cost-per-request="0.04329515877147319">
+      <td class="name">Chris Giessner</td>
+      <td class="team">Queueless</td>
+      <td class="email">c.giessner@cvent.com</td>
+      <td class="currency">$83.17</td>
+      <td class="number">1,921</td>
+      <td class="number">60</td>
+      <td class="currency">$0.04</td>
+      <td class="currency model-cell">$0.60</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$12.22</td><td class="currency model-cell">$60.45</td><td class="currency model-cell">$9.91</td><td class="currency product-cell">$83.17</td>
+    </tr>
+    <tr data-email="human@cvent.com" data-cost="81.5" data-requests="2532" data-sessions="36" data-cost-per-request="0.03218799368088467">
+      <td class="name">Howard Uman</td>
+      <td class="team">ApocalypseNull</td>
+      <td class="email">human@cvent.com</td>
+      <td class="currency">$81.50</td>
+      <td class="number">2,532</td>
+      <td class="number">36</td>
+      <td class="currency">$0.03</td>
+      <td class="currency model-cell">$35.21</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$27.91</td><td class="currency model-cell">$18.38</td><td class="currency product-cell">$81.50</td>
+    </tr>
+    <tr data-email="tushar.srivastava@cvent.com" data-cost="80.04" data-requests="792" data-sessions="20" data-cost-per-request="0.10106060606060607">
+      <td class="name">Tushar Srivastava</td>
+      <td class="team">Artificial-Pirates</td>
+      <td class="email">tushar.srivastava@cvent.com</td>
+      <td class="currency">$80.04</td>
+      <td class="number">792</td>
+      <td class="number">20</td>
+      <td class="currency">$0.10</td>
+      <td class="currency model-cell">$0.10</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$55.52</td><td class="currency model-cell">$24.42</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$80.04</td>
+    </tr>
+    <tr data-email="jayant.sharma3@cvent.com" data-cost="78.68" data-requests="2177" data-sessions="54" data-cost-per-request="0.03614147909967846">
+      <td class="name">Jayant Sharma</td>
+      <td class="team">Team-Rocket</td>
+      <td class="email">jayant.sharma3@cvent.com</td>
+      <td class="currency">$78.68</td>
+      <td class="number">2,177</td>
+      <td class="number">54</td>
+      <td class="currency">$0.04</td>
+      <td class="currency model-cell">$10.32</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$64.28</td><td class="currency model-cell">$4.08</td><td class="currency product-cell">$78.68</td>
+    </tr>
+    <tr data-email="dwhite@cvent.com" data-cost="72.95" data-requests="310" data-sessions="17" data-cost-per-request="0.2353225806451613">
+      <td class="name">David White</td>
+      <td class="team">GinPorter</td>
+      <td class="email">dwhite@cvent.com</td>
+      <td class="currency">$72.95</td>
+      <td class="number">310</td>
+      <td class="number">17</td>
+      <td class="currency">$0.24</td>
+      <td class="currency model-cell">$0.01</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$68.14</td><td class="currency model-cell">$4.80</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$72.95</td>
+    </tr>
+    <tr data-email="qtrinh@cvent.com" data-cost="72.75" data-requests="972" data-sessions="17" data-cost-per-request="0.07484567901234568">
+      <td class="name">Quan Trinh</td>
+      <td class="team">Oktagon</td>
+      <td class="email">qtrinh@cvent.com</td>
+      <td class="currency">$72.75</td>
+      <td class="number">972</td>
+      <td class="number">17</td>
+      <td class="currency">$0.07</td>
+      <td class="currency model-cell">$1.54</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$10.88</td><td class="currency model-cell">$39.62</td><td class="currency model-cell">$20.72</td><td class="currency product-cell">$72.75</td>
+    </tr>
+    <tr data-email="vishwadeep.tripathi@cvent.com" data-cost="70.6" data-requests="1893" data-sessions="30" data-cost-per-request="0.037295298468040146">
+      <td class="name">Vishwadeep Tripathi</td>
+      <td class="team">Team-Rocket</td>
+      <td class="email">vishwadeep.tripathi@cvent.com</td>
+      <td class="currency">$70.60</td>
+      <td class="number">1,893</td>
+      <td class="number">30</td>
+      <td class="currency">$0.04</td>
+      <td class="currency model-cell">$16.81</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$10.54</td><td class="currency model-cell">$42.06</td><td class="currency model-cell">$1.19</td><td class="currency product-cell">$70.60</td>
+    </tr>
+    <tr data-email="yash.mathuria@cvent.com" data-cost="67.9" data-requests="1271" data-sessions="47" data-cost-per-request="0.05342250196695516">
+      <td class="name">Yash Mathuria</td>
+      <td class="team">RepLock</td>
+      <td class="email">yash.mathuria@cvent.com</td>
+      <td class="currency">$67.90</td>
+      <td class="number">1,271</td>
+      <td class="number">47</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$0.25</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$33.26</td><td class="currency model-cell">$34.38</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$67.90</td>
+    </tr>
+    <tr data-email="tnegi@cvent.com" data-cost="67.12" data-requests="1141" data-sessions="10" data-cost-per-request="0.05882559158632779">
+      <td class="name">Tushar Negi</td>
+      <td class="team">Team-Rocket</td>
+      <td class="email">tnegi@cvent.com</td>
+      <td class="currency">$67.12</td>
+      <td class="number">1,141</td>
+      <td class="number">10</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$2.33</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$26.23</td><td class="currency model-cell">$38.56</td><td class="currency product-cell">$67.12</td>
+    </tr>
+    <tr data-email="lkennan@cvent.com" data-cost="64.01" data-requests="1506" data-sessions="53" data-cost-per-request="0.04250332005312085">
+      <td class="name">Lawson Kennan</td>
+      <td class="team">Queueless</td>
+      <td class="email">lkennan@cvent.com</td>
+      <td class="currency">$64.01</td>
+      <td class="number">1,506</td>
+      <td class="number">53</td>
+      <td class="currency">$0.04</td>
+      <td class="currency model-cell">$0.03</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$9.94</td><td class="currency model-cell">$50.78</td><td class="currency model-cell">$3.26</td><td class="currency product-cell">$64.01</td>
+    </tr>
+    <tr data-email="vgera@cvent.com" data-cost="63.6" data-requests="811" data-sessions="16" data-cost-per-request="0.07842170160295932">
+      <td class="name">Vishal Gera</td>
+      <td class="team">CocoDell</td>
+      <td class="email">vgera@cvent.com</td>
+      <td class="currency">$63.60</td>
+      <td class="number">811</td>
+      <td class="number">16</td>
+      <td class="currency">$0.08</td>
+      <td class="currency model-cell">$0.06</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$25.19</td><td class="currency model-cell">$5.96</td><td class="currency model-cell">$32.39</td><td class="currency product-cell">$63.60</td>
+    </tr>
+    <tr data-email="paul.armstrong@cvent.com" data-cost="56.55" data-requests="1373" data-sessions="38" data-cost-per-request="0.04118718135469774">
+      <td class="name">Paul Armstrong</td>
+      <td class="team">RESTafarians</td>
+      <td class="email">paul.armstrong@cvent.com</td>
+      <td class="currency">$56.55</td>
+      <td class="number">1,373</td>
+      <td class="number">38</td>
+      <td class="currency">$0.04</td>
+      <td class="currency model-cell">$0.07</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$3.29</td><td class="currency model-cell">$32.55</td><td class="currency model-cell">$20.64</td><td class="currency product-cell">$56.55</td>
+    </tr>
+    <tr data-email="eyan@cvent.com" data-cost="56.43" data-requests="905" data-sessions="8" data-cost-per-request="0.062353591160220996">
+      <td class="name">Edwin Yan</td>
+      <td class="team">Rebel-Intelligence</td>
+      <td class="email">eyan@cvent.com</td>
+      <td class="currency">$56.43</td>
+      <td class="number">905</td>
+      <td class="number">8</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$2.05</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$10.84</td><td class="currency model-cell">$4.16</td><td class="currency model-cell">$39.38</td><td class="currency product-cell">$56.43</td>
+    </tr>
+    <tr data-email="sahil.sharma1@cvent.com" data-cost="44.82" data-requests="586" data-sessions="42" data-cost-per-request="0.07648464163822526">
+      <td class="name">Sahil Sharma</td>
+      <td class="team">RepLock</td>
+      <td class="email">sahil.sharma1@cvent.com</td>
+      <td class="currency">$44.82</td>
+      <td class="number">586</td>
+      <td class="number">42</td>
+      <td class="currency">$0.08</td>
+      <td class="currency model-cell">$0.04</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$23.67</td><td class="currency model-cell">$21.11</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$44.82</td>
+    </tr>
+    <tr data-email="mkothari@cvent.com" data-cost="28.67" data-requests="662" data-sessions="18" data-cost-per-request="0.04330815709969789">
+      <td class="name">Mihir Kothari</td>
+      <td class="team">RESTafarians</td>
+      <td class="email">mkothari@cvent.com</td>
+      <td class="currency">$28.67</td>
+      <td class="number">662</td>
+      <td class="number">18</td>
+      <td class="currency">$0.04</td>
+      <td class="currency model-cell">$0.04</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$28.63</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$28.67</td>
+    </tr>
+    <tr data-email="rbairwa@cvent.com" data-cost="27.84" data-requests="420" data-sessions="11" data-cost-per-request="0.06628571428571428">
+      <td class="name">Rahul Bairwa</td>
+      <td class="team">Bellatrix</td>
+      <td class="email">rbairwa@cvent.com</td>
+      <td class="currency">$27.84</td>
+      <td class="number">420</td>
+      <td class="number">11</td>
+      <td class="currency">$0.07</td>
+      <td class="currency model-cell">$0.01</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$26.33</td><td class="currency model-cell">$1.50</td><td class="currency product-cell">$27.84</td>
+    </tr>
+    <tr data-email="sandeep.chauhan@cvent.com" data-cost="25.71" data-requests="287" data-sessions="7" data-cost-per-request="0.08958188153310105">
+      <td class="name">Sandeep Singh Chauhan</td>
+      <td class="team">Bellatrix</td>
+      <td class="email">sandeep.chauhan@cvent.com</td>
+      <td class="currency">$25.71</td>
+      <td class="number">287</td>
+      <td class="number">7</td>
+      <td class="currency">$0.09</td>
+      <td class="currency model-cell">$0.26</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$22.73</td><td class="currency model-cell">$2.72</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$25.71</td>
+    </tr>
+    <tr data-email="rbagga@cvent.com" data-cost="23.05" data-requests="348" data-sessions="26" data-cost-per-request="0.06623563218390804">
+      <td class="name">Rajpaul Bagga</td>
+      <td class="team">RESTafarians</td>
+      <td class="email">rbagga@cvent.com</td>
+      <td class="currency">$23.05</td>
+      <td class="number">348</td>
+      <td class="number">26</td>
+      <td class="currency">$0.07</td>
+      <td class="currency model-cell">$0.18</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$5.93</td><td class="currency model-cell">$11.78</td><td class="currency model-cell">$5.16</td><td class="currency product-cell">$23.05</td>
+    </tr>
+    <tr data-email="sdongol@cvent.com" data-cost="22.04" data-requests="632" data-sessions="15" data-cost-per-request="0.03487341772151899">
+      <td class="name">Sanju Dongol</td>
+      <td class="team">ApocalypseNull</td>
+      <td class="email">sdongol@cvent.com</td>
+      <td class="currency">$22.04</td>
+      <td class="number">632</td>
+      <td class="number">15</td>
+      <td class="currency">$0.03</td>
+      <td class="currency model-cell">$0.02</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$2.30</td><td class="currency model-cell">$19.71</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$22.04</td>
+    </tr>
+    <tr data-email="kalpana.verma@cvent.com" data-cost="19.76" data-requests="345" data-sessions="11" data-cost-per-request="0.05727536231884058">
+      <td class="name">Kalpana Verma</td>
+      <td class="team">Artificial-Pirates</td>
+      <td class="email">kalpana.verma@cvent.com</td>
+      <td class="currency">$19.76</td>
+      <td class="number">345</td>
+      <td class="number">11</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$0.01</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$13.70</td><td class="currency model-cell">$6.04</td><td class="currency product-cell">$19.76</td>
+    </tr>
+    <tr data-email="eliu@cvent.com" data-cost="8.18" data-requests="96" data-sessions="5" data-cost-per-request="0.08520833333333333">
+      <td class="name">Edwin Liu</td>
+      <td class="team">Neuron</td>
+      <td class="email">eliu@cvent.com</td>
+      <td class="currency">$8.18</td>
+      <td class="number">96</td>
+      <td class="number">5</td>
+      <td class="currency">$0.09</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$3.40</td><td class="currency model-cell">$0.49</td><td class="currency model-cell">$4.29</td><td class="currency product-cell">$8.18</td>
+    </tr>
+    <tr data-email="mdahiya@cvent.com" data-cost="7.98" data-requests="164" data-sessions="10" data-cost-per-request="0.048658536585365855">
+      <td class="name">Meenakshi Dahiya</td>
+      <td class="team">Artificial-Pirates</td>
+      <td class="email">mdahiya@cvent.com</td>
+      <td class="currency">$7.98</td>
+      <td class="number">164</td>
+      <td class="number">10</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$0.01</td><td class="currency model-cell">$2.95</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$5.03</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$7.98</td>
+    </tr>
+    <tr data-email="sjoshi@cvent.com" data-cost="7.44" data-requests="111" data-sessions="2" data-cost-per-request="0.06702702702702704">
+      <td class="name">Sanjay Joshi</td>
+      <td class="team">Team-Rocket</td>
+      <td class="email">sjoshi@cvent.com</td>
+      <td class="currency">$7.44</td>
+      <td class="number">111</td>
+      <td class="number">2</td>
+      <td class="currency">$0.07</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.75</td><td class="currency model-cell">$6.69</td><td class="currency product-cell">$7.44</td>
+    </tr>
+    <tr data-email="nihal.shaikh-v@cvent.com" data-cost="7.02" data-requests="91" data-sessions="4" data-cost-per-request="0.07714285714285714">
+      <td class="name">Nihal Shaikh</td>
+      <td class="team">Red-emption</td>
+      <td class="email">nihal.shaikh-v@cvent.com</td>
+      <td class="currency">$7.02</td>
+      <td class="number">91</td>
+      <td class="number">4</td>
+      <td class="currency">$0.08</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.64</td><td class="currency model-cell">$6.38</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$7.02</td>
+    </tr>
+    <tr data-email="snitin@cvent.com" data-cost="5.08" data-requests="74" data-sessions="6" data-cost-per-request="0.06864864864864866">
+      <td class="name">Nitin Shivankar</td>
+      <td class="team">Red-emption</td>
+      <td class="email">snitin@cvent.com</td>
+      <td class="currency">$5.08</td>
+      <td class="number">74</td>
+      <td class="number">6</td>
+      <td class="currency">$0.07</td>
+      <td class="currency model-cell">$0.01</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$2.38</td><td class="currency model-cell">$2.69</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$5.08</td>
+    </tr>
+    <tr data-email="epeters@cvent.com" data-cost="4.01" data-requests="114" data-sessions="3" data-cost-per-request="0.03517543859649123">
+      <td class="name">Edward Peters</td>
+      <td class="team">ApocalypseNull</td>
+      <td class="email">epeters@cvent.com</td>
+      <td class="currency">$4.01</td>
+      <td class="number">114</td>
+      <td class="number">3</td>
+      <td class="currency">$0.04</td>
+      <td class="currency model-cell">$0.20</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$3.81</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$4.01</td>
+    </tr>
+    <tr data-email="jmyshrall@cvent.com" data-cost="3.91" data-requests="61" data-sessions="2" data-cost-per-request="0.06409836065573771">
+      <td class="name">Jake Myshrall</td>
+      <td class="team">Rebel-Intelligence</td>
+      <td class="email">jmyshrall@cvent.com</td>
+      <td class="currency">$3.91</td>
+      <td class="number">61</td>
+      <td class="number">2</td>
+      <td class="currency">$0.06</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$2.50</td><td class="currency model-cell">$0.58</td><td class="currency model-cell">$0.83</td><td class="currency product-cell">$3.91</td>
+    </tr>
+    <tr data-email="akumar6@cvent.com" data-cost="1.54" data-requests="33" data-sessions="2" data-cost-per-request="0.04666666666666667">
+      <td class="name">Amit Kumar</td>
+      <td class="team">Bellatrix</td>
+      <td class="email">akumar6@cvent.com</td>
+      <td class="currency">$1.54</td>
+      <td class="number">33</td>
+      <td class="number">2</td>
+      <td class="currency">$0.05</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$1.51</td><td class="currency model-cell">$0.03</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$1.54</td>
+    </tr>
+    <tr data-email="justin.bailey@cvent.com" data-cost="0" data-requests="0" data-sessions="0" data-cost-per-request="0">
+      <td class="name">Justin Bailey</td>
+      <td class="team">ApocalypseNull</td>
+      <td class="email">justin.bailey@cvent.com</td>
+      <td class="currency">$0.00</td>
+      <td class="number">0</td>
+      <td class="number">0</td>
+      <td class="currency">$0.00</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$0.00</td>
+    </tr>
+    <tr data-email="robm@cvent.com" data-cost="0" data-requests="0" data-sessions="0" data-cost-per-request="0">
+      <td class="name">Rob Miller</td>
+      <td class="team">ApocalypseNull</td>
+      <td class="email">robm@cvent.com</td>
+      <td class="currency">$0.00</td>
+      <td class="number">0</td>
+      <td class="number">0</td>
+      <td class="currency">$0.00</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$0.00</td>
+    </tr>
+    <tr data-email="ayush.bahuguna@cvent.com" data-cost="0" data-requests="0" data-sessions="0" data-cost-per-request="0">
+      <td class="name">Ayush Bahuguna</td>
+      <td class="team">Artificial-Pirates</td>
+      <td class="email">ayush.bahuguna@cvent.com</td>
+      <td class="currency">$0.00</td>
+      <td class="number">0</td>
+      <td class="number">0</td>
+      <td class="currency">$0.00</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$0.00</td>
+    </tr>
+    <tr data-email="kbhanot@cvent.com" data-cost="0" data-requests="0" data-sessions="0" data-cost-per-request="0">
+      <td class="name">Karan Bhanot</td>
+      <td class="team">Artificial-Pirates</td>
+      <td class="email">kbhanot@cvent.com</td>
+      <td class="currency">$0.00</td>
+      <td class="number">0</td>
+      <td class="number">0</td>
+      <td class="currency">$0.00</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$0.00</td>
+    </tr>
+    <tr data-email="abathla@cvent.com" data-cost="0" data-requests="0" data-sessions="0" data-cost-per-request="0">
+      <td class="name">Aseem Bathla</td>
+      <td class="team">Bellatrix</td>
+      <td class="email">abathla@cvent.com</td>
+      <td class="currency">$0.00</td>
+      <td class="number">0</td>
+      <td class="number">0</td>
+      <td class="currency">$0.00</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$0.00</td>
+    </tr>
+    <tr data-email="darora@cvent.com" data-cost="0" data-requests="0" data-sessions="0" data-cost-per-request="0">
+      <td class="name">Dushyant Arora</td>
+      <td class="team">Bellatrix</td>
+      <td class="email">darora@cvent.com</td>
+      <td class="currency">$0.00</td>
+      <td class="number">0</td>
+      <td class="number">0</td>
+      <td class="currency">$0.00</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$0.00</td>
+    </tr>
+    <tr data-email="gdhingra@cvent.com" data-cost="0" data-requests="0" data-sessions="0" data-cost-per-request="0">
+      <td class="name">Gagan Dhingra</td>
+      <td class="team">Bellatrix</td>
+      <td class="email">gdhingra@cvent.com</td>
+      <td class="currency">$0.00</td>
+      <td class="number">0</td>
+      <td class="number">0</td>
+      <td class="currency">$0.00</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$0.00</td>
+    </tr>
+    <tr data-email="rahulakash.katare@cvent.com" data-cost="0" data-requests="0" data-sessions="0" data-cost-per-request="0">
+      <td class="name">Rahul Akash Katare</td>
+      <td class="team">Bellatrix</td>
+      <td class="email">rahulakash.katare@cvent.com</td>
+      <td class="currency">$0.00</td>
+      <td class="number">0</td>
+      <td class="number">0</td>
+      <td class="currency">$0.00</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$0.00</td>
+    </tr>
+    <tr data-email="amigdol@cvent.com" data-cost="0" data-requests="0" data-sessions="0" data-cost-per-request="0">
+      <td class="name">Alex Migdol</td>
+      <td class="team">Dumbledore-Army</td>
+      <td class="email">amigdol@cvent.com</td>
+      <td class="currency">$0.00</td>
+      <td class="number">0</td>
+      <td class="number">0</td>
+      <td class="currency">$0.00</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$0.00</td>
+    </tr>
+    <tr data-email="kisha.cooper@cvent.com" data-cost="0" data-requests="0" data-sessions="0" data-cost-per-request="0">
+      <td class="name">Kisha Cooper</td>
+      <td class="team">Dumbledore-Army</td>
+      <td class="email">kisha.cooper@cvent.com</td>
+      <td class="currency">$0.00</td>
+      <td class="number">0</td>
+      <td class="number">0</td>
+      <td class="currency">$0.00</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$0.00</td>
+    </tr>
+    <tr data-email="plohiya@cvent.com" data-cost="0" data-requests="0" data-sessions="0" data-cost-per-request="0">
+      <td class="name">Pooja Lohiya</td>
+      <td class="team">Dumbledore-Army</td>
+      <td class="email">plohiya@cvent.com</td>
+      <td class="currency">$0.00</td>
+      <td class="number">0</td>
+      <td class="number">0</td>
+      <td class="currency">$0.00</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$0.00</td>
+    </tr>
+    <tr data-email="kgovil@cvent.com" data-cost="0" data-requests="0" data-sessions="0" data-cost-per-request="0">
+      <td class="name">Karan Govil</td>
+      <td class="team">GinPorter</td>
+      <td class="email">kgovil@cvent.com</td>
+      <td class="currency">$0.00</td>
+      <td class="number">0</td>
+      <td class="number">0</td>
+      <td class="currency">$0.00</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$0.00</td>
+    </tr>
+    <tr data-email="nicholas.hancock@cvent.com" data-cost="0" data-requests="0" data-sessions="0" data-cost-per-request="0">
+      <td class="name">Nicholas Hancock</td>
+      <td class="team">GinPorter</td>
+      <td class="email">nicholas.hancock@cvent.com</td>
+      <td class="currency">$0.00</td>
+      <td class="number">0</td>
+      <td class="number">0</td>
+      <td class="currency">$0.00</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$0.00</td>
+    </tr>
+    <tr data-email="james.lapus@cvent.com" data-cost="0" data-requests="0" data-sessions="0" data-cost-per-request="0">
+      <td class="name">James Lapus</td>
+      <td class="team">Neuron</td>
+      <td class="email">james.lapus@cvent.com</td>
+      <td class="currency">$0.00</td>
+      <td class="number">0</td>
+      <td class="number">0</td>
+      <td class="currency">$0.00</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$0.00</td>
+    </tr>
+    <tr data-email="edward.chang@cvent.com" data-cost="0" data-requests="0" data-sessions="0" data-cost-per-request="0">
+      <td class="name">Edward Chang</td>
+      <td class="team">Queueless</td>
+      <td class="email">edward.chang@cvent.com</td>
+      <td class="currency">$0.00</td>
+      <td class="number">0</td>
+      <td class="number">0</td>
+      <td class="currency">$0.00</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$0.00</td>
+    </tr>
+    <tr data-email="m.chatterjee@cvent.com" data-cost="0" data-requests="0" data-sessions="0" data-cost-per-request="0">
+      <td class="name">Monish Chatterjee</td>
+      <td class="team">Red-emption</td>
+      <td class="email">m.chatterjee@cvent.com</td>
+      <td class="currency">$0.00</td>
+      <td class="number">0</td>
+      <td class="number">0</td>
+      <td class="currency">$0.00</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$0.00</td>
+    </tr>
+    <tr data-email="rmadane@cvent.com" data-cost="0" data-requests="0" data-sessions="0" data-cost-per-request="0">
+      <td class="name">Ramesh Madane</td>
+      <td class="team">Red-emption</td>
+      <td class="email">rmadane@cvent.com</td>
+      <td class="currency">$0.00</td>
+      <td class="number">0</td>
+      <td class="number">0</td>
+      <td class="currency">$0.00</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$0.00</td>
+    </tr>
+    <tr data-email="sbundale@cvent.com" data-cost="0" data-requests="0" data-sessions="0" data-cost-per-request="0">
+      <td class="name">Sagar Bundale</td>
+      <td class="team">Red-emption</td>
+      <td class="email">sbundale@cvent.com</td>
+      <td class="currency">$0.00</td>
+      <td class="number">0</td>
+      <td class="number">0</td>
+      <td class="currency">$0.00</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$0.00</td>
+    </tr>
+    <tr data-email="vishrut.jambudi@cvent.com" data-cost="0" data-requests="0" data-sessions="0" data-cost-per-request="0">
+      <td class="name">Vishrut Jambudi</td>
+      <td class="team">Red-emption</td>
+      <td class="email">vishrut.jambudi@cvent.com</td>
+      <td class="currency">$0.00</td>
+      <td class="number">0</td>
+      <td class="number">0</td>
+      <td class="currency">$0.00</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$0.00</td>
+    </tr>
+    <tr data-email="shivangi.aggarwal@cvent.com" data-cost="0" data-requests="0" data-sessions="0" data-cost-per-request="0">
+      <td class="name">Shivangi Aggarwal</td>
+      <td class="team">RepLock</td>
+      <td class="email">shivangi.aggarwal@cvent.com</td>
+      <td class="currency">$0.00</td>
+      <td class="number">0</td>
+      <td class="number">0</td>
+      <td class="currency">$0.00</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$0.00</td>
+    </tr>
+    <tr data-email="mmittal@cvent.com" data-cost="0" data-requests="0" data-sessions="0" data-cost-per-request="0">
+      <td class="name">Manu Mittal</td>
+      <td class="team">Team-Rocket</td>
+      <td class="email">mmittal@cvent.com</td>
+      <td class="currency">$0.00</td>
+      <td class="number">0</td>
+      <td class="number">0</td>
+      <td class="currency">$0.00</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$0.00</td>
+    </tr>
+    <tr data-email="samar.mathur@cvent.com" data-cost="0" data-requests="0" data-sessions="0" data-cost-per-request="0">
+      <td class="name">Samar Mathur</td>
+      <td class="team">Team-Rocket</td>
+      <td class="email">samar.mathur@cvent.com</td>
+      <td class="currency">$0.00</td>
+      <td class="number">0</td>
+      <td class="number">0</td>
+      <td class="currency">$0.00</td>
+      <td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency model-cell">$0.00</td><td class="currency product-cell">$0.00</td>
+    </tr>
+
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    let sortState = {};
+
+    function getSortKey(header) {
+      const text = header.textContent.trim();
+      const index = Array.from(header.parentNode.children).indexOf(header);
+      return {text, index};
+    }
+
+    function parseValue(text) {
+      // Try currency
+      if (text.startsWith('$')) {
+        return parseFloat(text.substring(1).replace(/,/g, ''));
+      }
+      // Try number
+      const num = parseFloat(text.replace(/,/g, ''));
+      if (!isNaN(num)) {
+        return num;
+      }
+      // String
+      return text.toLowerCase();
+    }
+
+    function sortTable(header) {
+      const key = getSortKey(header);
+      const table = header.closest('table');
+      const tbody = table.querySelector('tbody');
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+
+      // Remove previous sort indicators
+      table.querySelectorAll('th').forEach(h => {
+        h.classList.remove('sort-asc', 'sort-desc');
+      });
+
+      // Determine sort direction
+      let ascending = true;
+      if (sortState.lastHeader === header) {
+        ascending = !sortState.lastAscending;
+      }
+
+      // Sort rows
+      rows.sort((a, b) => {
+        const aVal = parseValue(a.children[key.index].textContent);
+        const bVal = parseValue(b.children[key.index].textContent);
+
+        if (typeof aVal === 'number' && typeof bVal === 'number') {
+          return ascending ? aVal - bVal : bVal - aVal;
+        }
+
+        const aStr = String(aVal);
+        const bStr = String(bVal);
+        const cmp = aStr.localeCompare(bStr);
+        return ascending ? cmp : -cmp;
+      });
+
+      // Re-append sorted rows
+      rows.forEach(row => tbody.appendChild(row));
+
+      // Update sort indicator
+      header.classList.add(ascending ? 'sort-asc' : 'sort-desc');
+      sortState = {lastHeader: header, lastAscending: ascending};
+    }
+
+    // Attach click handlers to sortable headers
+    document.querySelectorAll('th.sortable').forEach(header => {
+      header.addEventListener('click', () => sortTable(header));
+    });
+
+    // Team filter functionality
+    function applyTeamFilter() {
+      const selectedTeams = Array.from(document.querySelectorAll('.team-filter:checked')).map(cb => cb.value);
+
+      // Filter Team Summary table (team in column 0)
+      const teamTable = document.getElementById('team-summary-table');
+      if (teamTable) {
+        const rows = teamTable.querySelector('tbody').querySelectorAll('tr');
+        rows.forEach(row => {
+          const teamCell = row.children[0].textContent.trim();
+          const isVisible = selectedTeams.length > 0 && selectedTeams.includes(teamCell);
+          row.style.display = isVisible ? '' : 'none';
+        });
+      }
+
+      // Filter Users table (team in column 1) and collect stats
+      const usersTable = document.getElementById('active-users-table');
+      let totalCost = 0, totalRequests = 0, totalSessions = 0;
+      if (usersTable) {
+        const rows = usersTable.querySelector('tbody').querySelectorAll('tr');
+        rows.forEach(row => {
+          const teamCell = row.children[1].textContent.trim();
+          const isVisible = selectedTeams.length > 0 && selectedTeams.includes(teamCell);
+          row.style.display = isVisible ? '' : 'none';
+
+          if (isVisible) {
+            const cost = parseFloat(row.dataset.cost || 0);
+            const requests = parseInt(row.dataset.requests || 0);
+            const sessions = parseInt(row.dataset.sessions || 0);
+            totalCost += cost;
+            totalRequests += requests;
+            totalSessions += sessions;
+          }
+        });
+      }
+
+      // Update summary stats
+      const userCount = usersTable ? Array.from(usersTable.querySelector('tbody').querySelectorAll('tr')).filter(r => r.style.display !== 'none').length : 0;
+      const costPerRequest = totalRequests > 0 ? totalCost / totalRequests : 0;
+
+      const statsItems = document.querySelectorAll('.stat-item');
+      statsItems.forEach(item => {
+        const label = item.querySelector('.stat-label').textContent.trim();
+        if (label === 'Users:') {
+          item.querySelector('.stat-value').textContent = userCount;
+        } else if (label === 'Total Cost:') {
+          item.querySelector('.stat-value').textContent = '$' + totalCost.toFixed(2);
+        } else if (label === 'Total Requests:') {
+          item.querySelector('.stat-value').textContent = totalRequests.toLocaleString();
+        } else if (label === 'Average Cost/Request:') {
+          item.querySelector('.stat-value').textContent = '$' + costPerRequest.toFixed(2);
+        }
+      });
+    }
+
+    // Attach filter change handlers
+    document.querySelectorAll('.team-filter').forEach(checkbox => {
+      checkbox.addEventListener('change', applyTeamFilter);
+    });
+
+    // Select All button handler
+    const selectAllButton = document.getElementById('select-all-teams');
+    if (selectAllButton) {
+      selectAllButton.addEventListener('click', () => {
+        document.querySelectorAll('.team-filter').forEach(checkbox => {
+          checkbox.checked = true;
+        });
+        applyTeamFilter();
+      });
+    }
+
+    // Clear All button handler
+    const clearAllButton = document.getElementById('clear-all-teams');
+    if (clearAllButton) {
+      clearAllButton.addEventListener('click', () => {
+        document.querySelectorAll('.team-filter').forEach(checkbox => {
+          checkbox.checked = false;
+        });
+        applyTeamFilter();
+      });
+    }
+  </script>
+</body>
+</html>
