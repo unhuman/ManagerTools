@@ -146,10 +146,11 @@ Configuration is stored in `~/.managerTools.cfg` as a JSON file. The following o
 
 #### Datadog Integration
 
-- **`datadogPAT`** — Datadog Personal Access Token for querying Claude Code usage data. Required for generating team usage reports. The token must have the following scopes:
-  - `logs_read_index` — Required to read logs for usage metrics
+- **`datadogPAT`** — Datadog Personal Access Token for querying Anthropic product usage data. Required for generating team usage reports. The token must have the following scopes:
+  - `cloud_cost_management_read` — Required to read Cloud Cost Management metrics for all Anthropic products
+  - `timeseries_query` — Required to query metrics via the v1/query endpoint
   
-  To generate a new token, go to Datadog Settings → Organization → API Keys → Personal Access Tokens. Create a new token with the `logs_read_index` scope.
+  To generate a new token, go to Datadog Settings → Organization → API Keys → Personal Access Tokens. Create a new token with the `cloud_cost_management_read` and `timeseries_query` scopes.
   ```json
   "datadogPAT": "ddpat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
   ```

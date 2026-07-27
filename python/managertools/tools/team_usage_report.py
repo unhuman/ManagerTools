@@ -189,16 +189,22 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     </div>
     '''
 
-    # Generate model cost header columns
-    model_headers = ''.join(f'<th class="sortable model-col" data-model="{escape_html(m)}">{escape_html(m)}</th>' for m in models)
+    # Generate model cost header columns (individual model names)
+    model_headers_individual = ''.join(f'<th class="sortable model-col" data-model="{escape_html(m)}">{escape_html(m)}</th>' for m in models)
+
+    # Generate group header for models (only if there are models)
+    model_group_header = f'<th class="group-header model-group-header" colspan="{len(models)}">Model</th>' if models else ''
 
     model_cells = []
     for row in all_rows:
         cells = ''.join(f'<td class="currency model-cell">{format_currency(row["model_costs"].get(m, 0))}</td>' for m in models)
         model_cells.append(cells)
 
-    # Generate product cost header columns
-    product_headers = ''.join(f'<th class="sortable product-col" data-product="{escape_html(p)}">{escape_html(p)}</th>' for p in products)
+    # Generate product cost header columns (individual product names)
+    product_headers_individual = ''.join(f'<th class="sortable product-col" data-product="{escape_html(p)}">{escape_html(p)}</th>' for p in products)
+
+    # Generate group header for products (only if there are products)
+    product_group_header = f'<th class="group-header product-group-header" colspan="{len(products)}">Product</th>' if products else ''
 
     product_cells = []
     for row in all_rows:
@@ -208,14 +214,11 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     # Build table rows
     all_table_rows = ''
     for i, row in enumerate(all_rows):
-        all_table_rows += f'''    <tr data-email="{escape_html(row['email'])}" data-cost="{row['cost']}" data-requests="{row['requests']}" data-sessions="{row['sessions']}" data-cost-per-request="{row['cost_per_request']}">
+        all_table_rows += f'''    <tr data-email="{escape_html(row['email'])}" data-cost="{row['cost']}">
       <td class="name">{row['name']}</td>
       <td class="team">{row['team']}</td>
       <td class="email">{row['email']}</td>
       <td class="currency">{row['cost_formatted']}</td>
-      <td class="number">{row['requests_formatted']}</td>
-      <td class="number">{row['sessions_formatted']}</td>
-      <td class="currency">{row['cost_per_request_formatted']}</td>
       {model_cells[i]}{product_cells[i]}
     </tr>
 '''
@@ -225,13 +228,10 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     for row in team_rows:
         model_cells = ''.join(f'<td class="currency model-cell">{format_currency(row["model_costs"].get(m, 0))}</td>' for m in models)
         product_cells = ''.join(f'<td class="currency product-cell">{format_currency(row["product_costs"].get(p, 0))}</td>' for p in products)
-        team_table_rows += f'''    <tr class="team-row" data-cost="{row['cost']}" data-requests="{row['requests']}" data-sessions="{row['sessions']}" data-cost-per-request="{row['cost_per_request']}">
+        team_table_rows += f'''    <tr class="team-row" data-cost="{row['cost']}">
       <td class="name">{row['name']}</td>
       <td class="number">{row['active_member_count_formatted']}/{row['member_count_formatted']}</td>
       <td class="currency">{row['cost_formatted']}</td>
-      <td class="number">{row['requests_formatted']}</td>
-      <td class="number">{row['sessions_formatted']}</td>
-      <td class="currency">{row['cost_per_request_formatted']}</td>
       {model_cells}{product_cells}
     </tr>
 '''
@@ -460,11 +460,62 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       font-family: "Courier New", monospace;
     }}
 
+    .report-table .group-header {{
+      font-weight: 600;
+      border-bottom: 2px solid var(--border);
+      text-align: center;
+    }}
+
+    .report-table .model-group-header {{
+      background-color: #e8f0ff;
+    }}
+
+    @media (prefers-color-scheme: dark) {{
+      .report-table .model-group-header {{
+        background-color: #1a3a52;
+      }}
+    }}
+
+    :root[data-theme="light"] .report-table .model-group-header {{
+      background-color: #e8f0ff;
+    }}
+
+    :root[data-theme="dark"] .report-table .model-group-header {{
+      background-color: #1a3a52;
+    }}
+
+    .report-table .product-group-header {{
+      background-color: #f0e8ff;
+    }}
+
+    @media (prefers-color-scheme: dark) {{
+      .report-table .product-group-header {{
+        background-color: #3a1a52;
+      }}
+    }}
+
+    :root[data-theme="light"] .report-table .product-group-header {{
+      background-color: #f0e8ff;
+    }}
+
+    :root[data-theme="dark"] .report-table .product-group-header {{
+      background-color: #3a1a52;
+    }}
+
     .report-table .model-col {{
       font-size: 0.85rem;
     }}
 
     .report-table .model-cell {{
+      font-size: 0.85rem;
+      text-align: right;
+    }}
+
+    .report-table .product-col {{
+      font-size: 0.85rem;
+    }}
+
+    .report-table .product-cell {{
       font-size: 0.85rem;
       text-align: right;
     }}
@@ -608,13 +659,14 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     <table class="report-table team-table" id="team-summary-table">
       <thead>
         <tr>
+          <th colspan="3" style="border: none; background: none;"></th>
+          {model_group_header}{product_group_header}
+        </tr>
+        <tr>
           <th class="sortable">Team</th>
           <th class="sortable">Active/Members</th>
           <th class="sortable">Total Cost</th>
-          <th class="sortable">Requests</th>
-          <th class="sortable">Sessions</th>
-          <th class="sortable">Cost/Request</th>
-          {model_headers}{product_headers}
+          {model_headers_individual}{product_headers_individual}
         </tr>
       </thead>
       <tbody>
@@ -626,14 +678,15 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     <table class="report-table" id="active-users-table">
       <thead>
         <tr>
+          <th colspan="4" style="border: none; background: none;"></th>
+          {model_group_header}{product_group_header}
+        </tr>
+        <tr>
           <th class="sortable">Name</th>
           <th class="sortable">Team</th>
           <th class="sortable">Email</th>
           <th class="sortable">Total Cost</th>
-          <th class="sortable">Requests</th>
-          <th class="sortable">Sessions</th>
-          <th class="sortable">Cost/Request</th>
-          {model_headers}{product_headers}
+          {model_headers_individual}{product_headers_individual}
         </tr>
       </thead>
       <tbody>

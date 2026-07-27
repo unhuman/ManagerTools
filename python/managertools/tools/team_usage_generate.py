@@ -2,7 +2,7 @@
 """
 Generate a complete Claude Code team usage report end-to-end.
 
-Fetches rosters from Backstage, queries Datadog for usage, builds params,
+Fetches rosters from Backstage, queries Datadog Cloud Cost API for usage, builds params,
 and generates an interactive HTML report - all in one command.
 
 Usage:
@@ -16,42 +16,25 @@ Arguments:
 Configuration required in ~/.managerTools.cfg:
   - backstageServer: Backstage FQDN
   - datadogPAT: Datadog Personal Access Token with scopes:
-    * logs_read_index (required for querying logs API)
+    * cloud_cost_management_read (required for Cloud Cost API)
+    * timeseries_query (required for metrics API)
   - orgTeams: Array of team names (if using 'org' parameter)
 """
 import sys
 import json
 import os
-import socket
 import urllib.request
 import urllib.parse
 import time
-import threading
+import re
 from datetime import date, datetime, timedelta
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from managertools.util.config_file_manager import ConfigFileManager
 from managertools.rest.backstage_rest import BackstageREST
 from managertools.util.backstage_cache import BackstageCache
 from managertools.tools.team_usage_report import generate_html
 
-# Global rate limit lock - shared across all threads
-_rate_limit_lock = threading.Lock()
-_rate_limit_reset_time = 0
 
-
-def log_debug(day_str, page, message, time_of_day=None):
-    """Log debug message with day, page, and optional time-of-day context.
-
-    Args:
-        day_str: The day being queried (e.g., "2026-07-15")
-        page: The page number being fetched
-        message: The message to log
-        time_of_day: Optional timestamp showing progress within the day (e.g., "14:32:15")
-    """
-    thread_id = threading.current_thread().ident
-    time_str = f"@{time_of_day}" if time_of_day else ""
-    print(f"[{day_str}{time_str}:p{page}:t{thread_id}] {message}", file=sys.stderr, flush=True)
 
 
 def get_date_range(time_period):
@@ -152,374 +135,140 @@ def fetch_rosters(teams, config_mgr):
     return list(members_by_email.values())
 
 
-def split_date_range(start_ms, end_ms):
-    """Split a date range into individual calendar days.
-
-    Returns:
-        List of tuples: (day_start_ms, day_end_ms, date_str)
-    """
-    start_dt = datetime.fromtimestamp(start_ms / 1000)
-    end_dt = datetime.fromtimestamp(end_ms / 1000)
-
-    result = []
-    current = start_dt.replace(hour=0, minute=0, second=0, microsecond=0)
-
-    while current <= end_dt:
-        day_start = current
-        day_end = current.replace(hour=23, minute=59, second=59, microsecond=999999)
-        if day_end > end_dt:
-            day_end = end_dt
-
-        day_start_ms = int(day_start.timestamp() * 1000)
-        day_end_ms = int(day_end.timestamp() * 1000)
-        date_str = current.strftime('%Y-%m-%d')
-
-        result.append((day_start_ms, day_end_ms, date_str))
-
-        current += timedelta(days=1)
-
-    return result
 
 
-def merge_usage_dicts(usage_dicts):
-    """Merge multiple per-day usage dicts into one.
+def query_datadog(config_mgr, start_ms, end_ms, roster=None):
+    """Query Datadog Cloud Cost Management API for all Anthropic product usage.
 
-    Args:
-        usage_dicts: List of {(email, model, product): {'cost': ..., 'requests': ..., 'sessions': {...}}} dicts
-
-    Returns:
-        Merged dict with costs/requests summed and sessions union'd
-    """
-    merged = {}
-
-    for usage_dict in usage_dicts:
-        for key, data in usage_dict.items():
-            if key not in merged:
-                merged[key] = {
-                    'cost': 0,
-                    'requests': 0,
-                    'sessions': set()
-                }
-
-            merged[key]['cost'] += data['cost']
-            merged[key]['requests'] += data['requests']
-            merged[key]['sessions'].update(data['sessions'])
-
-    return merged
-
-
-def query_datadog_day(config_mgr, start_ms, end_ms, day_str, resume_id=None, roster_emails=None):
-    """Query Datadog for a single day of Anthropic product usage by email, model, and product.
+    Uses the v1/query endpoint to retrieve metrics from Cloud Cost Management, which
+    includes all Anthropic products (chat, claude-code, claude-design, etc.).
 
     Args:
         config_mgr: ConfigFileManager
-        start_ms: Day start (milliseconds since epoch)
-        end_ms: Day end (milliseconds since epoch)
-        day_str: Date string for logging (e.g., "2026-07-15")
-        resume_id: Optional resume ID for per-day checkpointing
-        roster_emails: Optional set/list of emails to filter by (for efficiency)
+        start_ms: Period start (milliseconds since epoch)
+        end_ms: Period end (milliseconds since epoch)
+        roster: Optional list of member dicts with email field (for filtering results)
 
     Returns:
-        Dict {(email, model, product): {'cost': float, 'requests': int, 'sessions': set}}
+        List of usage dicts with model and product cost breakdowns
     """
     if not config_mgr.contains_key('datadogPAT'):
         raise RuntimeError("datadogPAT not configured in ~/.managerTools.cfg")
 
     pat = config_mgr.get_value('datadogPAT')
 
-    # Datadog logs query API endpoint - query all Anthropic usage events (no product filtering)
-    # This captures: chat, claude-code, claude-design, claude-web, voice-mode, research, cowork, office-agent, etc.
-    query = "@event.name:api_request @cost_usd:>0"
+    # Convert milliseconds to seconds (Cloud Cost API expects unix seconds)
+    start_seconds = int(start_ms / 1000)
+    end_seconds = int(end_ms / 1000)
 
-    # Add email filter if roster is provided (more efficient server-side filtering)
-    if roster_emails:
-        email_filters = " OR ".join([f"@user.normalized_email:{email}" for email in sorted(roster_emails)])
-        query = f"{query} ({email_filters})"
+    # Cloud Cost metrics query: all costs by display_user_email, product, and servicename (model)
+    query = "sum:custom.cost.amortized{providername:Anthropic} by {display_user_email,product,servicename,cost_type}"
 
     headers = {
         'Authorization': f'Bearer {pat}',
         'Content-Type': 'application/json'
     }
 
-    usage_by_email_model_product = {}
-    page = 0
-    cursor = None
-    total_logs = 0
-    last_known_timestamp = None  # Track progress through the day
+    # Construct URL for Cloud Cost metrics query
+    url = f"https://api.datadoghq.com/api/v1/query?query={urllib.parse.quote(query)}&from={start_seconds}&to={end_seconds}"
 
-    # Per-day checkpoint (optional)
-    checkpoint_file = None
-    if resume_id:
-        checkpoint_file = f"/tmp/datadog_daycheck_{resume_id}_{day_str}.json"
-        if os.path.exists(checkpoint_file):
-            try:
-                with open(checkpoint_file, 'r') as f:
-                    checkpoint = json.load(f)
-                    cursor = checkpoint.get('cursor')
-                    page = checkpoint.get('page', 0)
-                    total_logs = checkpoint.get('total_logs', 0)
+    # Retry logic with exponential backoff
+    retry_count = 0
+    max_retries = 10
+    max_retry_wait = 300  # Cap backoff at 5 minutes
+    response_data = None
 
-                    # Restore accumulated usage data
-                    saved_usage = checkpoint.get('usage', {})
-                    for key_str, data in saved_usage.items():
-                        parts = key_str.split('|')
-                        email, model, product = parts[0], parts[1], parts[2] if len(parts) > 2 else ''
-                        usage_by_email_model_product[(email, model, product)] = {
-                            'cost': data['cost'],
-                            'requests': data['requests'],
-                            'sessions': set(data['sessions'])
-                        }
-
-                    print(f"\n✓ Resuming from checkpoint: Page {page}, Total: {total_logs}, Recovered {len(usage_by_email_model_product)} user/model/product tuples", file=sys.stderr, flush=True)
-            except Exception as e:
-                print(f"\n⚠ Failed to load checkpoint: {e}", file=sys.stderr)
-                pass
-
-    try:
-        while True:
-            page += 1
-
-            # Build URL with pagination
-            base_url = f"https://api.datadoghq.com/api/v2/logs/events?filter[query]={urllib.parse.quote(query)}&filter[from]={start_ms}&filter[to]={end_ms}&page[limit]=1000"
-            if cursor:
-                url = f"{base_url}&page[cursor]={urllib.parse.quote(cursor)}"
-            else:
-                url = base_url
-
-            # Retry logic for connection issues - infinite retries with exponential backoff
-            retry_count = 0
-            max_retry_wait = 300  # Cap backoff at 5 minutes
-            data = None
-
-            while data is None:
-                try:
-                    req = urllib.request.Request(url, headers=headers)
-                    with urllib.request.urlopen(req, timeout=30) as response:
-                        data = json.loads(response.read().decode('utf-8'))
-
-                        # Check rate limit headers
-                        remaining = response.headers.get('X-RateLimit-Remaining')
-                        limit = response.headers.get('X-RateLimit-Limit')
-                        reset = response.headers.get('X-RateLimit-Reset')
-
-                        if remaining and limit:
-                            remaining_int = int(remaining)
-                            limit_int = int(limit)
-                            log_debug(day_str, page, f"Rate limit: {remaining_int}/{limit_int} remaining")
-
-                            # If we're running low on requests, sleep until reset (thread-safe)
-                            if remaining_int < 5:
-                                reset_int = int(reset) if reset else None
-                                if reset_int:
-                                    wait_until_reset = reset_int - int(time.time())
-                                    if wait_until_reset > 0:
-                                        log_debug(day_str, page, f"Rate limit low, waiting {wait_until_reset}s until reset at {datetime.fromtimestamp(reset_int)}")
-                                        with _rate_limit_lock:
-                                            # Double-check after acquiring lock
-                                            if int(reset) > int(time.time()):
-                                                actual_wait = int(reset) - int(time.time())
-                                                if actual_wait > 0:
-                                                    time.sleep(actual_wait + 1)
-
-                except urllib.error.HTTPError as e:
-                    retry_count += 1
-                    wait_time = min(2 ** retry_count, max_retry_wait)
-                    error_code = e.code
-                    error_msg = e.reason if hasattr(e, 'reason') else str(e)
-                    log_debug(day_str, page, f"HTTP {error_code} ({error_msg}), retrying in {wait_time}s (attempt {retry_count})", time_of_day=last_known_timestamp)
-                    time.sleep(wait_time)
-                except (urllib.error.URLError, ConnectionResetError, BrokenPipeError, TimeoutError, socket.timeout) as e:
-                    retry_count += 1
-                    wait_time = min(2 ** retry_count, max_retry_wait)
-                    error_type = type(e).__name__
-                    log_debug(day_str, page, f"{error_type}: {str(e)[:100]}, retrying in {wait_time}s (attempt {retry_count})", time_of_day=last_known_timestamp)
-                    time.sleep(wait_time)
-
-            if data is None:
-                break
-
-            if not data.get('data'):
-                break
-
-            logs_in_page = len(data['data'])
-            total_logs += logs_in_page
-
-            # Extract timestamp from last entry in page for progress indication
-            latest_timestamp = ""
-            if data['data']:
-                last_log = data['data'][-1]
-                ts_raw = last_log.get('attributes', {}).get('attributes', {}).get('event', {}).get('timestamp')
-                if ts_raw:
-                    # Convert ISO format to readable format
-                    try:
-                        # Parse ISO timestamp and format as readable date/time
-                        from datetime import datetime as dt_module
-                        dt_obj = dt_module.fromisoformat(ts_raw.replace('Z', '+00:00'))
-                        latest_timestamp = f" - Latest: {dt_obj.strftime('%Y-%m-%d %H:%M:%S')}"
-                        last_known_timestamp = dt_obj.strftime('%H:%M:%S')  # Save time of day for error logging
-                    except:
-                        pass
-
-            print(f"\rPage {page}: Fetched {logs_in_page} log entries (total: {total_logs}){latest_timestamp}", file=sys.stderr, end='', flush=True)
-
-            # Process logs
-            for log in data['data']:
-                # Extract product from top-level service field
-                product = log.get('attributes', {}).get('service', '')
-                attrs = log.get('attributes', {}).get('attributes', {})
-
-                # Extract email from user object
-                user = attrs.get('user', {})
-                email = (user.get('normalized_email') or user.get('email') or '').lower()
-
-                # Extract model and cost
-                model = attrs.get('model', '')
-                cost = float(attrs.get('cost_usd', 0) or 0)
-
-                # Extract session ID
-                session_id = attrs.get('session', {}).get('id', '')
-
-                if email and model and product:
-                    key = (email, model, product)
-                    if key not in usage_by_email_model_product:
-                        usage_by_email_model_product[key] = {
-                            'cost': 0,
-                            'requests': 0,
-                            'sessions': set()
-                        }
-
-                    usage_by_email_model_product[key]['cost'] += cost
-                    usage_by_email_model_product[key]['requests'] += 1
-
-                    if session_id:
-                        usage_by_email_model_product[key]['sessions'].add(session_id)
-
-            # Save checkpoint for resume capability
-            if checkpoint_file:
-                next_cursor = data.get('meta', {}).get('page', {}).get('after')
-                checkpoint_data = {
-                    'page': page,
-                    'cursor': next_cursor,
-                    'total_logs': total_logs,
-                    'usage': {
-                        f"{email}|{model}|{product}": {
-                            'cost': usage_data['cost'],
-                            'requests': usage_data['requests'],
-                            'sessions': list(usage_data['sessions'])
-                        }
-                        for (email, model, product), usage_data in usage_by_email_model_product.items()
-                    }
-                }
-                try:
-                    with open(checkpoint_file, 'w') as f:
-                        json.dump(checkpoint_data, f)
-                except:
-                    pass  # Fail silently if checkpoint can't be saved
-
-            # Check for next page
-            cursor = data.get('meta', {}).get('page', {}).get('after')
-            if not cursor:
-                break
-
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode('utf-8')
-        print(f"Datadog API error ({e.code}): {error_body}", file=sys.stderr)
-        raise RuntimeError(f"Failed to query Datadog: {e}")
-    except Exception as e:
-        print(f"Error querying Datadog: {e}", file=sys.stderr)
-        raise
-
-    # Clean up checkpoint file on successful day completion
-    if checkpoint_file and os.path.exists(checkpoint_file):
+    while response_data is None and retry_count < max_retries:
         try:
-            os.remove(checkpoint_file)
-        except:
-            pass  # Fail silently if cleanup fails
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=30) as response:
+                response_data = json.loads(response.read().decode('utf-8'))
+        except urllib.error.HTTPError as e:
+            retry_count += 1
+            wait_time = min(2 ** retry_count, max_retry_wait)
+            error_code = e.code
+            error_msg = e.reason if hasattr(e, 'reason') else str(e)
+            print(f"HTTP {error_code} ({error_msg}), retrying in {wait_time}s (attempt {retry_count})", file=sys.stderr)
+            time.sleep(wait_time)
+        except Exception as e:
+            retry_count += 1
+            wait_time = min(2 ** retry_count, max_retry_wait)
+            error_type = type(e).__name__
+            print(f"{error_type}: {str(e)[:100]}, retrying in {wait_time}s (attempt {retry_count})", file=sys.stderr)
+            time.sleep(wait_time)
 
-    print(f"✓ {day_str}: Fetched {total_logs} log entries ({page} page(s))", file=sys.stderr)
+    if response_data is None:
+        raise RuntimeError(f"Failed to query Datadog after {max_retries} retries")
 
-    # Return raw usage dict for merging with other days
-    return usage_by_email_model_product
-
-
-def query_datadog(config_mgr, start_ms, end_ms, resume_id=None, roster=None):
-    """Query Datadog for all days in parallel, merge results.
-
-    Args:
-        config_mgr: ConfigFileManager
-        start_ms: Period start (milliseconds since epoch)
-        end_ms: Period end (milliseconds since epoch)
-        resume_id: Optional resume ID for per-day checkpointing
-        roster: Optional list of member dicts with email field (for server-side filtering)
-
-    Returns:
-        List of usage dicts with model and product cost breakdowns
-    """
-    days = split_date_range(start_ms, end_ms)
-    day_strs = [d[2] for d in days]
-    print(f"⚙️  Parallel query setup: {len(days)} day(s) [{day_strs[0]} to {day_strs[-1]}]", file=sys.stderr)
-
-    # Get max workers from config, default to 8
-    max_workers = 8
-    if config_mgr.contains_key('datadogParallelDays'):
-        try:
-            max_workers = int(config_mgr.get_value('datadogParallelDays'))
-        except:
-            max_workers = 8
-
-    print(f"   Using {max_workers} worker thread(s)", file=sys.stderr)
-
-    # Extract emails from roster for efficient server-side filtering
+    # Extract roster emails for filtering (if provided)
     roster_emails = set()
     if roster:
-        roster_emails = {member['email'] for member in roster}
-        print(f"   Filtering by {len(roster_emails)} roster email(s)", file=sys.stderr)
+        roster_emails = {member['email'].lower() for member in roster}
 
-    # Query each day in parallel
-    all_usage_dicts = []
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {
-            executor.submit(query_datadog_day, config_mgr, d_start, d_end, day_str, resume_id, roster_emails if roster_emails else None): day_str
-            for d_start, d_end, day_str in days
-        }
-
-        for future in as_completed(futures):
-            try:
-                day_usage = future.result()
-                all_usage_dicts.append(day_usage)
-            except Exception as e:
-                day_str = futures[future]
-                print(f"✗ {day_str}: Failed to fetch - {e}", file=sys.stderr)
-                raise
-
-    # Merge results from all days
-    merged_usage = merge_usage_dicts(all_usage_dicts)
-
-    # Convert to flat array, grouped by email, with breakdown by model and product
+    # Parse response and aggregate costs by email, model, and product
     usage_by_email = {}
-    for (email, model, product), data in merged_usage.items():
+
+    series_list = response_data.get('series', [])
+    print(f"⚙️  Retrieved {len(series_list)} series from Cloud Cost API", file=sys.stderr)
+
+    for series in series_list:
+        expression = series.get('expression', '')
+
+        # Extract tags from expression string: "sum:metric{tag1:val1,tag2:val2,...}"
+        # Find the {...} portion and parse tags
+        match = re.search(r'\{([^}]+)\}', expression)
+        if not match:
+            continue
+
+        tags_str = match.group(1)
+        tags = {}
+        for tag_pair in tags_str.split(','):
+            if ':' in tag_pair:
+                key, value = tag_pair.split(':', 1)
+                tags[key] = value
+
+        email = tags.get('display_user_email', '').lower()
+        product = tags.get('product', '')
+        servicename = tags.get('servicename', '')  # This is the model name
+        cost_type = tags.get('cost_type', '')
+
+        # Skip if missing required fields
+        if not email or not product or not servicename:
+            continue
+
+        # Filter to roster if provided
+        if roster_emails and email not in roster_emails:
+            continue
+
+        # Sum the pointlist values for total cost
+        pointlist = series.get('pointlist', [])
+        total_cost = sum(p[1] for p in pointlist if p[1] is not None)
+
+        if total_cost <= 0:
+            continue
+
+        # Initialize email entry if needed
         if email not in usage_by_email:
             usage_by_email[email] = {
                 'cost': 0,
                 'requests': 0,
-                'sessions': set(),
+                'sessions': 0,
                 'model_costs': {},
                 'product_costs': {}
             }
 
-        usage_by_email[email]['cost'] += data['cost']
-        usage_by_email[email]['requests'] += data['requests']
-        usage_by_email[email]['sessions'].update(data['sessions'])
+        # Accumulate costs
+        usage_by_email[email]['cost'] += total_cost
 
-        # Track cost by model
-        if model not in usage_by_email[email]['model_costs']:
-            usage_by_email[email]['model_costs'][model] = 0
-        usage_by_email[email]['model_costs'][model] += data['cost']
+        # Track cost by model (servicename)
+        if servicename not in usage_by_email[email]['model_costs']:
+            usage_by_email[email]['model_costs'][servicename] = 0
+        usage_by_email[email]['model_costs'][servicename] += total_cost
 
         # Track cost by product
         if product not in usage_by_email[email]['product_costs']:
             usage_by_email[email]['product_costs'][product] = 0
-        usage_by_email[email]['product_costs'][product] += data['cost']
+        usage_by_email[email]['product_costs'][product] += total_cost
 
     # Convert to flat array for downstream processing
     usage_data = []
@@ -527,13 +276,13 @@ def query_datadog(config_mgr, start_ms, end_ms, resume_id=None, roster=None):
         usage_data.append({
             'email': email,
             'cost': round(data['cost'], 2),
-            'requests': data['requests'],
-            'sessions': len(data['sessions']),
+            'requests': 0,  # Cloud Cost API doesn't provide request counts
+            'sessions': 0,  # Cloud Cost API doesn't provide session counts
             'model_costs': {m: round(c, 2) for m, c in data['model_costs'].items()},
             'product_costs': {p: round(c, 2) for p, c in data['product_costs'].items()}
         })
 
-    print(f"\nParallel fetch complete: {len(days)} days queried", file=sys.stderr)
+    print(f"✓ Cloud Cost query complete: {len(usage_data)} user(s) with usage", file=sys.stderr)
 
     return usage_data
 
@@ -766,17 +515,11 @@ def main(user_email, teams_str, time_period, output_path):
     from datetime import datetime as dt_module
     start_utc = dt_module.fromtimestamp(start_ms/1000)
     end_utc = dt_module.fromtimestamp(end_ms/1000)
-    print(f"   Query will fetch: service:claude* @event.name:api_request", file=sys.stderr)
+    print(f"   Query: sum:custom.cost.amortized{{providername:Anthropic}} by {{display_user_email,product,servicename}}", file=sys.stderr)
     print(f"   Timestamps: {start_utc.isoformat()}Z to {end_utc.isoformat()}Z", file=sys.stderr)
 
-    # Query Datadog with resume capability
-    # Use user_email or teams_str + time_period as resume ID so same query can resume
-    if user_email:
-        resume_id = f"user_{user_email.replace('@', '_')}_{time_period}".replace(' ', '_')
-    else:
-        resume_id = f"teams_{teams_str}_{time_period}".replace(' ', '_').replace(',', '')
-
-    usage_data = query_datadog(config_mgr, start_ms, end_ms, resume_id=resume_id, roster=roster)
+    # Query Datadog Cloud Cost API
+    usage_data = query_datadog(config_mgr, start_ms, end_ms, roster=roster)
     active_users = [u['email'] for u in usage_data if u['cost'] > 0]
     print(f"📊 Query results: {len(active_users)} active user(s) from {len(roster)} roster member(s)", file=sys.stderr)
 

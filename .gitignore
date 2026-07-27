@@ -11,6 +11,7 @@ ManagerTools.iml
 **/*.png
 **/*.zip
 .DS_Store
+python/*.html
 
 # Python cache files
 __pycache__/
