@@ -589,6 +589,81 @@ def find_user_in_rosters(user_email, config_mgr):
     raise RuntimeError(f"User {user_email} not found in any team")
 
 
+def print_help():
+    """Print comprehensive usage help."""
+    help_text = """
+Generate an interactive Claude Code usage report with multi-dimensional cost analysis.
+
+USAGE:
+    python -m managertools.tools.team_usage_generate [-u EMAIL | -t TEAMS] TIME_PERIOD OUTPUT_PATH
+    python -m managertools.tools.team_usage_generate --help
+
+REQUIRED ARGUMENTS (choose one):
+    -u EMAIL                Single user email to analyze (mutually exclusive with -t)
+    -t TEAMS                Team name(s) to analyze (mutually exclusive with -u)
+                            - Use "org" to include all teams from orgTeams config
+                            - Use comma-separated names for multiple teams: "Team A,Team B"
+
+REQUIRED POSITIONAL ARGUMENTS:
+    TIME_PERIOD             Report period:
+                            - mtd        Month-to-date (1st of current month to today)
+                            - past-month Previous calendar month
+                            - Nd         Last N days, where N is 1-30
+                            - Examples: 1d (today), 7d (last 7 days), 30d (last 30 days)
+
+    OUTPUT_PATH             Where to write the HTML report
+                            - Relative: report.html, ./reports/usage.html
+                            - Home dir: ~/usage.html, ~/reports/usage.html
+                            - Absolute: /tmp/report.html
+
+CONFIGURATION (required in ~/.managerTools.cfg):
+    backstageServer        Backstage FQDN (e.g., backstage.core.cvent.org)
+    datadogPAT            Datadog Personal Access Token
+    orgTeams              Array of team names (required if using -t org)
+
+OPTIONAL CONFIGURATION:
+    datadogParallelDays   Number of parallel day queries (default: 8, max: 16)
+
+EXAMPLES:
+    # Single user for last 7 days
+    python -m managertools.tools.team_usage_generate -u alice@cvent.com 7d ~/usage.html
+
+    # Single team, month-to-date
+    python -m managertools.tools.team_usage_generate -t Queueless mtd report.html
+
+    # Multiple teams, previous month
+    python -m managertools.tools.team_usage_generate -t "Team A,Team B" past-month ~/reports/usage.html
+
+    # All org teams, last 30 days (parallel query - very fast)
+    python -m managertools.tools.team_usage_generate -t org 30d ~/usage.html
+
+    # Single user, today only
+    python -m managertools.tools.team_usage_generate -u bob@cvent.com 1d usage-today.html
+
+OUTPUT:
+    - Interactive HTML report with sortable tables
+    - Per-person metrics: Name, Team, Email, Total Cost, Requests, Sessions
+    - Cost breakdown by Claude model (Haiku, Sonnet, Opus, etc.)
+    - Cost breakdown by Anthropic product (Claude Code, Claude Web, etc.)
+    - Team summary section showing team-level aggregation
+    - Inactive users section (zero usage in period)
+    - JSON summary to stdout with metadata
+
+FEATURES:
+    - Parallel day-by-day querying for speed (30-day queries in 1-3 minutes)
+    - Rate limit handling (respects Datadog API limits)
+    - Resume capability (can restart interrupted queries)
+    - Per-day checkpointing for resilience
+
+TROUBLESHOOTING:
+    - "User not found": Email doesn't exist in any team roster
+    - "orgTeams not configured": Need to set orgTeams in ~/.managerTools.cfg
+    - "datadogPAT not configured": Need to set datadogPAT in ~/.managerTools.cfg
+    - Rate limit errors: Reduce datadogParallelDays in config (default 8, try 4)
+"""
+    print(help_text)
+
+
 def main(user_email, teams_str, time_period, output_path):
     """Main entry point.
 
@@ -687,17 +762,20 @@ def main(user_email, teams_str, time_period, output_path):
 
 
 if __name__ == '__main__':
+    # Check for help first
+    if len(sys.argv) > 1 and (sys.argv[1] == '--help' or sys.argv[1] == '-h' or sys.argv[1] == 'help'):
+        print_help()
+        sys.exit(0)
+
     if len(sys.argv) < 4:
         print(json.dumps({
             "error": "Usage: python -m managertools.tools.team_usage_generate [-u EMAIL | -t TEAMS] TIME_PERIOD OUTPUT_PATH\n"
-                     "  -u EMAIL: Single user email (mutually exclusive with -t)\n"
-                     "  -t TEAMS: Team names (comma-separated) or 'org' (mutually exclusive with -u). One of -u or -t is required.\n"
-                     "  TIME_PERIOD: 'mtd', 'past-month', or 'Nd' where N is 1-30 (e.g., '5d' for last 5 days, '1d' for today)\n"
-                     "  OUTPUT_PATH: Output file path (e.g., report.html or ~/usage.html or /path/to/report.html)\n"
-                     "\nExamples:\n"
-                     "  python -m managertools.tools.team_usage_generate -u alice@cvent.com 7d ~/usage.html\n"
-                     "  python -m managertools.tools.team_usage_generate -t Queueless mtd ~/usage.html\n"
-                     "  python -m managertools.tools.team_usage_generate -t org 30d ~/usage.html"
+                     "       python -m managertools.tools.team_usage_generate --help\n"
+                     "\nQuick examples:\n"
+                     "  -u EMAIL:     python -m managertools.tools.team_usage_generate -u alice@cvent.com 7d ~/usage.html\n"
+                     "  -t TEAMS:     python -m managertools.tools.team_usage_generate -t Queueless mtd ~/usage.html\n"
+                     "  -t org:       python -m managertools.tools.team_usage_generate -t org 30d ~/usage.html\n"
+                     "\nFor full help: python -m managertools.tools.team_usage_generate --help"
         }), file=sys.stderr)
         sys.exit(1)
 
