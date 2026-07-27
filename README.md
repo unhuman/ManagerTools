@@ -147,17 +147,14 @@ Configuration is stored in `~/.managerTools.cfg` as a JSON file. The following o
 #### Datadog Integration
 
 - **`datadogPAT`** — Datadog Personal Access Token for querying Anthropic product usage data. Required for generating team usage reports. The token must have the following scopes:
-  - `cloud_cost_management_read` — Required to read Cloud Cost Management metrics for all Anthropic products
+  - `cloud_cost_management_read` — Required to read Cloud Cost Management metrics for all Anthropic products (chat, claude-code, voice-mode, research, etc.)
   - `timeseries_query` — Required to query metrics via the v1/query endpoint
+  - `logs_read_data` — Optional but recommended for comprehensive coverage
+  - `logs_read_index_data` — Optional but recommended for comprehensive coverage
   
-  To generate a new token, go to Datadog Settings → Organization → API Keys → Personal Access Tokens. Create a new token with the `cloud_cost_management_read` and `timeseries_query` scopes.
+  To generate a new token, go to Datadog Settings → Organization → API Keys → Personal Access Tokens. Create a new token with at least `cloud_cost_management_read` and `timeseries_query` scopes.
   ```json
   "datadogPAT": "ddpat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-  ```
-
-- **`datadogParallelDays`** — Number of concurrent day-by-day queries to run when fetching Datadog logs (default: `8`). Increase for faster queries if your token allows higher concurrency; decrease if you hit rate limits.
-  ```json
-  "datadogParallelDays": 8
   ```
 
 #### Backstage Catalog Integration
@@ -213,6 +210,35 @@ When the same setting is provided in both the configuration file and CLI flags:
   "downMergeTrunkBranches": ["main", "master", "develop", "release/.*"]
 }
 ```
+
+### Claude Code Team Usage Report Features
+
+The team usage report (`team_usage_generate.py`) generates an interactive HTML report with the following features:
+
+#### Data Source
+- **Cloud Cost Management API**: Queries all Anthropic products (chat, claude-code, claude-design, voice-mode, research, etc.), not just claude-code
+- **Single efficient query**: Uses Datadog v1/query endpoint for fast, complete data retrieval
+- **Per-user, per-model, per-product breakdown**: Aggregates costs across all dimensions
+
+#### Report Visualization
+- **Grouped column headers**: Model and Product columns grouped under semantic headers with distinct colors
+  - Model columns: Light blue tint (#e8f0ff light / #1a3a52 dark)
+  - Product columns: Light purple tint (#f0e8ff light / #3a1a52 dark)
+- **Tinted data cells**: Data values inherit color tint from their group for easy visual scanning
+- **Sticky table headers**: Column headers remain visible while scrolling through data (800px max height per table)
+- **Interactive sorting**: Click any column header to sort ascending/descending; tables default to sorting by Team/Name on load
+- **Team filtering**: Multi-select checkboxes to filter both tables by team
+- **Dark mode support**: Reports respect browser dark/light mode preference
+
+#### Two Main Tables
+1. **Team Summary** — Team-level aggregation with active/total member counts
+2. **Users** — Individual contributor metrics with per-model and per-product costs
+
+#### HTML Output
+- Self-contained (no external dependencies)
+- Works offline
+- Mobile responsive
+- Sortable and filterable
 
 ### Developer Notes
 - Data is stored in `~/.managerTools.cfg`

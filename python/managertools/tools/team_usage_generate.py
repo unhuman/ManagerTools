@@ -426,7 +426,7 @@ CONFIGURATION (required in ~/.managerTools.cfg):
     orgTeams              Array of team names (required if using -t org)
 
 OPTIONAL CONFIGURATION:
-    datadogParallelDays   Number of parallel day queries (default: 8, max: 16)
+    datadogParallelDays   (deprecated - no longer used)
 
 EXAMPLES:
     # Single user for last 7 days
@@ -438,26 +438,36 @@ EXAMPLES:
     # Multiple teams, previous month
     python -m managertools.tools.team_usage_generate -t "Team A,Team B" past-month ~/reports/usage.html
 
-    # All org teams, last 30 days (parallel query - very fast)
+    # All org teams, last 30 days (completes in seconds)
     python -m managertools.tools.team_usage_generate -t org 30d ~/usage.html
 
     # Single user, today only
     python -m managertools.tools.team_usage_generate -u bob@cvent.com 1d usage-today.html
 
 OUTPUT:
-    - Interactive HTML report with sortable tables
-    - Per-person metrics: Name, Team, Email, Total Cost, Requests, Sessions
-    - Cost breakdown by Claude model (Haiku, Sonnet, Opus, etc.)
-    - Cost breakdown by Anthropic product (Claude Code, Claude Web, etc.)
-    - Team summary section showing team-level aggregation
-    - Inactive users section (zero usage in period)
+    - Interactive HTML report with:
+      * Two tables: Team Summary and Users (individual contributors)
+      * Sticky column headers (stays visible while scrolling)
+      * Default sorting by Team/Name (ascending) on page load
+      * Click any column header to sort ascending/descending
+      * Team filtering with multi-select checkboxes
+    - Per-person metrics: Name, Team, Email, Total Cost
+      (Note: Requests/Sessions show 0; Cloud Cost API provides costs only)
+    - Cost breakdown by Claude model (claude-sonnet-5, claude-opus-4-8, etc.)
+    - Cost breakdown by Anthropic product (chat, claude-code, voice-mode, research, etc.)
+    - Grouped column headers with distinct colors (blue for Model, purple for Product)
+    - Tinted data cells matching their group headers for easy visual scanning
+    - Dark mode support (auto-adapts to browser preference)
+    - Self-contained HTML (no external assets or dependencies)
     - JSON summary to stdout with metadata
 
 FEATURES:
-    - Parallel day-by-day querying for speed (30-day queries in 1-3 minutes)
-    - Rate limit handling (respects Datadog API limits)
-    - Resume capability (can restart interrupted queries)
-    - Per-day checkpointing for resilience
+    - Complete Anthropic product coverage (chat, claude-code, voice-mode, research, etc.)
+    - Single efficient Cloud Cost Management API query
+    - Fast execution (completes in seconds, not minutes)
+    - User-friendly interactive report with sorting and filtering
+    - Multi-dimensional cost analysis by user, model, and product
+    - Mobile responsive design
 
 TROUBLESHOOTING:
     - "User not found": Email doesn't exist in any team roster
