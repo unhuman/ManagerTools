@@ -921,6 +921,27 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
         applyTeamFilter();
       }});
     }}
+
+    // Initialize tables with default sort
+    window.addEventListener('DOMContentLoaded', () => {{
+      // Sort Team Summary table by Team (first column) ascending
+      const teamTable = document.getElementById('team-summary-table');
+      if (teamTable) {{
+        const teamHeader = teamTable.querySelector('tbody').parentElement.querySelector('tr:last-child th:first-child');
+        if (teamHeader) {{
+          sortTable(teamHeader);
+        }}
+      }}
+
+      // Sort Users table by Name (first column) ascending
+      const usersTable = document.getElementById('active-users-table');
+      if (usersTable) {{
+        const nameHeader = usersTable.querySelector('tbody').parentElement.querySelector('tr:last-child th:first-child');
+        if (nameHeader) {{
+          sortTable(nameHeader);
+        }}
+      }}
+    }});
   </script>
 </body>
 </html>'''
