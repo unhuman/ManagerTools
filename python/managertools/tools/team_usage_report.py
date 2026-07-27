@@ -133,9 +133,8 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
             'active_member_count_formatted': format_number(team_data['active_member_count']),
         })
 
-    # Build active and inactive rows
-    active_rows = []
-    inactive_rows = []
+    # Build all rows
+    all_rows = []
 
     for member in members:
         email = member['email']
@@ -166,21 +165,18 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
             'cost_per_request_formatted': format_currency(cost_per_request),
         }
 
-        if cost > 0 or requests > 0:
-            active_rows.append(row)
-        else:
-            inactive_rows.append(row)
+        all_rows.append(row)
 
-    # Sort active by cost descending
-    active_rows.sort(key=lambda r: r['cost'], reverse=True)
+    # Sort by cost descending (inactive users with $0 will be at the bottom)
+    all_rows.sort(key=lambda r: r['cost'], reverse=True)
 
-    # Extract unique teams from active users
-    active_teams = sorted(set(r['team'] for r in active_rows))
+    # Extract unique teams from all users
+    all_teams = sorted(set(r['team'] for r in all_rows))
     team_filter_html = ''
-    if active_teams:
+    if all_teams:
         team_checkboxes = ''.join(
             f'<label><input type="checkbox" class="team-filter" value="{t}" checked> {t}</label>'
-            for t in active_teams
+            for t in all_teams
         )
         team_filter_html = f'''
     <div class="team-filter-container">
@@ -196,33 +192,23 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     # Generate model cost header columns
     model_headers = ''.join(f'<th class="sortable model-col" data-model="{escape_html(m)}">{escape_html(m)}</th>' for m in models)
 
-    model_cells_active = []
-    for row in active_rows:
+    model_cells = []
+    for row in all_rows:
         cells = ''.join(f'<td class="currency model-cell">{format_currency(row["model_costs"].get(m, 0))}</td>' for m in models)
-        model_cells_active.append(cells)
-
-    model_cells_inactive = []
-    for row in inactive_rows:
-        cells = ''.join(f'<td class="currency model-cell">$0.00</td>' for m in models)
-        model_cells_inactive.append(cells)
+        model_cells.append(cells)
 
     # Generate product cost header columns
     product_headers = ''.join(f'<th class="sortable product-col" data-product="{escape_html(p)}">{escape_html(p)}</th>' for p in products)
 
-    product_cells_active = []
-    for row in active_rows:
+    product_cells = []
+    for row in all_rows:
         cells = ''.join(f'<td class="currency product-cell">{format_currency(row["product_costs"].get(p, 0))}</td>' for p in products)
-        product_cells_active.append(cells)
+        product_cells.append(cells)
 
-    product_cells_inactive = []
-    for row in inactive_rows:
-        cells = ''.join(f'<td class="currency product-cell">$0.00</td>' for p in products)
-        product_cells_inactive.append(cells)
-
-    # Build table rows - active section
-    active_table_rows = ''
-    for i, row in enumerate(active_rows):
-        active_table_rows += f'''    <tr class="active-row" data-email="{escape_html(row['email'])}" data-cost="{row['cost']}" data-requests="{row['requests']}" data-sessions="{row['sessions']}" data-cost-per-request="{row['cost_per_request']}">
+    # Build table rows
+    all_table_rows = ''
+    for i, row in enumerate(all_rows):
+        all_table_rows += f'''    <tr data-email="{escape_html(row['email'])}" data-cost="{row['cost']}" data-requests="{row['requests']}" data-sessions="{row['sessions']}" data-cost-per-request="{row['cost_per_request']}">
       <td class="name">{row['name']}</td>
       <td class="team">{row['team']}</td>
       <td class="email">{row['email']}</td>
@@ -230,22 +216,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       <td class="number">{row['requests_formatted']}</td>
       <td class="number">{row['sessions_formatted']}</td>
       <td class="currency">{row['cost_per_request_formatted']}</td>
-      {model_cells_active[i]}{product_cells_active[i]}
-    </tr>
-'''
-
-    # Build table rows - inactive section
-    inactive_table_rows = ''
-    for i, row in enumerate(inactive_rows):
-        inactive_table_rows += f'''    <tr class="inactive-row" data-email="{escape_html(row['email'])}" data-cost="0" data-requests="0" data-sessions="0" data-cost-per-request="0">
-      <td class="name">{row['name']}</td>
-      <td class="team">{row['team']}</td>
-      <td class="email">{row['email']}</td>
-      <td class="currency">$0.00</td>
-      <td class="number">0</td>
-      <td class="number">0</td>
-      <td class="currency">$0.00</td>
-      {model_cells_inactive[i]}{product_cells_inactive[i]}
+      {model_cells[i]}{product_cells[i]}
     </tr>
 '''
 
@@ -266,15 +237,16 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
 '''
 
     # Compute summary statistics
-    total_cost = sum(r['cost'] for r in active_rows)
-    total_requests = sum(r['requests'] for r in active_rows)
-    total_sessions = sum(r['sessions'] for r in active_rows)
+    total_cost = sum(r['cost'] for r in all_rows)
+    total_requests = sum(r['requests'] for r in all_rows)
+    total_sessions = sum(r['sessions'] for r in all_rows)
+    active_user_count = sum(1 for r in all_rows if r['cost'] > 0 or r['requests'] > 0)
     total_cost_per_request = (total_cost / total_requests) if total_requests > 0 else 0
 
     summary_html = f'''    <div class="summary-stats">
       <div class="stat-item">
-        <span class="stat-label">Active Users:</span>
-        <span class="stat-value">{len(active_rows)}</span>
+        <span class="stat-label">Users:</span>
+        <span class="stat-value">{len(all_rows)}</span>
       </div>
       <div class="stat-item">
         <span class="stat-label">Total Cost:</span>
@@ -291,28 +263,6 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     </div>
 '''
 
-    inactive_section = ''
-    if inactive_rows:
-        inactive_section = f'''    <h3 class="inactive-header" id="inactive-users">Inactive Users ({len(inactive_rows)})</h3>
-    <p class="inactive-description">These team members have no Claude Code usage in the selected period.</p>
-    <table class="report-table inactive-table">
-      <thead>
-        <tr>
-          <th class="sortable">Name</th>
-          <th class="sortable">Team</th>
-          <th class="sortable">Email</th>
-          <th class="sortable">Total Cost</th>
-          <th class="sortable">Requests</th>
-          <th class="sortable">Sessions</th>
-          <th class="sortable">Cost/Request</th>
-          {model_headers}{product_headers}
-        </tr>
-      </thead>
-      <tbody>
-        {inactive_table_rows}
-      </tbody>
-    </table>
-'''
 
     html = f'''<!DOCTYPE html>
 <html lang="en">
@@ -327,8 +277,6 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       --border: #ddd;
       --header-bg: #f5f5f5;
       --hover-bg: #fafafa;
-      --inactive-bg: #f0f0f0;
-      --inactive-text: #888;
       --accent: #0066cc;
     }}
 
@@ -339,8 +287,6 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
         --border: #444;
         --header-bg: #2d2d2d;
         --hover-bg: #333;
-        --inactive-bg: #252525;
-        --inactive-text: #888;
         --accent: #5aa8ff;
       }}
     }}
@@ -351,8 +297,6 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       --border: #ddd;
       --header-bg: #f5f5f5;
       --hover-bg: #fafafa;
-      --inactive-bg: #f0f0f0;
-      --inactive-text: #888;
       --accent: #0066cc;
     }}
 
@@ -362,8 +306,6 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       --border: #444;
       --header-bg: #2d2d2d;
       --hover-bg: #333;
-      --inactive-bg: #252525;
-      --inactive-text: #888;
       --accent: #5aa8ff;
     }}
 
@@ -398,7 +340,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     }}
 
     .period-label {{
-      color: var(--inactive-text);
+      color: var(--text);
       font-size: 0.9rem;
       margin-bottom: 2rem;
     }}
@@ -431,7 +373,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     .stat-label {{
       display: block;
       font-size: 0.9rem;
-      color: var(--inactive-text);
+      color: var(--text);
       margin-bottom: 0.5rem;
     }}
 
@@ -500,13 +442,11 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     }}
 
     .report-table .team {{
-      color: var(--inactive-text);
       font-size: 0.9rem;
     }}
 
     .report-table .email {{
       font-size: 0.85rem;
-      color: var(--inactive-text);
       font-family: monospace;
     }}
 
@@ -529,28 +469,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       text-align: right;
     }}
 
-    .inactive-header {{
-      margin-top: 3rem;
-      margin-bottom: 0.5rem;
-      font-size: 1.3rem;
-      color: var(--inactive-text);
-    }}
-
-    .inactive-description {{
-      margin-bottom: 1rem;
-      color: var(--inactive-text);
-      font-size: 0.9rem;
-    }}
-
-    .inactive-table {{
-      opacity: 0.6;
-    }}
-
-    .inactive-table tbody tr {{
-      background-color: var(--inactive-bg);
-    }}
-
-    .toc {{
+.toc {{
       background-color: var(--header-bg);
       border: 1px solid var(--border);
       border-radius: 4px;
@@ -673,8 +592,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       <strong>Contents:</strong>
       <ul>
         <li><a href="#team-summary">Team Summary</a></li>
-        <li><a href="#individual-users">Individual Users</a></li>
-        {f'<li><a href="#inactive-users">Inactive Users</a></li>' if inactive_section else ''}
+        <li><a href="#individual-users">Users</a></li>
       </ul>
     </nav>
 
@@ -698,7 +616,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       </tbody>
     </table>
 
-    <h2 id="individual-users">Active Users ({len(active_rows)})</h2>
+    <h2 id="individual-users">Users ({len(all_rows)})</h2>
     {team_filter_html}
     <table class="report-table" id="active-users-table">
       <thead>
@@ -714,11 +632,9 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
         </tr>
       </thead>
       <tbody>
-        {active_table_rows}
+        {all_table_rows}
       </tbody>
     </table>
-
-    {inactive_section}
   </div>
 
   <script>
