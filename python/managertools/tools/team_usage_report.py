@@ -596,10 +596,12 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       </ul>
     </nav>
 
+    {team_filter_html}
+
     {summary_html}
 
     <h2 id="team-summary">Team Summary ({len(team_rows)})</h2>
-    <table class="report-table team-table">
+    <table class="report-table team-table" id="team-summary-table">
       <thead>
         <tr>
           <th class="sortable">Team</th>
@@ -617,7 +619,6 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     </table>
 
     <h2 id="individual-users">Users ({len(all_rows)})</h2>
-    {team_filter_html}
     <table class="report-table" id="active-users-table">
       <thead>
         <tr>
@@ -708,14 +709,55 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     // Team filter functionality
     function applyTeamFilter() {{
       const selectedTeams = Array.from(document.querySelectorAll('.team-filter:checked')).map(cb => cb.value);
-      const table = document.getElementById('active-users-table');
-      if (!table) return;
 
-      const rows = table.querySelector('tbody').querySelectorAll('tr');
-      rows.forEach(row => {{
-        const teamCell = row.children[1].textContent.trim();
-        const isVisible = selectedTeams.length > 0 && selectedTeams.includes(teamCell);
-        row.style.display = isVisible ? '' : 'none';
+      // Filter Team Summary table (team in column 0)
+      const teamTable = document.getElementById('team-summary-table');
+      if (teamTable) {{
+        const rows = teamTable.querySelector('tbody').querySelectorAll('tr');
+        rows.forEach(row => {{
+          const teamCell = row.children[0].textContent.trim();
+          const isVisible = selectedTeams.length > 0 && selectedTeams.includes(teamCell);
+          row.style.display = isVisible ? '' : 'none';
+        }});
+      }}
+
+      // Filter Users table (team in column 1) and collect stats
+      const usersTable = document.getElementById('active-users-table');
+      let totalCost = 0, totalRequests = 0, totalSessions = 0;
+      if (usersTable) {{
+        const rows = usersTable.querySelector('tbody').querySelectorAll('tr');
+        rows.forEach(row => {{
+          const teamCell = row.children[1].textContent.trim();
+          const isVisible = selectedTeams.length > 0 && selectedTeams.includes(teamCell);
+          row.style.display = isVisible ? '' : 'none';
+
+          if (isVisible) {{
+            const cost = parseFloat(row.dataset.cost || 0);
+            const requests = parseInt(row.dataset.requests || 0);
+            const sessions = parseInt(row.dataset.sessions || 0);
+            totalCost += cost;
+            totalRequests += requests;
+            totalSessions += sessions;
+          }}
+        }});
+      }}
+
+      // Update summary stats
+      const userCount = usersTable ? Array.from(usersTable.querySelector('tbody').querySelectorAll('tr')).filter(r => r.style.display !== 'none').length : 0;
+      const costPerRequest = totalRequests > 0 ? totalCost / totalRequests : 0;
+
+      const statsItems = document.querySelectorAll('.stat-item');
+      statsItems.forEach(item => {{
+        const label = item.querySelector('.stat-label').textContent.trim();
+        if (label === 'Users:') {{
+          item.querySelector('.stat-value').textContent = userCount;
+        }} else if (label === 'Total Cost:') {{
+          item.querySelector('.stat-value').textContent = '$' + totalCost.toFixed(2);
+        }} else if (label === 'Total Requests:') {{
+          item.querySelector('.stat-value').textContent = totalRequests.toLocaleString();
+        }} else if (label === 'Average Cost/Request:') {{
+          item.querySelector('.stat-value').textContent = '$' + costPerRequest.toFixed(2);
+        }}
       }});
     }}
 
