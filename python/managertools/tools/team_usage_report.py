@@ -384,14 +384,18 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       color: var(--text);
     }}
 
+    .table-wrapper {{
+      max-height: 600px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      margin-bottom: 2rem;
+    }}
+
     .report-table {{
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 2rem;
       background-color: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      overflow: hidden;
     }}
 
     .report-table thead {{
@@ -405,7 +409,10 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       border-bottom: 1px solid var(--border);
       user-select: none;
       cursor: pointer;
-      position: relative;
+      position: sticky;
+      top: 0;
+      background-color: var(--header-bg);
+      z-index: 10;
     }}
 
     .report-table th.sortable::after {{
@@ -505,6 +512,9 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     .report-table .model-col {{
       font-size: 0.85rem;
       background-color: #e8f0ff;
+      position: sticky;
+      top: 0;
+      z-index: 10;
     }}
 
     @media (prefers-color-scheme: dark) {{
@@ -544,6 +554,9 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     .report-table .product-col {{
       font-size: 0.85rem;
       background-color: #f0e8ff;
+      position: sticky;
+      top: 0;
+      z-index: 10;
     }}
 
     @media (prefers-color-scheme: dark) {{
@@ -716,43 +729,47 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     {summary_html}
 
     <h2 id="team-summary">Team Summary ({len(team_rows)})</h2>
-    <table class="report-table team-table" id="team-summary-table">
-      <thead>
-        <tr>
-          <th colspan="3" style="border: none; background: none;"></th>
-          {model_group_header}{product_group_header}
-        </tr>
-        <tr>
-          <th class="sortable">Team</th>
-          <th class="sortable">Active/Members</th>
-          <th class="sortable">Total Cost</th>
-          {model_headers_individual}{product_headers_individual}
-        </tr>
-      </thead>
-      <tbody>
-        {team_table_rows}
-      </tbody>
-    </table>
+    <div class="table-wrapper">
+      <table class="report-table team-table" id="team-summary-table">
+        <thead>
+          <tr>
+            <th colspan="3" style="border: none; background: none;"></th>
+            {model_group_header}{product_group_header}
+          </tr>
+          <tr>
+            <th class="sortable">Team</th>
+            <th class="sortable">Active/Members</th>
+            <th class="sortable">Total Cost</th>
+            {model_headers_individual}{product_headers_individual}
+          </tr>
+        </thead>
+        <tbody>
+          {team_table_rows}
+        </tbody>
+      </table>
+    </div>
 
     <h2 id="individual-users">Users ({len(all_rows)})</h2>
-    <table class="report-table" id="active-users-table">
-      <thead>
-        <tr>
-          <th colspan="4" style="border: none; background: none;"></th>
-          {model_group_header}{product_group_header}
-        </tr>
-        <tr>
-          <th class="sortable">Name</th>
-          <th class="sortable">Team</th>
-          <th class="sortable">Email</th>
-          <th class="sortable">Total Cost</th>
-          {model_headers_individual}{product_headers_individual}
-        </tr>
-      </thead>
-      <tbody>
-        {all_table_rows}
-      </tbody>
-    </table>
+    <div class="table-wrapper">
+      <table class="report-table" id="active-users-table">
+        <thead>
+          <tr>
+            <th colspan="4" style="border: none; background: none;"></th>
+            {model_group_header}{product_group_header}
+          </tr>
+          <tr>
+            <th class="sortable">Name</th>
+            <th class="sortable">Team</th>
+            <th class="sortable">Email</th>
+            <th class="sortable">Total Cost</th>
+            {model_headers_individual}{product_headers_individual}
+          </tr>
+        </thead>
+        <tbody>
+          {all_table_rows}
+        </tbody>
+      </table>
+    </div>
   </div>
 
   <script>
