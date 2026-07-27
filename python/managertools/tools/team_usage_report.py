@@ -186,7 +186,10 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     <div class="team-filter-container">
       <label style="font-weight: 600; margin-right: 1rem;">Filter by Team:</label>
       {team_checkboxes}
-      <button id="clear-team-filter" class="filter-button">Clear All</button>
+      <div class="filter-buttons">
+        <button id="select-all-teams" class="filter-button">Select All</button>
+        <button id="clear-all-teams" class="filter-button">Clear All</button>
+      </div>
     </div>
     '''
 
@@ -613,6 +616,12 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       cursor: pointer;
     }}
 
+    .filter-buttons {{
+      display: flex;
+      gap: 0.5rem;
+      margin-left: auto;
+    }}
+
     .filter-button {{
       padding: 0.4rem 1rem;
       background-color: var(--accent);
@@ -622,7 +631,6 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       cursor: pointer;
       font-size: 0.9rem;
       transition: opacity 0.2s;
-      margin-left: auto;
     }}
 
     .filter-button:hover {{
@@ -800,12 +808,23 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       checkbox.addEventListener('change', applyTeamFilter);
     }});
 
-    // Clear All button handler
-    const clearButton = document.getElementById('clear-team-filter');
-    if (clearButton) {{
-      clearButton.addEventListener('click', () => {{
+    // Select All button handler
+    const selectAllButton = document.getElementById('select-all-teams');
+    if (selectAllButton) {{
+      selectAllButton.addEventListener('click', () => {{
         document.querySelectorAll('.team-filter').forEach(checkbox => {{
           checkbox.checked = true;
+        }});
+        applyTeamFilter();
+      }});
+    }}
+
+    // Clear All button handler
+    const clearAllButton = document.getElementById('clear-all-teams');
+    if (clearAllButton) {{
+      clearAllButton.addEventListener('click', () => {{
+        document.querySelectorAll('.team-filter').forEach(checkbox => {{
+          checkbox.checked = false;
         }});
         applyTeamFilter();
       }});
