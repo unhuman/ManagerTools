@@ -591,13 +591,17 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     <nav class="toc">
       <strong>Contents:</strong>
       <ul>
+        <li><a href="#filters">Filters</a></li>
+        <li><a href="#overall-stats">Overall Stats</a></li>
         <li><a href="#team-summary">Team Summary</a></li>
         <li><a href="#individual-users">Users</a></li>
       </ul>
     </nav>
 
+    <h2 id="filters">Filters</h2>
     {team_filter_html}
 
+    <h2 id="overall-stats">Overall Stats</h2>
     {summary_html}
 
     <h2 id="team-summary">Team Summary ({len(team_rows)})</h2>
