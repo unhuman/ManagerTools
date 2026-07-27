@@ -25,6 +25,7 @@ import socket
 import urllib.request
 import urllib.parse
 import time
+import threading
 from datetime import date, datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -32,6 +33,16 @@ from managertools.util.config_file_manager import ConfigFileManager
 from managertools.rest.backstage_rest import BackstageREST
 from managertools.util.backstage_cache import BackstageCache
 from managertools.tools.team_usage_report import generate_html
+
+# Global rate limit lock - shared across all threads
+_rate_limit_lock = threading.Lock()
+_rate_limit_reset_time = 0
+
+
+def log_debug(day_str, page, message):
+    """Log debug message with day and page context."""
+    thread_id = threading.current_thread().ident
+    print(f"[{day_str}:p{page}:t{thread_id}] {message}", file=sys.stderr, flush=True)
 
 
 def get_date_range(time_period):
@@ -277,21 +288,34 @@ def query_datadog_day(config_mgr, start_ms, end_ms, day_str, resume_id=None):
                         if remaining and limit:
                             remaining_int = int(remaining)
                             limit_int = int(limit)
+                            log_debug(day_str, page, f"Rate limit: {remaining_int}/{limit_int} remaining")
 
-                            # If we're running low on requests, sleep until reset
+                            # If we're running low on requests, sleep until reset (thread-safe)
                             if remaining_int < 5:
                                 reset_int = int(reset) if reset else None
                                 if reset_int:
                                     wait_until_reset = reset_int - int(time.time())
                                     if wait_until_reset > 0:
-                                        print(f"\r⏱ Rate limit approaching ({remaining_int}/{limit_int} remaining), sleeping {wait_until_reset}s...", file=sys.stderr, flush=True)
-                                        time.sleep(wait_until_reset + 1)  # +1 to be safe
+                                        log_debug(day_str, page, f"Rate limit low, waiting {wait_until_reset}s until reset at {datetime.fromtimestamp(reset_int)}")
+                                        with _rate_limit_lock:
+                                            # Double-check after acquiring lock
+                                            if int(reset) > int(time.time()):
+                                                actual_wait = int(reset) - int(time.time())
+                                                if actual_wait > 0:
+                                                    time.sleep(actual_wait + 1)
 
+                except urllib.error.HTTPError as e:
+                    retry_count += 1
+                    wait_time = min(2 ** retry_count, max_retry_wait)
+                    error_code = e.code
+                    error_msg = e.reason if hasattr(e, 'reason') else str(e)
+                    log_debug(day_str, page, f"HTTP {error_code} ({error_msg}), retrying in {wait_time}s (attempt {retry_count}, URL: {url[:80]}...)")
+                    time.sleep(wait_time)
                 except (urllib.error.URLError, ConnectionResetError, BrokenPipeError, TimeoutError, socket.timeout) as e:
                     retry_count += 1
-                    wait_time = min(2 ** retry_count, max_retry_wait)  # Exponential backoff, capped at 5 minutes
+                    wait_time = min(2 ** retry_count, max_retry_wait)
                     error_type = type(e).__name__
-                    print(f"\r⚠ {error_type} on page {page}, retrying in {wait_time}s (attempt {retry_count})...", file=sys.stderr, flush=True)
+                    log_debug(day_str, page, f"{error_type}: {str(e)[:100]}, retrying in {wait_time}s (attempt {retry_count})")
                     time.sleep(wait_time)
 
             if data is None:
@@ -413,6 +437,8 @@ def query_datadog(config_mgr, start_ms, end_ms, resume_id=None):
         List of usage dicts with model and product cost breakdowns
     """
     days = split_date_range(start_ms, end_ms)
+    day_strs = [d[2] for d in days]
+    print(f"⚙️  Parallel query setup: {len(days)} day(s) [{day_strs[0]} to {day_strs[-1]}]", file=sys.stderr)
 
     # Get max workers from config, default to 8
     max_workers = 8
@@ -421,6 +447,8 @@ def query_datadog(config_mgr, start_ms, end_ms, resume_id=None):
             max_workers = int(config_mgr.get_value('datadogParallelDays'))
         except:
             max_workers = 8
+
+    print(f"   Using {max_workers} worker thread(s)", file=sys.stderr)
 
     # Query each day in parallel
     all_usage_dicts = []
@@ -688,11 +716,11 @@ def main(user_email, teams_str, time_period, output_path):
 
     # Parse teams or user
     if user_email:
-        print(f"Fetching user: {user_email}", file=sys.stderr)
+        print(f"📧 Filtering by user: {user_email}", file=sys.stderr)
         member = find_user_in_rosters(user_email, config_mgr)
         roster = [member]
         teams = [member['team']]
-        print(f"Found user {member['name']} ({member['email']}) on team {member['team']}", file=sys.stderr)
+        print(f"   ✓ Found: {member['name']} ({member['email']}) on team {member['team']}", file=sys.stderr)
     else:
         if teams_str.lower() == 'org':
             if not config_mgr.contains_key('orgTeams'):
@@ -701,19 +729,20 @@ def main(user_email, teams_str, time_period, output_path):
         else:
             teams = [t.strip() for t in teams_str.split(',')]
 
-        print(f"Fetching rosters for teams: {', '.join(teams)}", file=sys.stderr)
+        print(f"👥 Filtering by teams: {', '.join(teams)}", file=sys.stderr)
         roster = fetch_rosters(teams, config_mgr)
-        print(f"Found {len(roster)} team members", file=sys.stderr)
+        print(f"   ✓ Found {len(roster)} team member(s)", file=sys.stderr)
 
     # Get date range
     start_ms, end_ms, start_date, end_date = get_date_range(time_period)
-    print(f"Querying Datadog for {start_date} to {end_date}", file=sys.stderr)
-    print(f"Timestamps: {start_ms} to {end_ms} (ms)", file=sys.stderr)
+    print(f"📅 Time period: {start_date} to {end_date}", file=sys.stderr)
 
-    # Debug: show what the dates convert to
+    # Show detailed Datadog query info
     from datetime import datetime as dt_module
-    print(f"Start: {dt_module.fromtimestamp(start_ms/1000)} UTC", file=sys.stderr)
-    print(f"End: {dt_module.fromtimestamp(end_ms/1000)} UTC", file=sys.stderr)
+    start_utc = dt_module.fromtimestamp(start_ms/1000)
+    end_utc = dt_module.fromtimestamp(end_ms/1000)
+    print(f"   Query will fetch: service:claude* @event.name:api_request", file=sys.stderr)
+    print(f"   Timestamps: {start_utc.isoformat()}Z to {end_utc.isoformat()}Z", file=sys.stderr)
 
     # Query Datadog with resume capability
     # Use user_email or teams_str + time_period as resume ID so same query can resume
@@ -723,7 +752,8 @@ def main(user_email, teams_str, time_period, output_path):
         resume_id = f"teams_{teams_str}_{time_period}".replace(' ', '_').replace(',', '')
 
     usage_data = query_datadog(config_mgr, start_ms, end_ms, resume_id=resume_id)
-    print(f"Found usage data for {len(set(u['email'] for u in usage_data))} users", file=sys.stderr)
+    active_users = [u['email'] for u in usage_data if u['cost'] > 0]
+    print(f"📊 Query results: {len(active_users)} active user(s) from {len(roster)} roster member(s)", file=sys.stderr)
 
     # Build params
     params = build_params(roster, usage_data, teams, time_period)
