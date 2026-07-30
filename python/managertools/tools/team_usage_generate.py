@@ -184,9 +184,12 @@ def query_datadog(config_mgr, start_ms, end_ms, roster=None):
             with urllib.request.urlopen(req, timeout=30) as response:
                 response_data = json.loads(response.read().decode('utf-8'))
         except urllib.error.HTTPError as e:
+            error_code = e.code
+            # 4xx errors (except 429 rate-limit) are permanent — retrying won't help
+            if 400 <= error_code < 500 and error_code != 429:
+                raise RuntimeError(f"Datadog API returned HTTP {error_code}: check datadogPAT in ~/.managerTools.cfg") from e
             retry_count += 1
             wait_time = min(2 ** retry_count, max_retry_wait)
-            error_code = e.code
             error_msg = e.reason if hasattr(e, 'reason') else str(e)
             print(f"HTTP {error_code} ({error_msg}), retrying in {wait_time}s (attempt {retry_count})", file=sys.stderr)
             time.sleep(wait_time)
