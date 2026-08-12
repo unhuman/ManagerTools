@@ -10,7 +10,7 @@ Usage:
 
 Arguments:
   TEAMS: Team name(s) comma-separated, or 'org' to use orgTeams from config
-  TIME_PERIOD: 'mtd' (month-to-date) or 'past-month'
+  TIME_PERIOD: 'mtd', 'last-month', 'past-month', or 'Nd' (where N is 1-30 days)
   --output PATH: Optional output HTML path (default: ~/claude_team_usage.html)
 
 Configuration required in ~/.managerTools.cfg:
@@ -41,20 +41,23 @@ def get_date_range(time_period):
     """Get start and end timestamps for the period (milliseconds since epoch).
 
     Args:
-        time_period: 'mtd', 'past-month', or 'Nd' where N is 1-30 (days)
+        time_period: 'mtd', 'last-month', 'past-month', or 'Nd' where N is 1-30 (days)
     """
     today = date.today()
 
     if time_period == 'mtd':
         start_date = date(today.year, today.month, 1)
         end_date = today
-    elif time_period == 'past-month':
+    elif time_period == 'last-month':
         if today.month == 1:
             start_date = date(today.year - 1, 12, 1)
             end_date = date(today.year - 1, 12, 31)
         else:
             start_date = date(today.year, today.month - 1, 1)
             end_date = date(today.year, today.month, 1) - timedelta(days=1)
+    elif time_period == 'past-month':
+        start_date = today - timedelta(days=29)
+        end_date = today
     elif time_period.endswith('d') and time_period[:-1].isdigit():
         # Handle 'Nd' format (e.g., '5d' = last 5 days)
         num_days = int(time_period[:-1])
@@ -63,7 +66,7 @@ def get_date_range(time_period):
         start_date = today - timedelta(days=num_days - 1)
         end_date = today
     else:
-        raise ValueError("time_period must be 'mtd', 'past-month', or 'Nd' (where N is 1-30)")
+        raise ValueError("time_period must be 'mtd', 'last-month', 'past-month', or 'Nd' (where N is 1-30)")
 
     # Convert to milliseconds since epoch (Datadog API expects this format)
     start_dt = datetime.combine(start_date, datetime.min.time())
@@ -81,12 +84,18 @@ def get_period_label(time_period):
     if time_period == 'mtd':
         month_name = today.strftime('%B %Y')
         return f"{month_name} (MTD)"
-    elif time_period == 'past-month':
+    elif time_period == 'last-month':
         if today.month == 1:
-            month_name = date(today.year - 1, 12, 1).strftime('%B %Y')
+            first = date(today.year - 1, 12, 1)
+            last = date(today.year - 1, 12, 31)
         else:
-            month_name = date(today.year, today.month - 1, 1).strftime('%B %Y')
-        return month_name
+            first = date(today.year, today.month - 1, 1)
+            last = date(today.year, today.month, 1) - timedelta(days=1)
+        month_name = first.strftime('%B %Y')
+        return f"{month_name} ({first.strftime('%b %d')} - {last.strftime('%b %d, %Y')})"
+    elif time_period == 'past-month':
+        start_date = today - timedelta(days=29)
+        return f"Past month ({start_date.strftime('%b %d')} - {today.strftime('%b %d, %Y')})"
     elif time_period.endswith('d') and time_period[:-1].isdigit():
         num_days = int(time_period[:-1])
         start_date = today - timedelta(days=num_days - 1)
@@ -412,7 +421,8 @@ REQUIRED ARGUMENTS (choose one):
 REQUIRED POSITIONAL ARGUMENTS:
     TIME_PERIOD             Report period:
                             - mtd        Month-to-date (1st of current month to today)
-                            - past-month Previous calendar month
+                            - last-month Previous calendar month
+                            - past-month Most recent 30 days (rolling window)
                             - Nd         Last N days, where N is 1-30
                             - Examples: 1d (today), 7d (last 7 days), 30d (last 30 days)
 
@@ -438,7 +448,10 @@ EXAMPLES:
     # Single team, month-to-date
     python -m managertools.tools.team_usage_generate -t Queueless mtd report.html
 
-    # Multiple teams, previous month
+    # Multiple teams, previous calendar month
+    python -m managertools.tools.team_usage_generate -t "Team A,Team B" last-month ~/reports/usage.html
+
+    # Multiple teams, rolling past 30 days
     python -m managertools.tools.team_usage_generate -t "Team A,Team B" past-month ~/reports/usage.html
 
     # All org teams, last 30 days (completes in seconds)
@@ -497,11 +510,11 @@ def main(user_email, teams_str, time_period, output_path):
     """
     # Validate time_period
     valid = (
-        time_period in ('mtd', 'past-month') or
+        time_period in ('mtd', 'last-month', 'past-month') or
         (time_period.endswith('d') and time_period[:-1].isdigit() and 1 <= int(time_period[:-1]) <= 30)
     )
     if not valid:
-        raise ValueError("time_period must be 'mtd', 'past-month', or 'Nd' (where N is 1-30)")
+        raise ValueError("time_period must be 'mtd', 'last-month', 'past-month', or 'Nd' (where N is 1-30)")
 
     output_path = os.path.expanduser(output_path)
 
