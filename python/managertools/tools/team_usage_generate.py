@@ -82,8 +82,9 @@ def get_period_label(time_period):
     """Generate human-readable period label."""
     today = date.today()
     if time_period == 'mtd':
-        month_name = today.strftime('%B %Y')
-        return f"{month_name} (MTD)"
+        first = date(today.year, today.month, 1)
+        month_name = first.strftime('%B')
+        return f"{month_name} MTD ({first.strftime('%b %d')} - {today.strftime('%b %d, %Y')})"
     elif time_period == 'last-month':
         if today.month == 1:
             first = date(today.year - 1, 12, 1)
