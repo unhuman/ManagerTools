@@ -636,26 +636,43 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       background-color: #1a521a;
     }}
 
-    .report-table .forecast-col {{
+    .report-table th.forecast-col {{
       font-size: 0.85rem;
       background-color: #e8ffe8;
       position: sticky;
       top: 0;
-      z-index: 10;
+      z-index: 11;
+      text-align: right;
+    }}
+
+    .report-table td.forecast-col {{
+      font-size: 0.85rem;
+      background-color: #e8ffe8;
       text-align: right;
     }}
 
     @media (prefers-color-scheme: dark) {{
-      .report-table .forecast-col {{
+      .report-table th.forecast-col {{
+        background-color: #1a521a;
+      }}
+      .report-table td.forecast-col {{
         background-color: #1a521a;
       }}
     }}
 
-    :root[data-theme="light"] .report-table .forecast-col {{
+    :root[data-theme="light"] .report-table th.forecast-col {{
       background-color: #e8ffe8;
     }}
 
-    :root[data-theme="dark"] .report-table .forecast-col {{
+    :root[data-theme="light"] .report-table td.forecast-col {{
+      background-color: #e8ffe8;
+    }}
+
+    :root[data-theme="dark"] .report-table th.forecast-col {{
+      background-color: #1a521a;
+    }}
+
+    :root[data-theme="dark"] .report-table td.forecast-col {{
       background-color: #1a521a;
     }}
 
