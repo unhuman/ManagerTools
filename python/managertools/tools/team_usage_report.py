@@ -37,7 +37,7 @@ def format_number(value):
     return f"{int(value):,}"
 
 
-def generate_html(teams, time_period, period_label, members, usage_by_email, models, products=None):
+def generate_html(teams, time_period, period_label, members, usage_by_email, models, products=None, forecast_by_email=None):
     """
     Generate a self-contained HTML report.
 
@@ -49,9 +49,12 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
         usage_by_email: Dict mapping email -> {'cost': float, 'requests': int, 'sessions': int, 'model_costs': {model: cost}, 'product_costs': {product: cost}}
         models: Sorted list of all model names found
         products: Sorted list of all product names found (optional)
+        forecast_by_email: Dict mapping email -> forecasted cost (optional, for mtd only)
     """
     if products is None:
         products = []
+    if forecast_by_email is None:
+        forecast_by_email = {}
 
     # Aggregate usage by team
     usage_by_team = {}
@@ -63,7 +66,8 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
             'member_count': 0,
             'active_member_count': 0,
             'model_costs': {},
-            'product_costs': {}
+            'product_costs': {},
+            'forecast': 0
         }
 
     for member in members:
@@ -77,7 +81,8 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
                 'member_count': 0,
                 'active_member_count': 0,
                 'model_costs': {},
-                'product_costs': {}
+                'product_costs': {},
+                'forecast': 0
             }
 
         usage_by_team[team]['member_count'] += 1
@@ -91,6 +96,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
 
         usage_by_team[team]['cost'] += cost
         usage_by_team[team]['requests'] += requests
+        usage_by_team[team]['forecast'] += forecast_by_email.get(email, 0)
 
         if sessions > 0:
             usage_by_team[team]['sessions'].add(email)
@@ -114,6 +120,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
         requests = team_data['requests']
         sessions = len(team_data['sessions'])
         cost_per_request = (cost / requests) if requests > 0 else 0
+        forecast = team_data['forecast']
 
         team_rows.append({
             'name': escape_html(team_name),
@@ -125,12 +132,14 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
             'active_member_count': team_data['active_member_count'],
             'model_costs': team_data['model_costs'],
             'product_costs': team_data['product_costs'],
+            'forecast': forecast,
             'cost_formatted': format_currency(cost),
             'requests_formatted': format_number(requests),
             'sessions_formatted': format_number(sessions),
             'cost_per_request_formatted': format_currency(cost_per_request),
             'member_count_formatted': format_number(team_data['member_count']),
             'active_member_count_formatted': format_number(team_data['active_member_count']),
+            'forecast_formatted': format_currency(forecast),
         })
 
     # Build all rows
@@ -148,6 +157,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
         cost_per_request = (cost / requests) if requests > 0 else 0
         model_costs = usage.get('model_costs', {})
         product_costs = usage.get('product_costs', {})
+        forecast = forecast_by_email.get(email, 0)
 
         row = {
             'name': escape_html(name),
@@ -159,10 +169,12 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
             'cost_per_request': cost_per_request,
             'model_costs': model_costs,
             'product_costs': product_costs,
+            'forecast': forecast,
             'cost_formatted': format_currency(cost),
             'requests_formatted': format_number(requests),
             'sessions_formatted': format_number(sessions),
             'cost_per_request_formatted': format_currency(cost_per_request),
+            'forecast_formatted': format_currency(forecast),
         }
 
         all_rows.append(row)
@@ -200,6 +212,17 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
         cells = ''.join(f'<td class="currency model-cell">{format_currency(row["model_costs"].get(m, 0))}</td>' for m in models)
         model_cells.append(cells)
 
+    # Generate forecast header and cells (only if forecast_by_email is provided and non-empty)
+    forecast_header = ''
+    forecast_group_header = ''
+    forecast_cells = []
+    if forecast_by_email:
+        forecast_header = '<th class="sortable forecast-col">Full Month</th>'
+        forecast_group_header = '<th class="group-header forecast-group-header">Forecast</th>'
+        for row in all_rows:
+            cells = f'<td class="currency forecast-col">{row["forecast_formatted"]}</td>'
+            forecast_cells.append(cells)
+
     # Generate product cost header columns (individual product names)
     product_headers_individual = ''.join(f'<th class="sortable product-col" data-product="{escape_html(p)}">{escape_html(p)}</th>' for p in products)
 
@@ -214,12 +237,13 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     # Build table rows
     all_table_rows = ''
     for i, row in enumerate(all_rows):
+        forecast_cell = forecast_cells[i] if forecast_cells else ''
         all_table_rows += f'''    <tr data-email="{escape_html(row['email'])}" data-cost="{row['cost']}">
       <td class="name">{row['name']}</td>
       <td class="team">{row['team']}</td>
       <td class="email">{row['email']}</td>
       <td class="currency">{row['cost_formatted']}</td>
-      {model_cells[i]}{product_cells[i]}
+      {forecast_cell}{model_cells[i]}{product_cells[i]}
     </tr>
 '''
 
@@ -228,11 +252,12 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     for row in team_rows:
         model_cells = ''.join(f'<td class="currency model-cell">{format_currency(row["model_costs"].get(m, 0))}</td>' for m in models)
         product_cells = ''.join(f'<td class="currency product-cell">{format_currency(row["product_costs"].get(p, 0))}</td>' for p in products)
+        forecast_cell = f'<td class="currency forecast-col">{row["forecast_formatted"]}</td>' if forecast_by_email else ''
         team_table_rows += f'''    <tr class="team-row" data-cost="{row['cost']}">
       <td class="name">{row['name']}</td>
       <td class="number">{row['active_member_count_formatted']}/{row['member_count_formatted']}</td>
       <td class="currency">{row['cost_formatted']}</td>
-      {model_cells}{product_cells}
+      {forecast_cell}{model_cells}{product_cells}
     </tr>
 '''
 
@@ -593,6 +618,47 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       background-color: #2e0f3e;
     }}
 
+    .report-table .forecast-group-header {{
+      background-color: #e8ffe8;
+    }}
+
+    @media (prefers-color-scheme: dark) {{
+      .report-table .forecast-group-header {{
+        background-color: #1a521a;
+      }}
+    }}
+
+    :root[data-theme="light"] .report-table .forecast-group-header {{
+      background-color: #e8ffe8;
+    }}
+
+    :root[data-theme="dark"] .report-table .forecast-group-header {{
+      background-color: #1a521a;
+    }}
+
+    .report-table .forecast-col {{
+      font-size: 0.85rem;
+      background-color: #e8ffe8;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      text-align: right;
+    }}
+
+    @media (prefers-color-scheme: dark) {{
+      .report-table .forecast-col {{
+        background-color: #1a521a;
+      }}
+    }}
+
+    :root[data-theme="light"] .report-table .forecast-col {{
+      background-color: #e8ffe8;
+    }}
+
+    :root[data-theme="dark"] .report-table .forecast-col {{
+      background-color: #1a521a;
+    }}
+
 .toc {{
       background-color: var(--header-bg);
       border: 1px solid var(--border);
@@ -734,13 +800,13 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
         <thead>
           <tr>
             <th colspan="3" style="border: none; background: none;"></th>
-            {model_group_header}{product_group_header}
+            {forecast_group_header}{model_group_header}{product_group_header}
           </tr>
           <tr>
             <th class="sortable">Team</th>
             <th class="sortable">Active/Members</th>
             <th class="sortable">Total Cost</th>
-            {model_headers_individual}{product_headers_individual}
+            {forecast_header}{model_headers_individual}{product_headers_individual}
           </tr>
         </thead>
         <tbody>
@@ -755,14 +821,14 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
         <thead>
           <tr>
             <th colspan="4" style="border: none; background: none;"></th>
-            {model_group_header}{product_group_header}
+            {forecast_group_header}{model_group_header}{product_group_header}
           </tr>
           <tr>
             <th class="sortable">Name</th>
             <th class="sortable">Team</th>
             <th class="sortable">Email</th>
             <th class="sortable">Total Cost</th>
-            {model_headers_individual}{product_headers_individual}
+            {forecast_header}{model_headers_individual}{product_headers_individual}
           </tr>
         </thead>
         <tbody>

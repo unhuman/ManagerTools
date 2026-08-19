@@ -27,6 +27,7 @@ import urllib.request
 import urllib.parse
 import time
 import re
+import calendar
 from datetime import date, datetime, timedelta
 
 from managertools.util.config_file_manager import ConfigFileManager
@@ -105,6 +106,17 @@ def get_period_label(time_period):
         else:
             return f"Last {num_days} days ({start_date.strftime('%b %d')} - {today.strftime('%b %d, %Y')})"
     return time_period
+
+
+def count_workdays(start_date, end_date):
+    """Count Mon-Fri workdays (inclusive) between start_date and end_date."""
+    count = 0
+    current = start_date
+    while current <= end_date:
+        if current.weekday() < 5:  # weekday() returns 0-6 for Mon-Sun
+            count += 1
+        current += timedelta(days=1)
+    return count
 
 
 def fetch_rosters(teams, config_mgr):
@@ -341,6 +353,22 @@ def build_params(roster, usage_data, teams, time_period):
                 usage_by_email[email]['product_costs'][product] = product_cost
                 products.add(product)
 
+    # Compute forecast for MTD: project spend to end of month
+    forecast_by_email = {}
+    if time_period == 'mtd':
+        today = date.today()
+        data_end = today - timedelta(days=1)   # data is one day lagging
+        month_start = date(today.year, today.month, 1)
+        month_end = date(today.year, today.month, calendar.monthrange(today.year, today.month)[1])
+        data_workdays = count_workdays(month_start, data_end)
+        month_workdays = count_workdays(month_start, month_end)
+        for email, usage in usage_by_email.items():
+            cost = usage.get('cost', 0)
+            if data_workdays > 0:
+                forecast_by_email[email] = round(cost * month_workdays / data_workdays, 2)
+            else:
+                forecast_by_email[email] = 0.0
+
     params = {
         'teams': teams,
         'time_period': time_period,
@@ -348,7 +376,8 @@ def build_params(roster, usage_data, teams, time_period):
         'members': roster,
         'usage_by_email': usage_by_email,
         'models': sorted(list(models)),
-        'products': sorted(list(products))
+        'products': sorted(list(products)),
+        'forecast_by_email': forecast_by_email
     }
 
     return params
@@ -568,7 +597,8 @@ def main(user_email, teams_str, time_period, output_path):
         roster,
         params['usage_by_email'],
         params['models'],
-        params['products']
+        params['products'],
+        params['forecast_by_email']
     )
 
     # Write output
