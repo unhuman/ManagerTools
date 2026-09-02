@@ -86,13 +86,15 @@ def query_logs(config_mgr, start, end, query):
         request = urllib.request.Request(
             'https://api.datadoghq.com/api/v2/logs/events/search',
             data=json.dumps(request_body).encode(),
-            headers={'Authorization': f"Bearer {config_mgr.get_value('datadogPAT')}",
+            headers={'DD-API-KEY': config_mgr.get_value('datadogPAT'),
                      'Content-Type': 'application/json'}, method='POST')
         try:
             with urllib.request.urlopen(request, timeout=60) as response:
                 payload = json.loads(response.read().decode())
         except urllib.error.HTTPError as exc:
-            raise RuntimeError(f"Datadog Logs API returned HTTP {exc.code}; check PAT logs scopes") from exc
+            if exc.code in (401, 403):
+                raise RuntimeError(f"Datadog Logs API returned HTTP {exc.code}; check datadogPAT and logs_read_data/logs_read_index_data scopes") from exc
+            raise RuntimeError(f"Datadog Logs API returned HTTP {exc.code}; retry later and verify the Datadog site/endpoint") from exc
         results.extend(payload.get('data', []))
         cursor = payload.get('meta', {}).get('page', {}).get('after')
         if not cursor:
