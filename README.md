@@ -240,6 +240,19 @@ The team usage report (`team_usage_generate.py`) generates an interactive HTML r
 - Mobile responsive
 - Sortable and filterable
 
+### Codex Team Usage Report
+
+The separate Codex report can be generated with:
+
+```bash
+python -m managertools.tools.codex_usage_generate -t "Team A,Team B" mtd ~/codex_team_usage.html
+```
+
+It queries Datadog log events for `codex.sse_event`, `codex.conversation_starts`,
+and `codex.tool_result`, joining users through `@user.email`. The report shows
+events, conversations, sessions, tool calls, active days, model counts, and tool
+counts. The PAT requires `logs_read_data` and `logs_read_index_data`.
+
 ### Developer Notes
 - Data is stored in `~/.managerTools.cfg`
 - There was difficulty getting long input from the terminal, so for that input, `zsh/vared` is used to accept input
