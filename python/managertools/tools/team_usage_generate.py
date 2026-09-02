@@ -268,6 +268,7 @@ def query_datadog(config_mgr, start_ms, end_ms, roster=None):
         # Sum the pointlist values for total cost
         pointlist = series.get('pointlist', [])
         total_cost = sum(p[1] for p in pointlist if p[1] is not None)
+        active_days = {int(p[0] // 86400000) for p in pointlist if p[1] is not None and p[1] > 0}
 
         if total_cost <= 0:
             continue
@@ -279,11 +280,13 @@ def query_datadog(config_mgr, start_ms, end_ms, roster=None):
                 'requests': 0,
                 'sessions': 0,
                 'model_costs': {},
-                'product_costs': {}
+                'product_costs': {},
+                'active_day_set': set()
             }
 
         # Accumulate costs
         usage_by_email[email]['cost'] += total_cost
+        usage_by_email[email]['active_day_set'].update(active_days)
 
         # Track cost by model (servicename)
         if servicename not in usage_by_email[email]['model_costs']:
@@ -303,6 +306,7 @@ def query_datadog(config_mgr, start_ms, end_ms, roster=None):
             'cost': round(data['cost'], 2),
             'requests': 0,  # Cloud Cost API doesn't provide request counts
             'sessions': 0,  # Cloud Cost API doesn't provide session counts
+            'active_days': len(data['active_day_set']),
             'model_costs': {m: round(c, 2) for m, c in data['model_costs'].items()},
             'product_costs': {p: round(c, 2) for p, c in data['product_costs'].items()}
         })
@@ -326,7 +330,8 @@ def build_params(roster, usage_data, teams, time_period):
             'requests': 0,
             'sessions': 0,
             'model_costs': {},
-            'product_costs': {}
+            'product_costs': {},
+            'active_days': 0
         }
 
     # Merge usage data
@@ -335,11 +340,13 @@ def build_params(roster, usage_data, teams, time_period):
         cost = row.get('cost', 0)
         requests = row.get('requests', 0)
         sessions = row.get('sessions', 0)
+        active_days = row.get('active_days', 0)
 
         if email in usage_by_email:
             usage_by_email[email]['cost'] += cost
             usage_by_email[email]['requests'] += requests
             usage_by_email[email]['sessions'] = max(usage_by_email[email]['sessions'], sessions)
+            usage_by_email[email]['active_days'] = active_days
 
             # Merge model costs
             model_costs = row.get('model_costs', {})

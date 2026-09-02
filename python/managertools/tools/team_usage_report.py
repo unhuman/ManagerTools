@@ -158,6 +158,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
         model_costs = usage.get('model_costs', {})
         product_costs = usage.get('product_costs', {})
         forecast = forecast_by_email.get(email, 0)
+        active_days = usage.get('active_days', 0)
 
         row = {
             'name': escape_html(name),
@@ -170,6 +171,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
             'model_costs': model_costs,
             'product_costs': product_costs,
             'forecast': forecast,
+            'active_days': active_days,
             'cost_formatted': format_currency(cost),
             'requests_formatted': format_number(requests),
             'sessions_formatted': format_number(sessions),
@@ -242,6 +244,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       <td class="name">{row['name']}</td>
       <td class="team">{row['team']}</td>
       <td class="email">{row['email']}</td>
+      <td class="number">{row['active_days']}</td>
       <td class="currency">{row['cost_formatted']}</td>
       {forecast_cell}{model_cells[i]}{product_cells[i]}
     </tr>
@@ -837,13 +840,14 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       <table class="report-table" id="active-users-table">
         <thead>
           <tr>
-            <th colspan="4" style="border: none; background: none;"></th>
+            <th colspan="5" style="border: none; background: none;"></th>
             {forecast_group_header}{model_group_header}{product_group_header}
           </tr>
           <tr>
             <th class="sortable">Name</th>
             <th class="sortable">Team</th>
             <th class="sortable">Email</th>
+            <th class="sortable">Days Active</th>
             <th class="sortable">Total Cost</th>
             {forecast_header}{model_headers_individual}{product_headers_individual}
           </tr>
