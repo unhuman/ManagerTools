@@ -70,35 +70,50 @@ def _event_attributes(item):
     return {**(nested if isinstance(nested, dict) else {}), **(attrs if isinstance(attrs, dict) else {})}
 
 
-def query_logs(config_mgr, start, end, query):
+def query_log_aggregate(config_mgr, start, end, query, include_sessions=False):
+    """Ask Datadog for grouped counts instead of downloading individual logs."""
     if not config_mgr.contains_key('datadogPAT'):
         raise RuntimeError("datadogPAT not configured in ~/.managerTools.cfg")
     start_dt = datetime.combine(start, datetime.min.time(), timezone.utc)
     end_dt = datetime.combine(end, datetime.max.time(), timezone.utc)
-    body = {'filter': {'from': start_dt.isoformat(), 'to': end_dt.isoformat(), 'query': query},
-            'sort': 'timestamp', 'page': {'limit': 1000}}
-    results = []
-    cursor = None
-    while True:
-        request_body = dict(body)
-        if cursor:
-            request_body['page'] = {'limit': 1000, 'cursor': cursor}
-        request = urllib.request.Request(
-            'https://api.datadoghq.com/api/v2/logs/events/search',
-            data=json.dumps(request_body).encode(),
-            headers={'DD-APPLICATION-KEY': config_mgr.get_value('datadogPAT'),
-                     'Content-Type': 'application/json'}, method='POST')
-        try:
-            with urllib.request.urlopen(request, timeout=60) as response:
-                payload = json.loads(response.read().decode())
-        except urllib.error.HTTPError as exc:
-            if exc.code in (401, 403):
-                raise RuntimeError(f"Datadog Logs API returned HTTP {exc.code}; check datadogPAT and logs_read_data/logs_read_index_data scopes") from exc
-            raise RuntimeError(f"Datadog Logs API returned HTTP {exc.code}; retry later and verify the Datadog site/endpoint") from exc
-        results.extend(payload.get('data', []))
-        cursor = payload.get('meta', {}).get('page', {}).get('after')
-        if not cursor:
-            return results
+    computes = [{'aggregation': 'count', 'type': 'total'}]
+    if include_sessions:
+        computes.append({'aggregation': 'cardinality', 'metric': '@session_id', 'type': 'cardinality'})
+    body = {
+        'compute': computes,
+        'filter': {'from': start_dt.isoformat(), 'to': end_dt.isoformat(), 'query': query},
+        'group_by': [
+            {'facet': '@user.email', 'limit': 10000},
+            {'facet': '@model', 'limit': 1000},
+        ],
+    }
+    if '@tool_name:' in query:
+        body['group_by'].append({'facet': '@tool_name', 'limit': 1000})
+    request = urllib.request.Request(
+        'https://api.datadoghq.com/api/v2/logs/analytics/aggregate',
+        data=json.dumps(body).encode(),
+        headers={'DD-APPLICATION-KEY': config_mgr.get_value('datadogPAT'),
+                 'Content-Type': 'application/json'}, method='POST')
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            payload = json.loads(response.read().decode())
+    except urllib.error.HTTPError as exc:
+        if exc.code in (401, 403):
+            raise RuntimeError(f"Datadog Logs API returned HTTP {exc.code}; verify that datadogPAT is valid and has logs_read_data and logs_read_index_data scopes") from exc
+        raise RuntimeError(f"Datadog Logs API returned HTTP {exc.code}; retry later and verify the Datadog site/endpoint") from exc
+    return payload.get('data', {}).get('buckets', [])
+
+
+def _compute(bucket, index):
+    computes = bucket.get('computes', {})
+    if isinstance(computes, list):
+        return computes[index] if index < len(computes) else 0
+    return computes.get(f'c{index}', 0) or 0
+
+
+def _bucket_value(bucket, facet, default=''):
+    by = bucket.get('by', {})
+    return _value(by, facet.lstrip('@'), by.get(facet, default))
 
 
 def fetch_rosters(teams, config_mgr):
@@ -122,33 +137,40 @@ def fetch_rosters(teams, config_mgr):
     return list(members.values())
 
 
-def aggregate_logs(logs_by_type, roster):
+def aggregate_logs(config_mgr, start, end, roster):
+    """Aggregate Codex events server-side and normalize them for the report."""
     allowed = {member['email'].lower() for member in roster}
     usage = {}
-    for kind, logs in logs_by_type.items():
-        for item in logs:
-            attrs = _event_attributes(item)
-            email = str(_value(attrs, 'user.email')).lower()
+    for kind, query in EVENT_QUERIES.items():
+        print(f"📊 Codex: aggregating {kind}...", file=sys.stderr, flush=True)
+        buckets = query_log_aggregate(config_mgr, start, end, query, include_sessions=(kind == 'conversations'))
+        print(f"   ✓ {kind}: received {len(buckets)} grouped result(s)", file=sys.stderr, flush=True)
+        for bucket in buckets:
+            email = str(_bucket_value(bucket, '@user.email')).lower()
             if email not in allowed:
                 continue
-            model = str(_value(attrs, 'model', 'Unknown'))
-            tool = str(_value(attrs, 'tool_name', 'Unknown')) if kind == 'tool_calls' else ''
-            timestamp = attrs.get('timestamp') or item.get('attributes', {}).get('timestamp', '')
-            day = str(timestamp)[:10]
-            entry = usage.setdefault(email, {'events': 0, 'conversations': 0, 'tool_calls': 0, 'sessions': set(), 'active_days': set(), 'models': {}, 'tools': {}})
-            entry[kind] += 1
-            if day:
-                entry['active_days'].add(day)
-            session = _value(attrs, 'session_id')
-            if session:
-                entry['sessions'].add(str(session))
+            model = str(_bucket_value(bucket, '@model', 'Unknown'))
+            tool = str(_bucket_value(bucket, '@tool_name', 'Unknown'))
+            entry = usage.setdefault(email, {'events': 0, 'conversations': 0, 'tool_calls': 0,
+                                             'sessions': 0, 'active_days': 0, 'models': {}, 'tools': {}})
+            count = int(_compute(bucket, 0))
+            entry[kind] += count
+            if kind == 'conversations':
+                entry['sessions'] += int(_compute(bucket, 1))
             if kind in ('events', 'conversations'):
-                entry['models'][model] = entry['models'].get(model, 0) + 1
+                entry['models'][model] = entry['models'].get(model, 0) + count
             if kind == 'tool_calls':
-                entry['tools'][tool] = entry['tools'].get(tool, 0) + 1
-    for entry in usage.values():
-        entry['sessions'] = len(entry['sessions'])
-        entry['active_days'] = len(entry['active_days'])
+                entry['tools'][tool] = entry['tools'].get(tool, 0) + count
+
+    current = start
+    while current <= end:
+        print(f"📅 Codex: checking active users for {current.isoformat()}...", file=sys.stderr, flush=True)
+        for bucket in query_log_aggregate(config_mgr, current, current, EVENT_QUERIES['conversations']):
+            email = str(_bucket_value(bucket, '@user.email')).lower()
+            if email in usage and _compute(bucket, 0):
+                usage[email]['active_days'] += 1
+        current += timedelta(days=1)
+    print(f"✓ Codex aggregation complete: {len(usage)} user(s) with usage", file=sys.stderr, flush=True)
     return usage
 
 
@@ -157,8 +179,7 @@ def main(teams_str, time_period, output_path):
     teams = config.get_value('orgTeams') if teams_str.lower() == 'org' else [t.strip() for t in teams_str.split(',')]
     start, end = get_date_range(time_period)
     roster = fetch_rosters(teams, config)
-    logs = {kind: query_logs(config, start, end, query) for kind, query in EVENT_QUERIES.items()}
-    usage = aggregate_logs(logs, roster)
+    usage = aggregate_logs(config, start, end, roster)
     params = {'teams': teams, 'time_period': time_period, 'period_label': period_label(time_period, start, end),
               'members': roster, 'usage_by_email': usage,
               'models': sorted({m for row in usage.values() for m in row['models']}),
