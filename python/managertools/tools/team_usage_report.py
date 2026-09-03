@@ -1032,6 +1032,20 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
             if (row.children[index]) row.children[index].style.display = visible ? '' : 'none';
           }});
         }});
+        const modelColumns = Array.from(table.querySelectorAll('th.model-col'))
+          .filter(header => header.style.display !== 'none');
+        const productColumns = Array.from(table.querySelectorAll('th.product-col'))
+          .filter(header => header.style.display !== 'none');
+        const modelGroup = table.querySelector('.model-group-header');
+        const productGroup = table.querySelector('.product-group-header');
+        if (modelGroup) {{
+          modelGroup.colSpan = modelColumns.length;
+          modelGroup.style.display = modelColumns.length ? '' : 'none';
+        }}
+        if (productGroup) {{
+          productGroup.colSpan = productColumns.length;
+          productGroup.style.display = productColumns.length ? '' : 'none';
+        }}
       }});
     }}
 
