@@ -473,7 +473,7 @@ REQUIRED POSITIONAL ARGUMENTS:
                             - Absolute: /tmp/report.html
 
     --sources SOURCES       Comma-separated providers for the source selector report:
-                            - claude (default), codex, or claude,codex
+                            - claude,codex (default), claude, or codex
 
 CONFIGURATION (required in ~/.managerTools.cfg):
     backstageServer        Backstage FQDN (e.g., backstage.core.cvent.org)
@@ -595,7 +595,7 @@ def main(user_email, teams_str, time_period, output_path, sources=None):
     print(f"   Query: sum:custom.cost.amortized{{providername:Anthropic}} by {{display_user_email,product,servicename}}", file=sys.stderr)
     print(f"   Timestamps: {start_utc.isoformat()}Z to {end_utc.isoformat()}Z", file=sys.stderr)
 
-    sources = [source.strip().lower() for source in (sources or ['claude'])]
+    sources = [source.strip().lower() for source in (sources or ['claude', 'codex'])]
     unknown = set(sources) - {'claude', 'codex'}
     if unknown:
         raise ValueError(f"Unsupported source(s): {', '.join(sorted(unknown))}")
@@ -683,7 +683,7 @@ if __name__ == '__main__':
     teams_str = None
     time_period = None
     output_path = None
-    sources = ['claude']
+    sources = ['claude', 'codex']
 
     i = 1
     while i < len(sys.argv):
