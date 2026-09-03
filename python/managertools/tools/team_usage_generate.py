@@ -320,6 +320,23 @@ def query_datadog(config_mgr, start_ms, end_ms, roster=None):
     return usage_data
 
 
+def calculate_forecast(usage_by_email, time_period):
+    """Project MTD spend using the report's workday-based forecast basis."""
+    if time_period != 'mtd':
+        return {}
+    today = date.today()
+    data_end = today - timedelta(days=1)   # Datadog cost data is one day lagging
+    month_start = date(today.year, today.month, 1)
+    month_end = date(today.year, today.month, calendar.monthrange(today.year, today.month)[1])
+    data_workdays = count_workdays(month_start, data_end)
+    month_workdays = count_workdays(month_start, month_end)
+    return {
+        email: round(usage.get('cost', 0) * month_workdays / data_workdays, 2)
+        if data_workdays > 0 else 0.0
+        for email, usage in usage_by_email.items()
+    }
+
+
 def build_params(roster, usage_data, teams, time_period):
     """Build params from roster and usage data."""
     usage_by_email = {}
@@ -364,21 +381,8 @@ def build_params(roster, usage_data, teams, time_period):
                 usage_by_email[email]['product_costs'][product] = product_cost
                 products.add(product)
 
-    # Compute forecast for MTD: project spend to end of month
-    forecast_by_email = {}
-    if time_period == 'mtd':
-        today = date.today()
-        data_end = today - timedelta(days=1)   # data is one day lagging
-        month_start = date(today.year, today.month, 1)
-        month_end = date(today.year, today.month, calendar.monthrange(today.year, today.month)[1])
-        data_workdays = count_workdays(month_start, data_end)
-        month_workdays = count_workdays(month_start, month_end)
-        for email, usage in usage_by_email.items():
-            cost = usage.get('cost', 0)
-            if data_workdays > 0:
-                forecast_by_email[email] = round(cost * month_workdays / data_workdays, 2)
-            else:
-                forecast_by_email[email] = 0.0
+    # Compute forecast for MTD: project spend to end of month.
+    forecast_by_email = calculate_forecast(usage_by_email, time_period)
 
     params = {
         'teams': teams,
@@ -625,6 +629,18 @@ def main(user_email, teams_str, time_period, output_path, sources=None):
             email: {**row, 'applications': {}}
             for email, row in codex_usage.items()
         }
+
+    # Forecast the same combined spend that the unified report displays. The
+    # legacy forecast was calculated before Codex was fetched, which omitted
+    # Codex spend and left Codex-only users at $0.
+    combined_forecast_usage = {
+        member['email']: {'cost': 0.0} for member in roster
+    }
+    for provider_rows in source_usage.values():
+        for email, row in provider_rows.items():
+            if email in combined_forecast_usage:
+                combined_forecast_usage[email]['cost'] += float(row.get('cost', 0) or 0)
+    params['forecast_by_email'] = calculate_forecast(combined_forecast_usage, time_period)
 
     # Use the original full-featured renderer for both legacy Claude data and
     # the unified provider view.  The renderer normalizes provider data before
