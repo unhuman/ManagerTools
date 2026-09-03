@@ -70,24 +70,28 @@ def _event_attributes(item):
     return {**(nested if isinstance(nested, dict) else {}), **(attrs if isinstance(attrs, dict) else {})}
 
 
-def query_log_aggregate(config_mgr, start, end, query, include_sessions=False, include_model=True):
+def query_log_aggregate(config_mgr, start, end, query, email_chunk, include_sessions=False, include_model=True):
     """Ask Datadog for grouped counts instead of downloading individual logs."""
     if not config_mgr.contains_key('datadogPAT'):
         raise RuntimeError("datadogPAT not configured in ~/.managerTools.cfg")
     start_dt = datetime.combine(start, datetime.min.time(), timezone.utc)
     end_dt = datetime.combine(end, datetime.max.time(), timezone.utc)
+    email_limit = len(email_chunk)
+    facet_limit = max(1, min(1000, 10000 // email_limit))
+    email_filter = '@user.email:(' + ' OR '.join(f'"{email}"' for email in email_chunk) + ')'
+    query = f'{query} {email_filter}'
     computes = [{'aggregation': 'count', 'type': 'total'}]
     if include_sessions:
         computes.append({'aggregation': 'cardinality', 'metric': '@session_id', 'type': 'total'})
     body = {
         'compute': computes,
         'filter': {'from': start_dt.isoformat(), 'to': end_dt.isoformat(), 'query': query},
-        'group_by': [{'facet': '@user.email', 'limit': 900}],
+        'group_by': [{'facet': '@user.email', 'limit': email_limit}],
     }
     if '@tool_name:' in query:
-        body['group_by'].append({'facet': '@tool_name', 'limit': 10})
+        body['group_by'].append({'facet': '@tool_name', 'limit': facet_limit})
     elif include_model:
-        body['group_by'].append({'facet': '@model', 'limit': 10})
+        body['group_by'].append({'facet': '@model', 'limit': facet_limit})
     request = urllib.request.Request(
         'https://api.datadoghq.com/api/v2/logs/analytics/aggregate',
         data=json.dumps(body).encode(),
@@ -140,35 +144,38 @@ def fetch_rosters(teams, config_mgr):
 def aggregate_logs(config_mgr, start, end, roster):
     """Aggregate Codex events server-side and normalize them for the report."""
     allowed = {member['email'].lower() for member in roster}
+    email_chunks = [list(chunk) for chunk in (allowed[i:i + 900] for i in range(0, len(allowed), 900))]
     usage = {}
     for kind, query in EVENT_QUERIES.items():
-        print(f"📊 Codex: aggregating {kind}...", file=sys.stderr, flush=True)
-        buckets = query_log_aggregate(config_mgr, start, end, query, include_sessions=(kind == 'conversations'))
-        print(f"   ✓ {kind}: received {len(buckets)} grouped result(s)", file=sys.stderr, flush=True)
-        for bucket in buckets:
-            email = str(_bucket_value(bucket, '@user.email')).lower()
-            if email not in allowed:
-                continue
-            model = str(_bucket_value(bucket, '@model', 'Unknown'))
-            tool = str(_bucket_value(bucket, '@tool_name', 'Unknown'))
-            entry = usage.setdefault(email, {'events': 0, 'conversations': 0, 'tool_calls': 0,
-                                             'sessions': 0, 'active_days': 0, 'models': {}, 'tools': {}})
-            count = int(_compute(bucket, 0))
-            entry[kind] += count
-            if kind == 'conversations':
-                entry['sessions'] += int(_compute(bucket, 1))
-            if kind in ('events', 'conversations'):
-                entry['models'][model] = entry['models'].get(model, 0) + count
-            if kind == 'tool_calls':
-                entry['tools'][tool] = entry['tools'].get(tool, 0) + count
+        for chunk_number, email_chunk in enumerate(email_chunks, 1):
+            print(f"📊 Codex: aggregating {kind} (email group {chunk_number}/{len(email_chunks)}, {len(email_chunk)} users)...", file=sys.stderr, flush=True)
+            buckets = query_log_aggregate(config_mgr, start, end, query, email_chunk, include_sessions=(kind == 'conversations'))
+            print(f"   ✓ {kind}: received {len(buckets)} grouped result(s)", file=sys.stderr, flush=True)
+            for bucket in buckets:
+                email = str(_bucket_value(bucket, '@user.email')).lower()
+                if email not in allowed:
+                    continue
+                model = str(_bucket_value(bucket, '@model', 'Unknown'))
+                tool = str(_bucket_value(bucket, '@tool_name', 'Unknown'))
+                entry = usage.setdefault(email, {'events': 0, 'conversations': 0, 'tool_calls': 0,
+                                                 'sessions': 0, 'active_days': 0, 'models': {}, 'tools': {}})
+                count = int(_compute(bucket, 0))
+                entry[kind] += count
+                if kind == 'conversations':
+                    entry['sessions'] += int(_compute(bucket, 1))
+                if kind in ('events', 'conversations'):
+                    entry['models'][model] = entry['models'].get(model, 0) + count
+                if kind == 'tool_calls':
+                    entry['tools'][tool] = entry['tools'].get(tool, 0) + count
 
     current = start
     while current <= end:
         print(f"📅 Codex: checking active users for {current.isoformat()}...", file=sys.stderr, flush=True)
-        for bucket in query_log_aggregate(config_mgr, current, current, EVENT_QUERIES['conversations'], include_model=False):
-            email = str(_bucket_value(bucket, '@user.email')).lower()
-            if email in usage and _compute(bucket, 0):
-                usage[email]['active_days'] += 1
+        for email_chunk in email_chunks:
+            for bucket in query_log_aggregate(config_mgr, current, current, EVENT_QUERIES['conversations'], email_chunk, include_model=False):
+                email = str(_bucket_value(bucket, '@user.email')).lower()
+                if email in usage and _compute(bucket, 0):
+                    usage[email]['active_days'] += 1
         current += timedelta(days=1)
     print(f"✓ Codex aggregation complete: {len(usage)} user(s) with usage", file=sys.stderr, flush=True)
     return usage
