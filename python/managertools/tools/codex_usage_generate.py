@@ -70,7 +70,7 @@ def _event_attributes(item):
     return {**(nested if isinstance(nested, dict) else {}), **(attrs if isinstance(attrs, dict) else {})}
 
 
-def query_log_aggregate(config_mgr, start, end, query, include_sessions=False):
+def query_log_aggregate(config_mgr, start, end, query, include_sessions=False, include_model=True):
     """Ask Datadog for grouped counts instead of downloading individual logs."""
     if not config_mgr.contains_key('datadogPAT'):
         raise RuntimeError("datadogPAT not configured in ~/.managerTools.cfg")
@@ -82,13 +82,12 @@ def query_log_aggregate(config_mgr, start, end, query, include_sessions=False):
     body = {
         'compute': computes,
         'filter': {'from': start_dt.isoformat(), 'to': end_dt.isoformat(), 'query': query},
-        'group_by': [
-            {'facet': '@user.email', 'limit': 1000},
-            {'facet': '@model', 'limit': 1000},
-        ],
+        'group_by': [{'facet': '@user.email', 'limit': 900}],
     }
     if '@tool_name:' in query:
-        body['group_by'].append({'facet': '@tool_name', 'limit': 1000})
+        body['group_by'].append({'facet': '@tool_name', 'limit': 10})
+    elif include_model:
+        body['group_by'].append({'facet': '@model', 'limit': 10})
     request = urllib.request.Request(
         'https://api.datadoghq.com/api/v2/logs/analytics/aggregate',
         data=json.dumps(body).encode(),
@@ -166,7 +165,7 @@ def aggregate_logs(config_mgr, start, end, roster):
     current = start
     while current <= end:
         print(f"📅 Codex: checking active users for {current.isoformat()}...", file=sys.stderr, flush=True)
-        for bucket in query_log_aggregate(config_mgr, current, current, EVENT_QUERIES['conversations']):
+        for bucket in query_log_aggregate(config_mgr, current, current, EVENT_QUERIES['conversations'], include_model=False):
             email = str(_bucket_value(bucket, '@user.email')).lower()
             if email in usage and _compute(bucket, 0):
                 usage[email]['active_days'] += 1
