@@ -144,7 +144,8 @@ def fetch_rosters(teams, config_mgr):
 def aggregate_logs(config_mgr, start, end, roster):
     """Aggregate Codex events server-side and normalize them for the report."""
     allowed = {member['email'].lower() for member in roster}
-    email_chunks = [list(chunk) for chunk in (allowed[i:i + 900] for i in range(0, len(allowed), 900))]
+    allowed_emails = sorted(allowed)
+    email_chunks = [allowed_emails[i:i + 900] for i in range(0, len(allowed_emails), 900)]
     usage = {}
     for kind, query in EVENT_QUERIES.items():
         for chunk_number, email_chunk in enumerate(email_chunks, 1):
