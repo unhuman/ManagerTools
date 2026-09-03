@@ -156,9 +156,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
             active_dates = set(source_value.get('active_day_dates', []))
             usage_by_team[team]['source_active_days'].setdefault(source, set()).update(active_dates)
             if float(source_value.get('cost', 0) or 0) > 0:
-                usage_by_team[team]['source_active_members'][source] = (
-                    usage_by_team[team]['source_active_members'].get(source, 0) + 1
-                )
+                usage_by_team[team]['source_active_members'].setdefault(source, set()).add(email)
 
         if sessions > 0:
             usage_by_team[team]['sessions'].add(email)
@@ -344,7 +342,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
         forecast_cell = f'<td class="currency forecast-col">{row["forecast_formatted"]}</td>' if forecast_by_email else ''
         source_costs = escape_html(json.dumps(row.get('source_costs', {}), separators=(',', ':')))
         source_days = escape_html(json.dumps({source: sorted(days) for source, days in row.get('source_active_days', {}).items()}, separators=(',', ':')))
-        source_members = escape_html(json.dumps(row.get('source_active_members', {}), separators=(',', ':')))
+        source_members = escape_html(json.dumps({source: sorted(emails) for source, emails in row.get('source_active_members', {}).items()}, separators=(',', ':')))
         team_table_rows += f'''    <tr class="team-row" data-cost="{row['cost']}" data-source-costs="{source_costs}" data-source-active-days="{source_days}" data-source-active-members="{source_members}" data-active-members="{row['active_member_count']}" data-member-count="{row['member_count']}" data-forecast-ratio="{forecast_ratio}">
       <td class="name">{row['name']}</td>
       <td class="number active-members-cell">{row['active_member_count_formatted']}/{row['member_count_formatted']}</td>
@@ -1094,7 +1092,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       function selectedActiveMembers(row) {{
         if (!selectedSources) return Number(row.dataset.activeMembers || 0);
         const values = JSON.parse(row.dataset.sourceActiveMembers || '{{}}');
-        return selectedSources.reduce((sum, source) => sum + Number(values[source] || 0), 0);
+        return new Set(selectedSources.flatMap(source => values[source] || [])).size;
       }}
 
       // Filter Team Summary table (team in column 0)
