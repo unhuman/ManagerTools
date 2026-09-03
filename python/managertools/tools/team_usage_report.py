@@ -37,7 +37,8 @@ def format_number(value):
     return f"{int(value):,}"
 
 
-def generate_html(teams, time_period, period_label, members, usage_by_email, models, products=None, forecast_by_email=None):
+def generate_html(teams, time_period, period_label, members, usage_by_email, models,
+                  products=None, forecast_by_email=None, source_usage=None, sources=None):
     """
     Generate a self-contained HTML report.
 
@@ -51,6 +52,42 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
         products: Sorted list of all product names found (optional)
         forecast_by_email: Dict mapping email -> forecasted cost (optional, for mtd only)
     """
+    # Normalize provider-specific data into the original report's data model.
+    # Keeping the legacy renderer as the single HTML implementation preserves
+    # its team summary, filters, sorting, forecast, dark mode, and responsive UI.
+    source_rows = {}
+    if source_usage:
+        sources = list(sources or source_usage.keys())
+        merged = {}
+        merged_models = set()
+        merged_products = set()
+        for source in sources:
+            label = source.title()
+            for email, value in source_usage.get(source, {}).items():
+                source_rows.setdefault(email, {})[source] = value
+                row = merged.setdefault(email, {'cost': 0, 'requests': 0, 'sessions': 0,
+                                                'active_days': 0, 'active_day_dates': [],
+                                                'model_costs': {}, 'product_costs': {}})
+                row['cost'] += float(value.get('cost', 0) or 0)
+                row['requests'] += int(value.get('requests', value.get('events', 0)) or 0)
+                row['sessions'] += int(value.get('sessions', value.get('conversations', 0)) or 0)
+                row['active_day_dates'] = sorted(set(row['active_day_dates']) |
+                                                 set(value.get('active_day_dates', [])))
+                row['active_days'] = len(row['active_day_dates'])
+                for model, amount in value.get('models', value.get('model_costs', {})).items():
+                    key = f'{label} · {model}'
+                    row['model_costs'][key] = row['model_costs'].get(key, 0) + float(amount or 0)
+                    merged_models.add(key)
+                for product, amount in value.get('applications', value.get('product_costs', {})).items():
+                    key = f'{label} · {product}'
+                    row['product_costs'][key] = row['product_costs'].get(key, 0) + float(amount or 0)
+                    merged_products.add(key)
+        usage_by_email = merged
+        models = sorted(merged_models)
+        products = sorted(merged_products)
+    elif sources:
+        sources = list(sources)
+
     if products is None:
         products = []
     if forecast_by_email is None:
@@ -67,7 +104,8 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
             'active_member_count': 0,
             'model_costs': {},
             'product_costs': {},
-            'forecast': 0
+            'forecast': 0,
+            'source_costs': {}
         }
 
     for member in members:
@@ -82,7 +120,8 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
                 'active_member_count': 0,
                 'model_costs': {},
                 'product_costs': {},
-                'forecast': 0
+                'forecast': 0,
+                'source_costs': {}
             }
 
         usage_by_team[team]['member_count'] += 1
@@ -97,6 +136,12 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
         usage_by_team[team]['cost'] += cost
         usage_by_team[team]['requests'] += requests
         usage_by_team[team]['forecast'] += forecast_by_email.get(email, 0)
+
+        for source, source_value in source_rows.get(email, {}).items():
+            usage_by_team[team]['source_costs'][source] = (
+                usage_by_team[team]['source_costs'].get(source, 0) +
+                float(source_value.get('cost', 0) or 0)
+            )
 
         if sessions > 0:
             usage_by_team[team]['sessions'].add(email)
@@ -140,6 +185,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
             'member_count_formatted': format_number(team_data['member_count']),
             'active_member_count_formatted': format_number(team_data['active_member_count']),
             'forecast_formatted': format_currency(forecast),
+            'source_costs': team_data['source_costs'],
         })
 
     # Build all rows
@@ -177,6 +223,8 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
             'sessions_formatted': format_number(sessions),
             'cost_per_request_formatted': format_currency(cost_per_request),
             'forecast_formatted': format_currency(forecast),
+            'source_costs': {source: float(value.get('cost', 0) or 0)
+                            for source, value in source_rows.get(email, {}).items()},
         }
 
         all_rows.append(row)
@@ -204,14 +252,19 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     '''
 
     # Generate model cost header columns (individual model names)
-    model_headers_individual = ''.join(f'<th class="sortable model-col" data-model="{escape_html(m)}">{escape_html(m)}</th>' for m in models)
+    def dimension_source(name):
+        return name.split(' · ', 1)[0].lower() if ' · ' in name else ''
+
+    model_headers_individual = ''.join(
+        f'<th class="sortable model-col" data-source="{dimension_source(m)}" data-model="{escape_html(m)}">{escape_html(m)}</th>'
+        for m in models)
 
     # Generate group header for models (only if there are models)
     model_group_header = f'<th class="group-header model-group-header" colspan="{len(models)}">Model</th>' if models else ''
 
     model_cells = []
     for row in all_rows:
-        cells = ''.join(f'<td class="currency model-cell">{format_currency(row["model_costs"].get(m, 0))}</td>' for m in models)
+        cells = ''.join(f'<td class="currency model-cell" data-source="{dimension_source(m)}">{format_currency(row["model_costs"].get(m, 0))}</td>' for m in models)
         model_cells.append(cells)
 
     # Generate forecast header and cells (only if forecast_by_email is provided and non-empty)
@@ -226,26 +279,37 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
             forecast_cells.append(cells)
 
     # Generate product cost header columns (individual product names)
-    product_headers_individual = ''.join(f'<th class="sortable product-col" data-product="{escape_html(p)}">{escape_html(p)}</th>' for p in products)
+    product_headers_individual = ''.join(
+        f'<th class="sortable product-col" data-source="{dimension_source(p)}" data-product="{escape_html(p)}">{escape_html(p)}</th>'
+        for p in products)
 
     # Generate group header for products (only if there are products)
     product_group_header = f'<th class="group-header product-group-header" colspan="{len(products)}">Product</th>' if products else ''
 
     product_cells = []
     for row in all_rows:
-        cells = ''.join(f'<td class="currency product-cell">{format_currency(row["product_costs"].get(p, 0))}</td>' for p in products)
+        cells = ''.join(f'<td class="currency product-cell" data-source="{dimension_source(p)}">{format_currency(row["product_costs"].get(p, 0))}</td>' for p in products)
         product_cells.append(cells)
 
     # Build table rows
+    source_filter_html = ''
+    if source_rows:
+        labels = {source: source.title() for source in sources}
+        checks = ''.join(
+            f'<label><input type="checkbox" class="source-filter" value="{escape_html(source)}" checked> {escape_html(labels[source])}</label>'
+            for source in sources)
+        source_filter_html = f'''\n    <div class="source-filter-container">\n      <label style="font-weight: 600; margin-right: 1rem;">Sources:</label>\n      {checks}\n    </div>'''
+
     all_table_rows = ''
     for i, row in enumerate(all_rows):
         forecast_cell = forecast_cells[i] if forecast_cells else ''
-        all_table_rows += f'''    <tr data-email="{escape_html(row['email'])}" data-cost="{row['cost']}">
+        source_costs = escape_html(json.dumps(row.get('source_costs', {}), separators=(',', ':')))
+        all_table_rows += f'''    <tr data-email="{escape_html(row['email'])}" data-cost="{row['cost']}" data-requests="{row['requests']}" data-sessions="{row['sessions']}" data-source-costs="{source_costs}">
       <td class="name">{row['name']}</td>
       <td class="team">{row['team']}</td>
       <td class="email">{row['email']}</td>
       <td class="number">{row['active_days']}</td>
-      <td class="currency">{row['cost_formatted']}</td>
+      <td class="currency total-cost-cell">{row['cost_formatted']}</td>
       {forecast_cell}{model_cells[i]}{product_cells[i]}
     </tr>
 '''
@@ -253,13 +317,14 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     # Build team table rows
     team_table_rows = ''
     for row in team_rows:
-        model_cells = ''.join(f'<td class="currency model-cell">{format_currency(row["model_costs"].get(m, 0))}</td>' for m in models)
-        product_cells = ''.join(f'<td class="currency product-cell">{format_currency(row["product_costs"].get(p, 0))}</td>' for p in products)
+        model_cells = ''.join(f'<td class="currency model-cell" data-source="{dimension_source(m)}">{format_currency(row["model_costs"].get(m, 0))}</td>' for m in models)
+        product_cells = ''.join(f'<td class="currency product-cell" data-source="{dimension_source(p)}">{format_currency(row["product_costs"].get(p, 0))}</td>' for p in products)
         forecast_cell = f'<td class="currency forecast-col">{row["forecast_formatted"]}</td>' if forecast_by_email else ''
-        team_table_rows += f'''    <tr class="team-row" data-cost="{row['cost']}">
+        source_costs = escape_html(json.dumps(row.get('source_costs', {}), separators=(',', ':')))
+        team_table_rows += f'''    <tr class="team-row" data-cost="{row['cost']}" data-source-costs="{source_costs}">
       <td class="name">{row['name']}</td>
       <td class="number">{row['active_member_count_formatted']}/{row['member_count_formatted']}</td>
-      <td class="currency">{row['cost_formatted']}</td>
+      <td class="currency total-cost-cell">{row['cost_formatted']}</td>
       {forecast_cell}{model_cells}{product_cells}
     </tr>
 '''
@@ -810,6 +875,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
 
     <h2 id="filters">Filters</h2>
     {team_filter_html}
+    {source_filter_html}
 
     <h2 id="overall-stats">Overall Stats</h2>
     {summary_html}
@@ -930,6 +996,14 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     // Team filter functionality
     function applyTeamFilter() {{
       const selectedTeams = Array.from(document.querySelectorAll('.team-filter:checked')).map(cb => cb.value);
+      const sourceFilters = Array.from(document.querySelectorAll('.source-filter'));
+      const selectedSources = sourceFilters.length ? sourceFilters.filter(cb => cb.checked).map(cb => cb.value) : null;
+
+      function selectedCost(row) {{
+        if (!selectedSources) return Number(row.dataset.cost || 0);
+        const values = JSON.parse(row.dataset.sourceCosts || '{{}}');
+        return selectedSources.reduce((sum, source) => sum + Number(values[source] || 0), 0);
+      }}
 
       // Filter Team Summary table (team in column 0)
       const teamTable = document.getElementById('team-summary-table');
@@ -939,6 +1013,9 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
           const teamCell = row.children[0].textContent.trim();
           const isVisible = selectedTeams.length > 0 && selectedTeams.includes(teamCell);
           row.style.display = isVisible ? '' : 'none';
+          row.dataset.selectedCost = selectedCost(row);
+          const teamCost = row.querySelector('.total-cost-cell');
+          if (teamCost) teamCost.textContent = '$' + Number(row.dataset.selectedCost).toFixed(2);
         }});
       }}
 
@@ -953,7 +1030,8 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
           row.style.display = isVisible ? '' : 'none';
 
           if (isVisible) {{
-            const cost = parseFloat(row.dataset.cost || 0);
+            const cost = selectedCost(row);
+            row.querySelector('.total-cost-cell').textContent = '$' + cost.toFixed(2);
             const requests = parseInt(row.dataset.requests || 0);
             const sessions = parseInt(row.dataset.sessions || 0);
             totalCost += cost;
@@ -980,10 +1058,17 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
           item.querySelector('.stat-value').textContent = '$' + costPerRequest.toFixed(2);
         }}
       }});
+
+      document.querySelectorAll('[data-source]').forEach(cell => {{
+        cell.style.display = !selectedSources || selectedSources.includes(cell.dataset.source) ? '' : 'none';
+      }});
     }}
 
     // Attach filter change handlers
     document.querySelectorAll('.team-filter').forEach(checkbox => {{
+      checkbox.addEventListener('change', applyTeamFilter);
+    }});
+    document.querySelectorAll('.source-filter').forEach(checkbox => {{
       checkbox.addEventListener('change', applyTeamFilter);
     }});
 

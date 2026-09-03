@@ -626,16 +626,12 @@ def main(user_email, teams_str, time_period, output_path, sources=None):
             for email, row in codex_usage.items()
         }
 
-    # Generate HTML
-    if sources == ['claude']:
-        html = generate_html(teams, time_period, params['period_label'], roster,
-                             params['usage_by_email'], params['models'], params['products'],
-                             params['forecast_by_email'])
-    else:
-        from managertools.tools.llm_usage_report import generate_html as generate_llm_html
-        html = generate_llm_html({'teams': teams, 'time_period': time_period,
-                                  'period_label': params['period_label'], 'members': roster,
-                                  'sources': sources, 'usage': source_usage})
+    # Use the original full-featured renderer for both legacy Claude data and
+    # the unified provider view.  The renderer normalizes provider data before
+    # building the existing team/user tables.
+    html = generate_html(teams, time_period, params['period_label'], roster,
+                         params['usage_by_email'], params['models'], params['products'],
+                         params['forecast_by_email'], source_usage, sources)
 
     # Write output
     os.makedirs(os.path.dirname(output_path) or '.', exist_ok=True)
@@ -646,14 +642,20 @@ def main(user_email, teams_str, time_period, output_path, sources=None):
     print(f"\n✓ Report generated successfully!", file=sys.stderr)
     print(f"  Output file: {output_path}", file=sys.stderr)
 
+    combined_usage = {}
+    for source_rows in source_usage.values():
+        for email, row in source_rows.items():
+            combined_usage.setdefault(email, 0)
+            combined_usage[email] += float(row.get('cost', 0) or 0)
+
     # Print JSON summary to stdout
     print(json.dumps({
         'success': True,
         'output': output_path,
         'teams': teams,
         'members': len(roster),
-        'active_users': sum(1 for u in params['usage_by_email'].values() if u['cost'] > 0),
-        'total_cost': round(sum(u['cost'] for u in params['usage_by_email'].values()), 2),
+        'active_users': sum(1 for cost in combined_usage.values() if cost > 0),
+        'total_cost': round(sum(combined_usage.values()), 2),
         'models': params['models'],
         'products': params['products'],
         'sources': sources
