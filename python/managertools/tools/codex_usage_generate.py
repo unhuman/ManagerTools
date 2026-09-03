@@ -86,7 +86,7 @@ def query_logs(config_mgr, start, end, query):
         request = urllib.request.Request(
             'https://api.datadoghq.com/api/v2/logs/events/search',
             data=json.dumps(request_body).encode(),
-            headers={'DD-API-KEY': config_mgr.get_value('datadogPAT'),
+            headers={'DD-APPLICATION-KEY': config_mgr.get_value('datadogPAT'),
                      'Content-Type': 'application/json'}, method='POST')
         try:
             with urllib.request.urlopen(request, timeout=60) as response:
