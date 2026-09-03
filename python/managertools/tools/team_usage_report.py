@@ -315,7 +315,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     if source_rows:
         labels = {source: source.title() for source in sources}
         checks = ''.join(
-            f'<label><input type="checkbox" class="source-filter" value="{escape_html(source)}" checked> {escape_html(labels[source])}</label>'
+            f'<label><input type="checkbox" class="source-filter" value="{escape_html(source)}" checked="checked"> {escape_html(labels[source])}</label>'
             for source in sources)
         source_filter_html = f'''\n    <h2 id="sources">Sources</h2>\n    <div class="source-filter-container">\n      {checks}\n      <div class="filter-buttons">\n        <button id="select-all-sources" class="filter-button">Select All</button>\n        <button id="clear-all-sources" class="filter-button">Clear All</button>\n      </div>\n    </div>'''
 
@@ -357,6 +357,12 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     total_sessions = sum(r['sessions'] for r in all_rows)
     active_user_count = sum(1 for r in all_rows if r['cost'] > 0 or r['requests'] > 0)
     total_cost_per_request = (total_cost / total_requests) if total_requests > 0 else 0
+    total_forecast = sum(forecast_by_email.values())
+    forecast_stat = f'''      <div class="stat-item">
+        <span class="stat-label">Forecast:</span>
+        <span class="stat-value">{format_currency(total_forecast)}</span>
+      </div>
+''' if forecast_by_email else ''
 
     summary_html = f'''    <div class="summary-stats">
       <div class="stat-item">
@@ -367,6 +373,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
         <span class="stat-label">Total Cost:</span>
         <span class="stat-value">{format_currency(total_cost)}</span>
       </div>
+{forecast_stat}
       <div class="stat-item">
         <span class="stat-label">Total Requests:</span>
         <span class="stat-value">{format_number(total_requests)}</span>
@@ -1115,7 +1122,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
 
       // Filter Users table (team in column 1) and collect stats
       const usersTable = document.getElementById('active-users-table');
-      let totalCost = 0, totalRequests = 0, totalSessions = 0;
+      let totalCost = 0, totalForecast = 0, totalRequests = 0, totalSessions = 0;
       if (usersTable) {{
         const rows = usersTable.querySelector('tbody').querySelectorAll('tr');
         rows.forEach(row => {{
@@ -1128,10 +1135,12 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
             row.querySelector('.total-cost-cell').textContent = '$' + cost.toFixed(2);
             row.querySelector('.active-days-cell').textContent = selectedDays(row);
             const userForecast = row.querySelector('.forecast-col');
-            if (userForecast) userForecast.textContent = '$' + (cost * Number(row.dataset.forecastRatio || 1)).toFixed(2);
+            const forecast = cost * Number(row.dataset.forecastRatio || 1);
+            if (userForecast) userForecast.textContent = '$' + forecast.toFixed(2);
             const requests = parseInt(row.dataset.requests || 0);
             const sessions = parseInt(row.dataset.sessions || 0);
             totalCost += cost;
+            totalForecast += forecast;
             totalRequests += requests;
             totalSessions += sessions;
           }}
@@ -1149,6 +1158,8 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
           item.querySelector('.stat-value').textContent = userCount;
         }} else if (label === 'Total Cost:') {{
           item.querySelector('.stat-value').textContent = '$' + totalCost.toFixed(2);
+        }} else if (label === 'Forecast:') {{
+          item.querySelector('.stat-value').textContent = '$' + totalForecast.toFixed(2);
         }} else if (label === 'Total Requests:') {{
           item.querySelector('.stat-value').textContent = totalRequests.toLocaleString();
         }} else if (label === 'Average Cost/Request:') {{
