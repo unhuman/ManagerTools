@@ -93,6 +93,13 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     if forecast_by_email is None:
         forecast_by_email = {}
 
+    forecast_ratio = 1.0
+    ratios = [forecast_by_email[email] / usage_by_email[email]['cost']
+              for email in forecast_by_email
+              if email in usage_by_email and usage_by_email[email].get('cost', 0) > 0]
+    if ratios:
+        forecast_ratio = ratios[0]
+
     # Aggregate usage by team
     usage_by_team = {}
     for team in teams:
@@ -105,7 +112,9 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
             'model_costs': {},
             'product_costs': {},
             'forecast': 0,
-            'source_costs': {}
+            'source_costs': {},
+            'source_active_days': {},
+            'source_active_members': {}
         }
 
     for member in members:
@@ -121,7 +130,9 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
                 'model_costs': {},
                 'product_costs': {},
                 'forecast': 0,
-                'source_costs': {}
+                'source_costs': {},
+                'source_active_days': {},
+                'source_active_members': {}
             }
 
         usage_by_team[team]['member_count'] += 1
@@ -142,6 +153,12 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
                 usage_by_team[team]['source_costs'].get(source, 0) +
                 float(source_value.get('cost', 0) or 0)
             )
+            active_dates = set(source_value.get('active_day_dates', []))
+            usage_by_team[team]['source_active_days'].setdefault(source, set()).update(active_dates)
+            if float(source_value.get('cost', 0) or 0) > 0:
+                usage_by_team[team]['source_active_members'][source] = (
+                    usage_by_team[team]['source_active_members'].get(source, 0) + 1
+                )
 
         if sessions > 0:
             usage_by_team[team]['sessions'].add(email)
@@ -186,6 +203,8 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
             'active_member_count_formatted': format_number(team_data['active_member_count']),
             'forecast_formatted': format_currency(forecast),
             'source_costs': team_data['source_costs'],
+            'source_active_days': team_data['source_active_days'],
+            'source_active_members': team_data['source_active_members'],
         })
 
     # Build all rows
@@ -225,6 +244,8 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
             'forecast_formatted': format_currency(forecast),
             'source_costs': {source: float(value.get('cost', 0) or 0)
                             for source, value in source_rows.get(email, {}).items()},
+            'source_active_days': {source: value.get('active_day_dates', [])
+                                  for source, value in source_rows.get(email, {}).items()},
         }
 
         all_rows.append(row)
@@ -304,11 +325,12 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     for i, row in enumerate(all_rows):
         forecast_cell = forecast_cells[i] if forecast_cells else ''
         source_costs = escape_html(json.dumps(row.get('source_costs', {}), separators=(',', ':')))
-        all_table_rows += f'''    <tr data-email="{escape_html(row['email'])}" data-cost="{row['cost']}" data-requests="{row['requests']}" data-sessions="{row['sessions']}" data-source-costs="{source_costs}">
+        source_days = escape_html(json.dumps(row.get('source_active_days', {}), separators=(',', ':')))
+        all_table_rows += f'''    <tr data-email="{escape_html(row['email'])}" data-cost="{row['cost']}" data-requests="{row['requests']}" data-sessions="{row['sessions']}" data-source-costs="{source_costs}" data-source-active-days="{source_days}" data-forecast-ratio="{forecast_ratio}">
       <td class="name">{row['name']}</td>
       <td class="team">{row['team']}</td>
       <td class="email">{row['email']}</td>
-      <td class="number">{row['active_days']}</td>
+      <td class="number active-days-cell">{row['active_days']}</td>
       <td class="currency total-cost-cell">{row['cost_formatted']}</td>
       {forecast_cell}{model_cells[i]}{product_cells[i]}
     </tr>
@@ -321,9 +343,11 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
         product_cells = ''.join(f'<td class="currency product-cell" data-source="{dimension_source(p)}" data-value="{row["product_costs"].get(p, 0)}">{format_currency(row["product_costs"].get(p, 0))}</td>' for p in products)
         forecast_cell = f'<td class="currency forecast-col">{row["forecast_formatted"]}</td>' if forecast_by_email else ''
         source_costs = escape_html(json.dumps(row.get('source_costs', {}), separators=(',', ':')))
-        team_table_rows += f'''    <tr class="team-row" data-cost="{row['cost']}" data-source-costs="{source_costs}">
+        source_days = escape_html(json.dumps({source: sorted(days) for source, days in row.get('source_active_days', {}).items()}, separators=(',', ':')))
+        source_members = escape_html(json.dumps(row.get('source_active_members', {}), separators=(',', ':')))
+        team_table_rows += f'''    <tr class="team-row" data-cost="{row['cost']}" data-source-costs="{source_costs}" data-source-active-days="{source_days}" data-source-active-members="{source_members}" data-active-members="{row['active_member_count']}" data-member-count="{row['member_count']}" data-forecast-ratio="{forecast_ratio}">
       <td class="name">{row['name']}</td>
-      <td class="number">{row['active_member_count_formatted']}/{row['member_count_formatted']}</td>
+      <td class="number active-members-cell">{row['active_member_count_formatted']}/{row['member_count_formatted']}</td>
       <td class="currency total-cost-cell">{row['cost_formatted']}</td>
       {forecast_cell}{model_cells}{product_cells}
     </tr>
@@ -1061,6 +1085,18 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
         return selectedSources.reduce((sum, source) => sum + Number(values[source] || 0), 0);
       }}
 
+      function selectedDays(row) {{
+        if (!selectedSources) return Number(row.querySelector('.active-days-cell')?.textContent || 0);
+        const values = JSON.parse(row.dataset.sourceActiveDays || '{{}}');
+        return new Set(selectedSources.flatMap(source => values[source] || [])).size;
+      }}
+
+      function selectedActiveMembers(row) {{
+        if (!selectedSources) return Number(row.dataset.activeMembers || 0);
+        const values = JSON.parse(row.dataset.sourceActiveMembers || '{{}}');
+        return selectedSources.reduce((sum, source) => sum + Number(values[source] || 0), 0);
+      }}
+
       // Filter Team Summary table (team in column 0)
       const teamTable = document.getElementById('team-summary-table');
       if (teamTable) {{
@@ -1072,6 +1108,10 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
           row.dataset.selectedCost = selectedCost(row);
           const teamCost = row.querySelector('.total-cost-cell');
           if (teamCost) teamCost.textContent = '$' + Number(row.dataset.selectedCost).toFixed(2);
+          const teamMembers = row.querySelector('.active-members-cell');
+          if (teamMembers) teamMembers.textContent = selectedActiveMembers(row) + '/' + row.dataset.memberCount;
+          const teamForecast = row.querySelector('.forecast-col');
+          if (teamForecast) teamForecast.textContent = '$' + (Number(row.dataset.selectedCost) * Number(row.dataset.forecastRatio || 1)).toFixed(2);
         }});
       }}
 
@@ -1088,6 +1128,9 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
           if (isVisible) {{
             const cost = selectedCost(row);
             row.querySelector('.total-cost-cell').textContent = '$' + cost.toFixed(2);
+            row.querySelector('.active-days-cell').textContent = selectedDays(row);
+            const userForecast = row.querySelector('.forecast-col');
+            if (userForecast) userForecast.textContent = '$' + (cost * Number(row.dataset.forecastRatio || 1)).toFixed(2);
             const requests = parseInt(row.dataset.requests || 0);
             const sessions = parseInt(row.dataset.sessions || 0);
             totalCost += cost;
