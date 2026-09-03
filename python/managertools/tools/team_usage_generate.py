@@ -618,11 +618,11 @@ def main(user_email, teams_str, time_period, output_path, sources=None):
             } for row in usage_data
         }
     if 'codex' in sources:
-        from managertools.tools.codex_usage_generate import aggregate_logs
+        from managertools.tools.codex_usage_generate import aggregate_costs
         print("🤖 Collecting Codex usage...", file=sys.stderr, flush=True)
-        codex_usage = aggregate_logs(config_mgr, start_date, end_date, roster)
+        codex_usage = aggregate_costs(config_mgr, start_date, end_date, roster)
         source_usage['codex'] = {
-            email: {**row, 'applications': row.get('tools', {})}
+            email: {**row, 'applications': {}}
             for email, row in codex_usage.items()
         }
 

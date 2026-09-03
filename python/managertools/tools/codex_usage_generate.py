@@ -26,6 +26,16 @@ EVENT_QUERIES = {
     'tool_calls': 'service:codex* env:cvent @event.name:codex.tool_result @tool_name:*',
 }
 
+# Rates and formula copied from the Datadog "Estimated Cost by Model (USD)"
+# widget. Values are USD per million tokens; priority traffic is 2.5x.
+MODEL_RATES = {
+    'gpt-5.6-sol': (5.0, 0.5, 30.0),
+    'gpt-5.6-terra': (2.0, 0.2, 12.0),
+    'gpt-5.6-luna': (0.2, 0.02, 1.2),
+    'codex-auto-review': (0.2, 0.02, 1.2),
+    'gpt-5.5': (5.0, 0.5, 30.0),
+}
+
 
 def get_date_range(time_period):
     today = date.today()
@@ -92,6 +102,39 @@ def query_log_aggregate(config_mgr, start, end, query, email_chunk, include_sess
         body['group_by'].append({'facet': '@tool_name', 'limit': facet_limit})
     elif include_model:
         body['group_by'].append({'facet': '@model', 'limit': facet_limit})
+    request = urllib.request.Request(
+        'https://api.datadoghq.com/api/v2/logs/analytics/aggregate',
+        data=json.dumps(body).encode(),
+        headers={'DD-APPLICATION-KEY': config_mgr.get_value('datadogPAT'),
+                 'Content-Type': 'application/json'}, method='POST')
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            payload = json.loads(response.read().decode())
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode('utf-8', errors='replace')[:500]
+        if exc.code in (401, 403):
+            raise RuntimeError(f"Datadog Logs API returned HTTP {exc.code}; verify that datadogPAT is valid and has logs_read_data and logs_read_index_data scopes") from exc
+        raise RuntimeError(f"Datadog Logs API returned HTTP {exc.code}: {detail}; verify the aggregation query") from exc
+    return payload.get('data', {}).get('buckets', [])
+
+
+def query_token_aggregate(config_mgr, start, end, query, email_chunk):
+    """Return per-user token sums for one model/service tier query."""
+    if not config_mgr.contains_key('datadogPAT'):
+        raise RuntimeError("datadogPAT not configured in ~/.managerTools.cfg")
+    start_dt = datetime.combine(start, datetime.min.time(), timezone.utc)
+    end_dt = datetime.combine(end, datetime.max.time(), timezone.utc)
+    email_filter = '@user.email:(' + ' OR '.join(f'"{email}"' for email in email_chunk) + ')'
+    body = {
+        'compute': [
+            {'aggregation': 'sum', 'metric': '@input_token_count', 'type': 'total'},
+            {'aggregation': 'sum', 'metric': '@cached_token_count', 'type': 'total'},
+            {'aggregation': 'sum', 'metric': '@output_token_count', 'type': 'total'},
+        ],
+        'filter': {'from': start_dt.isoformat(), 'to': end_dt.isoformat(),
+                   'query': f'{query} {email_filter}'},
+        'group_by': [{'facet': '@user.email', 'limit': len(email_chunk)}],
+    }
     request = urllib.request.Request(
         'https://api.datadoghq.com/api/v2/logs/analytics/aggregate',
         data=json.dumps(body).encode(),
@@ -183,6 +226,56 @@ def aggregate_logs(config_mgr, start, end, roster):
     print(f"✓ Codex aggregation complete: {len(usage)} user(s) with usage", file=sys.stderr, flush=True)
     for entry in usage.values():
         entry['active_day_dates'] = sorted(entry['active_day_dates'])
+    return usage
+
+
+def aggregate_costs(config_mgr, start, end, roster):
+    """Calculate Codex estimated cost using the dashboard token formula."""
+    allowed = {member['email'].lower() for member in roster}
+    allowed_emails = sorted(allowed)
+    email_chunks = [allowed_emails[i:i + 900] for i in range(0, len(allowed_emails), 900)]
+    usage = {}
+    for model, (input_rate, cached_rate, output_rate) in MODEL_RATES.items():
+        for tier, suffix, multiplier in (
+                ('normal', '-@service_tier:*', 1.0),
+                ('priority', '@service_tier:priority', 2.5)):
+            query = f'service:codex* env:cvent @event.name:codex.sse_event @model:{model} {suffix}'
+            for chunk_number, email_chunk in enumerate(email_chunks, 1):
+                print(f"📊 Codex: calculating {model} {tier} token cost (email group {chunk_number}/{len(email_chunks)}, {len(email_chunk)} users)...", file=sys.stderr, flush=True)
+                for bucket in query_token_aggregate(config_mgr, start, end, query, email_chunk):
+                    email = str(_bucket_value(bucket, '@user.email')).lower()
+                    if email not in allowed:
+                        continue
+                    input_tokens = float(_compute(bucket, 0) or 0)
+                    cached_tokens = float(_compute(bucket, 1) or 0)
+                    output_tokens = float(_compute(bucket, 2) or 0)
+                    cost = (((input_tokens - cached_tokens) * input_rate) +
+                            (cached_tokens * cached_rate) +
+                            (output_tokens * output_rate)) / 1000000 * multiplier
+                    entry = usage.setdefault(email, {'cost': 0.0, 'active_days': 0,
+                                                     'active_day_dates': set(), 'models': {}})
+                    entry['cost'] += cost
+                    entry['models'][model] = entry['models'].get(model, 0.0) + cost
+
+    current = start
+    while current <= end:
+        print(f"📅 Codex: checking active users for {current.isoformat()}...", file=sys.stderr, flush=True)
+        for email_chunk in email_chunks:
+            for bucket in query_log_aggregate(config_mgr, current, current,
+                                              EVENT_QUERIES['conversations'], email_chunk,
+                                              include_model=False):
+                email = str(_bucket_value(bucket, '@user.email')).lower()
+                if email in usage and _compute(bucket, 0):
+                    usage[email]['active_days'] += 1
+                    usage[email]['active_day_dates'].add(current.isoformat())
+        current += timedelta(days=1)
+
+    for email, entry in usage.items():
+        entry['cost'] = round(entry['cost'], 2)
+        entry['models'] = {model: round(cost, 2) for model, cost in entry['models'].items()
+                           if cost > 0}
+        entry['active_day_dates'] = sorted(entry['active_day_dates'])
+    print(f"✓ Codex cost calculation complete: {len(usage)} user(s) with estimated cost", file=sys.stderr, flush=True)
     return usage
 
 
