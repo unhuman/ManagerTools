@@ -28,7 +28,7 @@ import urllib.parse
 import time
 import re
 import calendar
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from managertools.util.config_file_manager import ConfigFileManager
 from managertools.rest.backstage_rest import BackstageREST
@@ -312,7 +312,7 @@ def query_datadog(config_mgr, start_ms, end_ms, roster=None):
             'sessions': 0,  # Cloud Cost API doesn't provide session counts
             'active_days': len(data['active_day_set']),
             'active_day_dates': [
-                datetime.utcfromtimestamp(day * 86400).date().isoformat()
+                datetime.fromtimestamp(day * 86400, timezone.utc).date().isoformat()
                 for day in sorted(data['active_day_set'])
             ],
             'model_costs': {m: round(c, 2) for m, c in data['model_costs'].items()},
