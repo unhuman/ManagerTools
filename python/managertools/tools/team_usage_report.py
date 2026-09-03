@@ -264,7 +264,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
 
     model_cells = []
     for row in all_rows:
-        cells = ''.join(f'<td class="currency model-cell" data-source="{dimension_source(m)}">{format_currency(row["model_costs"].get(m, 0))}</td>' for m in models)
+        cells = ''.join(f'<td class="currency model-cell" data-source="{dimension_source(m)}" data-value="{row["model_costs"].get(m, 0)}">{format_currency(row["model_costs"].get(m, 0))}</td>' for m in models)
         model_cells.append(cells)
 
     # Generate forecast header and cells (only if forecast_by_email is provided and non-empty)
@@ -288,7 +288,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
 
     product_cells = []
     for row in all_rows:
-        cells = ''.join(f'<td class="currency product-cell" data-source="{dimension_source(p)}">{format_currency(row["product_costs"].get(p, 0))}</td>' for p in products)
+        cells = ''.join(f'<td class="currency product-cell" data-source="{dimension_source(p)}" data-value="{row["product_costs"].get(p, 0)}">{format_currency(row["product_costs"].get(p, 0))}</td>' for p in products)
         product_cells.append(cells)
 
     # Build table rows
@@ -317,8 +317,8 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     # Build team table rows
     team_table_rows = ''
     for row in team_rows:
-        model_cells = ''.join(f'<td class="currency model-cell" data-source="{dimension_source(m)}">{format_currency(row["model_costs"].get(m, 0))}</td>' for m in models)
-        product_cells = ''.join(f'<td class="currency product-cell" data-source="{dimension_source(p)}">{format_currency(row["product_costs"].get(p, 0))}</td>' for p in products)
+        model_cells = ''.join(f'<td class="currency model-cell" data-source="{dimension_source(m)}" data-value="{row["model_costs"].get(m, 0)}">{format_currency(row["model_costs"].get(m, 0))}</td>' for m in models)
+        product_cells = ''.join(f'<td class="currency product-cell" data-source="{dimension_source(p)}" data-value="{row["product_costs"].get(p, 0)}">{format_currency(row["product_costs"].get(p, 0))}</td>' for p in products)
         forecast_cell = f'<td class="currency forecast-col">{row["forecast_formatted"]}</td>' if forecast_by_email else ''
         source_costs = escape_html(json.dumps(row.get('source_costs', {}), separators=(',', ':')))
         team_table_rows += f'''    <tr class="team-row" data-cost="{row['cost']}" data-source-costs="{source_costs}">
@@ -1018,6 +1018,23 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       header.addEventListener('click', () => sortTable(header));
     }});
 
+    function updateDimensionVisibility(selectedSources) {{
+      document.querySelectorAll('.report-table').forEach(table => {{
+        const bodyRows = Array.from(table.querySelectorAll('tbody tr'))
+          .filter(row => row.style.display !== 'none');
+        table.querySelectorAll('th.model-col, th.product-col').forEach(header => {{
+          const index = Array.from(header.parentNode.children).indexOf(header);
+          const sourceVisible = !selectedSources || selectedSources.includes(header.dataset.source);
+          const hasValue = bodyRows.some(row => Number(row.children[index]?.dataset.value || 0) !== 0);
+          const visible = sourceVisible && hasValue;
+          header.style.display = visible ? '' : 'none';
+          bodyRows.forEach(row => {{
+            if (row.children[index]) row.children[index].style.display = visible ? '' : 'none';
+          }});
+        }});
+      }});
+    }}
+
     // Team filter functionality
     function applyTeamFilter() {{
       const selectedTeams = Array.from(document.querySelectorAll('.team-filter:checked')).map(cb => cb.value);
@@ -1084,9 +1101,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
         }}
       }});
 
-      document.querySelectorAll('[data-source]').forEach(cell => {{
-        cell.style.display = !selectedSources || selectedSources.includes(cell.dataset.source) ? '' : 'none';
-      }});
+      updateDimensionVisibility(selectedSources);
     }}
 
     // Attach filter change handlers
@@ -1154,6 +1169,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
           sortTable(nameHeader);
         }}
       }}
+      applyTeamFilter();
     }});
   </script>
 </body>
