@@ -158,7 +158,8 @@ def aggregate_logs(config_mgr, start, end, roster):
                 model = str(_bucket_value(bucket, '@model', 'Unknown'))
                 tool = str(_bucket_value(bucket, '@tool_name', 'Unknown'))
                 entry = usage.setdefault(email, {'events': 0, 'conversations': 0, 'tool_calls': 0,
-                                                 'sessions': 0, 'active_days': 0, 'models': {}, 'tools': {}})
+                                             'sessions': 0, 'active_days': 0, 'active_day_dates': set(),
+                                             'models': {}, 'tools': {}})
                 count = int(_compute(bucket, 0))
                 entry[kind] += count
                 if kind == 'conversations':
@@ -176,8 +177,11 @@ def aggregate_logs(config_mgr, start, end, roster):
                 email = str(_bucket_value(bucket, '@user.email')).lower()
                 if email in usage and _compute(bucket, 0):
                     usage[email]['active_days'] += 1
+                    usage[email]['active_day_dates'].add(current.isoformat())
         current += timedelta(days=1)
     print(f"✓ Codex aggregation complete: {len(usage)} user(s) with usage", file=sys.stderr, flush=True)
+    for entry in usage.values():
+        entry['active_day_dates'] = sorted(entry['active_day_dates'])
     return usage
 
 

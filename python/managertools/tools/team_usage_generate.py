@@ -307,6 +307,10 @@ def query_datadog(config_mgr, start_ms, end_ms, roster=None):
             'requests': 0,  # Cloud Cost API doesn't provide request counts
             'sessions': 0,  # Cloud Cost API doesn't provide session counts
             'active_days': len(data['active_day_set']),
+            'active_day_dates': [
+                datetime.utcfromtimestamp(day * 86400).date().isoformat()
+                for day in sorted(data['active_day_set'])
+            ],
             'model_costs': {m: round(c, 2) for m, c in data['model_costs'].items()},
             'product_costs': {p: round(c, 2) for p, c in data['product_costs'].items()}
         })
@@ -446,7 +450,7 @@ def print_help():
 Generate an interactive Claude Code usage report with multi-dimensional cost analysis.
 
 USAGE:
-    python -m managertools.tools.team_usage_generate [-u EMAIL | -t TEAMS] TIME_PERIOD OUTPUT_PATH
+    python -m managertools.tools.team_usage_generate [-u EMAIL | -t TEAMS] TIME_PERIOD OUTPUT_PATH [--sources claude,codex]
     python -m managertools.tools.team_usage_generate --help
 
 REQUIRED ARGUMENTS (choose one):
@@ -467,6 +471,9 @@ REQUIRED POSITIONAL ARGUMENTS:
                             - Relative: report.html, ./reports/usage.html
                             - Home dir: ~/usage.html, ~/reports/usage.html
                             - Absolute: /tmp/report.html
+
+    --sources SOURCES       Comma-separated providers for the source selector report:
+                            - claude (default), codex, or claude,codex
 
 CONFIGURATION (required in ~/.managerTools.cfg):
     backstageServer        Backstage FQDN (e.g., backstage.core.cvent.org)
@@ -536,7 +543,7 @@ TROUBLESHOOTING:
     print(help_text)
 
 
-def main(user_email, teams_str, time_period, output_path):
+def main(user_email, teams_str, time_period, output_path, sources=None):
     """Main entry point.
 
     Args:
@@ -588,25 +595,47 @@ def main(user_email, teams_str, time_period, output_path):
     print(f"   Query: sum:custom.cost.amortized{{providername:Anthropic}} by {{display_user_email,product,servicename}}", file=sys.stderr)
     print(f"   Timestamps: {start_utc.isoformat()}Z to {end_utc.isoformat()}Z", file=sys.stderr)
 
-    # Query Datadog Cloud Cost API
-    usage_data = query_datadog(config_mgr, start_ms, end_ms, roster=roster)
+    sources = [source.strip().lower() for source in (sources or ['claude'])]
+    unknown = set(sources) - {'claude', 'codex'}
+    if unknown:
+        raise ValueError(f"Unsupported source(s): {', '.join(sorted(unknown))}")
+
+    usage_data = query_datadog(config_mgr, start_ms, end_ms, roster=roster) if 'claude' in sources else []
     active_users = [u['email'] for u in usage_data if u['cost'] > 0]
     print(f"📊 Query results: {len(active_users)} active user(s) from {len(roster)} roster member(s)", file=sys.stderr)
 
-    # Build params
+    # Build the legacy Claude params and normalized source data for the selector report.
     params = build_params(roster, usage_data, teams, time_period)
+    source_usage = {}
+    if 'claude' in sources:
+        source_usage['claude'] = {
+            row['email']: {
+                'cost': row.get('cost', 0), 'events': 0, 'conversations': 0,
+                'sessions': 0, 'tool_calls': 0,
+                'active_day_dates': row.get('active_day_dates', []),
+                'models': row.get('model_costs', {}),
+                'applications': row.get('product_costs', {}),
+            } for row in usage_data
+        }
+    if 'codex' in sources:
+        from managertools.tools.codex_usage_generate import aggregate_logs
+        print("🤖 Collecting Codex usage...", file=sys.stderr, flush=True)
+        codex_usage = aggregate_logs(config_mgr, start_date, end_date, roster)
+        source_usage['codex'] = {
+            email: {**row, 'applications': row.get('tools', {})}
+            for email, row in codex_usage.items()
+        }
 
     # Generate HTML
-    html = generate_html(
-        teams,
-        time_period,
-        params['period_label'],
-        roster,
-        params['usage_by_email'],
-        params['models'],
-        params['products'],
-        params['forecast_by_email']
-    )
+    if sources == ['claude']:
+        html = generate_html(teams, time_period, params['period_label'], roster,
+                             params['usage_by_email'], params['models'], params['products'],
+                             params['forecast_by_email'])
+    else:
+        from managertools.tools.llm_usage_report import generate_html as generate_llm_html
+        html = generate_llm_html({'teams': teams, 'time_period': time_period,
+                                  'period_label': params['period_label'], 'members': roster,
+                                  'sources': sources, 'usage': source_usage})
 
     # Write output
     os.makedirs(os.path.dirname(output_path) or '.', exist_ok=True)
@@ -626,7 +655,8 @@ def main(user_email, teams_str, time_period, output_path):
         'active_users': sum(1 for u in params['usage_by_email'].values() if u['cost'] > 0),
         'total_cost': round(sum(u['cost'] for u in params['usage_by_email'].values()), 2),
         'models': params['models'],
-        'products': params['products']
+        'products': params['products'],
+        'sources': sources
     }))
 
 
@@ -653,6 +683,7 @@ if __name__ == '__main__':
     teams_str = None
     time_period = None
     output_path = None
+    sources = ['claude']
 
     i = 1
     while i < len(sys.argv):
@@ -675,6 +706,12 @@ if __name__ == '__main__':
                 sys.exit(1)
             teams_str = sys.argv[i + 1]
             i += 2
+        elif arg == '--sources':
+            if i + 1 >= len(sys.argv):
+                print(json.dumps({'error': '--sources requires a comma-separated list'}), file=sys.stderr)
+                sys.exit(1)
+            sources = [s.strip().lower() for s in sys.argv[i + 1].split(',') if s.strip()]
+            i += 2
         else:
             # Positional arguments
             if time_period is None:
@@ -695,7 +732,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     try:
-        main(user_email, teams_str, time_period, output_path)
+        main(user_email, teams_str, time_period, output_path, sources)
     except Exception as e:
         print(json.dumps({"error": str(e)}), file=sys.stderr)
         import traceback

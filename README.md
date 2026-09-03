@@ -253,6 +253,17 @@ and `codex.tool_result`, joining users through `@user.email`. The report shows
 events, conversations, sessions, tool calls, active days, model counts, and tool
 counts. The PAT requires `logs_read_data` and `logs_read_index_data`.
 
+Claude and Codex can also be collected into one source-selectable report:
+
+```bash
+python -m managertools.tools.team_usage_generate -t org mtd ~/llm_team_usage.html --sources claude,codex
+```
+
+The report provides checkboxes for each source. Aggregate active days are the
+union of each provider's activity dates, so a day used for both Claude and Codex
+is counted once. Provider-specific model and application/tool columns remain
+separate.
+
 ### Developer Notes
 - Data is stored in `~/.managerTools.cfg`
 - There was difficulty getting long input from the terminal, so for that input, `zsh/vared` is used to accept input
