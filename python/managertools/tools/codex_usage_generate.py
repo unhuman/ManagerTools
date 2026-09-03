@@ -78,12 +78,12 @@ def query_log_aggregate(config_mgr, start, end, query, include_sessions=False):
     end_dt = datetime.combine(end, datetime.max.time(), timezone.utc)
     computes = [{'aggregation': 'count', 'type': 'total'}]
     if include_sessions:
-        computes.append({'aggregation': 'cardinality', 'metric': '@session_id', 'type': 'cardinality'})
+        computes.append({'aggregation': 'cardinality', 'metric': '@session_id', 'type': 'total'})
     body = {
         'compute': computes,
         'filter': {'from': start_dt.isoformat(), 'to': end_dt.isoformat(), 'query': query},
         'group_by': [
-            {'facet': '@user.email', 'limit': 10000},
+            {'facet': '@user.email', 'limit': 1000},
             {'facet': '@model', 'limit': 1000},
         ],
     }
@@ -98,9 +98,10 @@ def query_log_aggregate(config_mgr, start, end, query, include_sessions=False):
         with urllib.request.urlopen(request, timeout=60) as response:
             payload = json.loads(response.read().decode())
     except urllib.error.HTTPError as exc:
+        detail = exc.read().decode('utf-8', errors='replace')[:500]
         if exc.code in (401, 403):
             raise RuntimeError(f"Datadog Logs API returned HTTP {exc.code}; verify that datadogPAT is valid and has logs_read_data and logs_read_index_data scopes") from exc
-        raise RuntimeError(f"Datadog Logs API returned HTTP {exc.code}; retry later and verify the Datadog site/endpoint") from exc
+        raise RuntimeError(f"Datadog Logs API returned HTTP {exc.code}: {detail}; verify the aggregation query") from exc
     return payload.get('data', {}).get('buckets', [])
 
 
