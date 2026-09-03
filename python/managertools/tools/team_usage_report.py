@@ -298,7 +298,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
         checks = ''.join(
             f'<label><input type="checkbox" class="source-filter" value="{escape_html(source)}" checked> {escape_html(labels[source])}</label>'
             for source in sources)
-        source_filter_html = f'''\n    <div class="source-filter-container">\n      <label style="font-weight: 600; margin-right: 1rem;">Sources:</label>\n      {checks}\n    </div>'''
+        source_filter_html = f'''\n    <h2 id="sources">Sources</h2>\n    <div class="source-filter-container">\n      {checks}\n      <div class="filter-buttons">\n        <button id="select-all-sources" class="filter-button">Select All</button>\n        <button id="clear-all-sources" class="filter-button">Clear All</button>\n      </div>\n    </div>'''
 
     all_table_rows = ''
     for i, row in enumerate(all_rows):
@@ -810,6 +810,30 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       cursor: pointer;
     }}
 
+    .source-filter-container {{
+      margin: 1.5rem 0;
+      padding: 1rem;
+      background-color: var(--header-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+    }}
+
+    .source-filter-container label {{
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      user-select: none;
+    }}
+
+    .source-filter-container input[type="checkbox"] {{
+      cursor: pointer;
+    }}
+
     .filter-buttons {{
       display: flex;
       gap: 0.5rem;
@@ -867,6 +891,7 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
       <strong>Contents:</strong>
       <ul>
         <li><a href="#filters">Filters</a></li>
+        <li><a href="#sources">Sources</a></li>
         <li><a href="#overall-stats">Overall Stats</a></li>
         <li><a href="#team-summary">Team Summary</a></li>
         <li><a href="#individual-users">Users</a></li>
@@ -1071,6 +1096,22 @@ def generate_html(teams, time_period, period_label, members, usage_by_email, mod
     document.querySelectorAll('.source-filter').forEach(checkbox => {{
       checkbox.addEventListener('change', applyTeamFilter);
     }});
+
+    const selectAllSourcesButton = document.getElementById('select-all-sources');
+    if (selectAllSourcesButton) {{
+      selectAllSourcesButton.addEventListener('click', () => {{
+        document.querySelectorAll('.source-filter').forEach(checkbox => checkbox.checked = true);
+        applyTeamFilter();
+      }});
+    }}
+
+    const clearAllSourcesButton = document.getElementById('clear-all-sources');
+    if (clearAllSourcesButton) {{
+      clearAllSourcesButton.addEventListener('click', () => {{
+        document.querySelectorAll('.source-filter').forEach(checkbox => checkbox.checked = false);
+        applyTeamFilter();
+      }});
+    }}
 
     // Select All button handler
     const selectAllButton = document.getElementById('select-all-teams');
