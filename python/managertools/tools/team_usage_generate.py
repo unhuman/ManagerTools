@@ -202,6 +202,7 @@ def query_datadog(config_mgr, start_ms, end_ms, roster=None):
 
     while response_data is None and retry_count < max_retries:
         try:
+            print(f"📊 Claude: querying Cloud Cost API (attempt {retry_count + 1}/{max_retries})...", file=sys.stderr, flush=True)
             req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=30) as response:
                 response_data = json.loads(response.read().decode('utf-8'))
@@ -213,13 +214,13 @@ def query_datadog(config_mgr, start_ms, end_ms, roster=None):
             retry_count += 1
             wait_time = min(2 ** retry_count, max_retry_wait)
             error_msg = e.reason if hasattr(e, 'reason') else str(e)
-            print(f"HTTP {error_code} ({error_msg}), retrying in {wait_time}s (attempt {retry_count})", file=sys.stderr)
+            print(f"⚠️ Claude: HTTP {error_code} ({error_msg}), retrying in {wait_time}s (attempt {retry_count})", file=sys.stderr, flush=True)
             time.sleep(wait_time)
         except Exception as e:
             retry_count += 1
             wait_time = min(2 ** retry_count, max_retry_wait)
             error_type = type(e).__name__
-            print(f"{error_type}: {str(e)[:100]}, retrying in {wait_time}s (attempt {retry_count})", file=sys.stderr)
+            print(f"⚠️ Claude: {error_type}: {str(e)[:100]}, retrying in {wait_time}s (attempt {retry_count})", file=sys.stderr, flush=True)
             time.sleep(wait_time)
 
     if response_data is None:
@@ -234,9 +235,9 @@ def query_datadog(config_mgr, start_ms, end_ms, roster=None):
     usage_by_email = {}
 
     series_list = response_data.get('series', [])
-    print(f"⚙️  Retrieved {len(series_list)} series from Cloud Cost API", file=sys.stderr)
+    print(f"   ✓ Claude: received {len(series_list)} cost series; processing model/product breakdown...", file=sys.stderr, flush=True)
 
-    for series in series_list:
+    for index, series in enumerate(series_list, 1):
         expression = series.get('expression', '')
 
         # Extract tags from expression string: "sum:metric{tag1:val1,tag2:val2,...}"
@@ -297,6 +298,9 @@ def query_datadog(config_mgr, start_ms, end_ms, roster=None):
         if product not in usage_by_email[email]['product_costs']:
             usage_by_email[email]['product_costs'][product] = 0
         usage_by_email[email]['product_costs'][product] += total_cost
+
+        if index % 100 == 0 or index == len(series_list):
+            print(f"   Claude: processed {index}/{len(series_list)} cost series...", file=sys.stderr, flush=True)
 
     # Convert to flat array for downstream processing
     usage_data = []
@@ -604,7 +608,11 @@ def main(user_email, teams_str, time_period, output_path, sources=None):
     if unknown:
         raise ValueError(f"Unsupported source(s): {', '.join(sorted(unknown))}")
 
-    usage_data = query_datadog(config_mgr, start_ms, end_ms, roster=roster) if 'claude' in sources else []
+    if 'claude' in sources:
+        print("🟣 Collecting Claude usage...", file=sys.stderr, flush=True)
+        usage_data = query_datadog(config_mgr, start_ms, end_ms, roster=roster)
+    else:
+        usage_data = []
     active_users = [u['email'] for u in usage_data if u['cost'] > 0]
     print(f"📊 Query results: {len(active_users)} active user(s) from {len(roster)} roster member(s)", file=sys.stderr)
 
